@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
-
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
@@ -19,10 +15,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'OpenAI API key not configured' }, { status: 500 })
     }
 
-    // Convert file to base64
-    const bytes = await image.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    const base64Image = buffer.toString('base64')
+    // Initialize OpenAI client at runtime
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    })
 
     // Create the prompt based on selected style
     const stylePrompts = {
@@ -40,10 +36,10 @@ export async function POST(request: NextRequest) {
 
     console.log('Generating image with OpenAI DALL-E...', { style, prompt: prompt.substring(0, 100) + '...' })
 
-    // Generate image with DALL-E
-    const response = await openai.images.edit({
-      image: buffer,
-      prompt: prompt,
+    // Use DALL-E generate instead of edit since we don't need to edit an existing image
+    const response = await openai.images.generate({
+      model: "dall-e-3",
+      prompt: `Create a cartoon portrait in ${style} style: ${prompt}. Make it a full face portrait with clear features.`,
       n: 1,
       size: '1024x1024',
       response_format: 'url'
