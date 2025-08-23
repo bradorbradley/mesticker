@@ -408,7 +408,7 @@ export default function CartoonifyApp() {
             </div>
           )}
 
-          {/* Credit System */}
+          {/* Credit System - Always show after image upload */}
           {selectedStyle && uploadedImage && (
             <div className="animate-in slide-in-from-bottom-4 duration-500">
               <CreditSystem />
@@ -447,10 +447,7 @@ export default function CartoonifyApp() {
                       }`}
                     >
                       <Sparkles className="w-5 h-5 mr-3 animate-spin" />
-                      {hasCredits 
-                        ? (isFreeUser && credits === 1 ? 'Try Free!' : 'Cartoonify Me!') 
-                        : 'Need Credits'
-                      }
+                      {hasCredits ? 'Cartoonify Me!' : 'Buy Credits to Start'}
                       <Sparkles className="w-5 h-5 ml-3 animate-spin" />
                     </Button>
                   ) : (
