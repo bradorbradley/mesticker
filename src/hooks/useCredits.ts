@@ -15,7 +15,7 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
 ]
 
 const DEFAULT_STORAGE_KEY = 'mesticker_credits'
-const FREE_CREDITS = 0
+const FREE_CREDITS = 3
 
 export function useCredits() {
   const [credits, setCredits] = useState<number>(0)
@@ -40,9 +40,9 @@ export function useCredits() {
           if (stored) {
             setCredits(parseInt(stored))
           } else {
-            // New user starts with no credits
-            setCredits(0)
-            localStorage.setItem(userStorageKey, '0')
+            // New user gets 3 free credits
+            setCredits(FREE_CREDITS)
+            localStorage.setItem(userStorageKey, FREE_CREDITS.toString())
           }
         } else {
           // No user logged in, use default storage
@@ -50,8 +50,8 @@ export function useCredits() {
           if (stored) {
             setCredits(parseInt(stored))
           } else {
-            setCredits(0)
-            localStorage.setItem(DEFAULT_STORAGE_KEY, '0')
+            setCredits(FREE_CREDITS)
+            localStorage.setItem(DEFAULT_STORAGE_KEY, FREE_CREDITS.toString())
           }
         }
       } catch (error) {
@@ -61,8 +61,8 @@ export function useCredits() {
         if (stored) {
           setCredits(parseInt(stored))
         } else {
-          setCredits(0)
-          localStorage.setItem(DEFAULT_STORAGE_KEY, '0')
+          setCredits(FREE_CREDITS)
+          localStorage.setItem(DEFAULT_STORAGE_KEY, FREE_CREDITS.toString())
         }
       } finally {
         setIsLoading(false)
@@ -91,7 +91,7 @@ export function useCredits() {
   }
 
   const hasCredits = credits > 0
-  const isFreeUser = false // No free users - everyone pays
+  const isFreeUser = credits <= FREE_CREDITS && credits > 0
 
   return {
     credits,

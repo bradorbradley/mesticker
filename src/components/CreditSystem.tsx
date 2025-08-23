@@ -51,9 +51,16 @@ export default function CreditSystem() {
                 <p className="font-semibold text-gray-900">
                   {credits} Credit{credits !== 1 ? 's' : ''} Available
                 </p>
-                <p className="text-sm text-gray-600">
-                  Ready to generate cartoons
-                </p>
+                {isFreeUser && (
+                  <p className="text-sm text-gray-600">
+                    Free generation{credits !== 1 ? 's' : ''} remaining
+                  </p>
+                )}
+                {!isFreeUser && credits > 0 && (
+                  <p className="text-sm text-gray-600">
+                    Ready to generate cartoons
+                  </p>
+                )}
               </div>
             </div>
             <Badge className="bg-gradient-to-r from-green-400 to-emerald-400 text-white border-0">

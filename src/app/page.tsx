@@ -63,6 +63,7 @@ export default function CartoonifyApp() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedImage, setGeneratedImage] = useState<string | null>(null)
   const [loadingStep, setLoadingStep] = useState(0)
+  const [elapsedTime, setElapsedTime] = useState(0)
   const [showResult, setShowResult] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -95,21 +96,26 @@ export default function CartoonifyApp() {
     setIsGenerating(true)
     setShowResult(false)
     setError(null)
+    setElapsedTime(0)
 
-    // Show loading animation
-    const interval = setInterval(() => {
+    // Show loading animation with timer
+    const messageInterval = setInterval(() => {
       setLoadingStep((prev) => {
         if (prev >= loadingMessages.length - 1) {
-          clearInterval(interval)
           return 0
         }
         return prev + 1
       })
     }, 1200)
 
+    // Timer for elapsed time (updates every 0.1 seconds)
+    const timerInterval = setInterval(() => {
+      setElapsedTime(prev => prev + 0.1)
+    }, 100)
+
     try {
-      // Check if we should use testing mode (temporary: always true for payment testing)
-      const isTestingMode = true // process.env.NEXT_PUBLIC_TESTING_MODE === 'true'
+      // Check if we should use testing mode
+      const isTestingMode = process.env.NEXT_PUBLIC_TESTING_MODE === 'true'
       
       if (isTestingMode) {
         // TESTING MODE: Skip actual API call and simulate success
@@ -120,7 +126,8 @@ export default function CartoonifyApp() {
         
         decrementCredit()
         
-        clearInterval(interval)
+        clearInterval(messageInterval)
+        clearInterval(timerInterval)
         // Use a placeholder image for testing
         setGeneratedImage(uploadedImageUrl || '/cartoon-presets/outputexample.png')
         setIsGenerating(false)
@@ -157,13 +164,15 @@ export default function CartoonifyApp() {
       
       decrementCredit()
       
-      clearInterval(interval)
+      clearInterval(messageInterval)
+      clearInterval(timerInterval)
       setGeneratedImage(data.imageUrl)
       setIsGenerating(false)
       setShowResult(true)
       
     } catch (err: any) {
-      clearInterval(interval)
+      clearInterval(messageInterval)
+      clearInterval(timerInterval)
       console.error('Client error:', err)
       
       if (err.name === 'TypeError' && err.message.includes('fetch')) {
@@ -369,7 +378,7 @@ export default function CartoonifyApp() {
                       <img
                         src={uploadedImageUrl}
                         alt="Uploaded photo"
-                        className="w-full h-44 object-cover rounded-xl"
+                        className="w-full max-h-80 object-contain rounded-xl bg-gray-50"
                       />
                       <Badge className="absolute top-3 right-3 bg-gradient-to-r from-green-400 to-emerald-400 text-white font-semibold text-sm animate-bounce border-0 modern-shadow">
                         <Zap className="w-3 h-3 mr-1" />
@@ -447,24 +456,33 @@ export default function CartoonifyApp() {
                       }`}
                     >
                       <Sparkles className="w-5 h-5 mr-3 animate-spin" />
-                      {hasCredits ? 'Cartoonify Me!' : 'Buy Credits to Start'}
+                      {hasCredits 
+                        ? (isFreeUser ? `Try Free! (${credits} left)` : 'Cartoonify Me!') 
+                        : 'Buy Credits to Start'
+                      }
                       <Sparkles className="w-5 h-5 ml-3 animate-spin" />
                     </Button>
                   ) : (
                     <Card className="modern-card modern-shadow-lg cartoon-card border-0">
                       <CardContent className="p-8 text-center">
                         <div className="space-y-6">
-                          <div className="w-16 h-16 bg-gradient-to-r from-teal-400 to-cyan-400 rounded-2xl mx-auto flex items-center justify-center animate-pulse modern-shadow">
-                            <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <div className="w-20 h-20 bg-gradient-to-r from-teal-400 to-cyan-400 rounded-2xl mx-auto flex items-center justify-center animate-pulse modern-shadow">
+                            <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
                           </div>
                           <div>
-                            <p className="font-semibold text-gray-900 mb-3 text-base">{loadingMessages[loadingStep]}</p>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
+                            <p className="font-semibold text-gray-900 mb-2 text-lg">{loadingMessages[loadingStep]}</p>
+                            <div className="text-2xl font-mono font-bold text-teal-600 mb-4">
+                              {elapsedTime.toFixed(1)}s
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-3">
                               <div
-                                className="bg-gradient-to-r from-teal-400 to-cyan-400 h-full rounded-full transition-all duration-1000"
-                                style={{ width: `${((loadingStep + 1) / loadingMessages.length) * 100}%` }}
+                                className="bg-gradient-to-r from-teal-400 to-cyan-400 h-full rounded-full transition-all duration-300 animate-pulse"
+                                style={{ width: `${Math.min((elapsedTime / 30) * 100, 100)}%` }}
                               ></div>
                             </div>
+                            <p className="text-sm text-gray-500 mt-2">
+                              Creating your cartoon masterpiece...
+                            </p>
                           </div>
                         </div>
                       </CardContent>
@@ -488,7 +506,7 @@ export default function CartoonifyApp() {
                         <img
                           src={generatedImage}
                           alt="Generated cartoon"
-                          className="w-full h-60 object-cover rounded-xl"
+                          className="w-full max-h-80 object-contain rounded-xl bg-gray-50"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent rounded-xl"></div>
                         <Badge className="absolute bottom-4 left-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold border-0 rounded-lg modern-shadow">
@@ -501,38 +519,31 @@ export default function CartoonifyApp() {
                     </CardContent>
                   </Card>
 
-                  {/* Farcaster Actions */}
+                  {/* Action Buttons */}
                   <div className="space-y-4">
-                    {!isAuthenticated ? (
-                      <Button 
-                        onClick={handleFarcasterAuth}
-                        className="w-full h-12 btn-primary modern-button text-base font-semibold transition-all duration-300 transform hover:scale-105 rounded-2xl cartoon-button"
-                      >
-                        <Share2 className="w-4 h-4 mr-3" />
-                        Sign in with Farcaster
-                        <Sparkles className="w-4 h-4 ml-3" />
-                      </Button>
-                    ) : (
-                      <Button 
-                        onClick={handleShareToFarcaster}
-                        disabled={posting}
-                        className="w-full h-12 btn-primary modern-button text-base font-semibold transition-all duration-300 transform hover:scale-105 rounded-2xl cartoon-button"
-                      >
-                        <Share2 className="w-4 h-4 mr-3" />
-                        {posting ? 'Sharing...' : 'Post to Farcaster'}
-                        <Sparkles className="w-4 h-4 ml-3" />
-                      </Button>
-                    )}
-
                     <div className="grid grid-cols-2 gap-3">
                       <Button
                         variant="outline"
                         className="h-11 btn-secondary modern-button font-semibold transition-all duration-300 rounded-xl cartoon-button bg-transparent"
-                        onClick={() => {
-                          const link = document.createElement('a')
-                          link.href = generatedImage
-                          link.download = `cartoon-${selectedStyle}.png`
-                          link.click()
+                        onClick={async () => {
+                          try {
+                            // For external URLs, we need to fetch and convert to blob
+                            const response = await fetch(generatedImage!)
+                            const blob = await response.blob()
+                            const url = window.URL.createObjectURL(blob)
+                            
+                            const link = document.createElement('a')
+                            link.href = url
+                            link.download = `cartoon-${selectedStyle?.replace(/\s+/g, '-').toLowerCase()}.png`
+                            document.body.appendChild(link)
+                            link.click()
+                            document.body.removeChild(link)
+                            window.URL.revokeObjectURL(url)
+                          } catch (error) {
+                            console.error('Failed to save image:', error)
+                            // Fallback to simple link approach
+                            window.open(generatedImage, '_blank')
+                          }
                         }}
                       >
                         <Download className="w-4 h-4 mr-2" />
