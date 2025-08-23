@@ -108,8 +108,8 @@ export default function CartoonifyApp() {
     }, 1200)
 
     try {
-      // Check if we should use testing mode
-      const isTestingMode = process.env.NEXT_PUBLIC_TESTING_MODE === 'true'
+      // Check if we should use testing mode (temporary: always true for payment testing)
+      const isTestingMode = true // process.env.NEXT_PUBLIC_TESTING_MODE === 'true'
       
       if (isTestingMode) {
         // TESTING MODE: Skip actual API call and simulate success
