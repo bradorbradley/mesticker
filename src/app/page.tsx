@@ -229,24 +229,20 @@ export default function CartoonifyApp() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-gray-900 to-slate-900 font-medium overflow-x-hidden">
-      <div className="max-w-md mx-auto bg-gradient-to-b from-slate-900 to-black min-h-screen relative">
+    <div className="min-h-screen bg-white overflow-x-hidden">
+      <div className="max-w-md mx-auto bg-white min-h-screen relative">
         {/* Floating modern elements */}
         <div className="absolute top-20 left-4 w-3 h-3 bg-teal-400 rounded-full animate-bounce opacity-60 blur-[0.5px]"></div>
         <div className="absolute top-32 right-6 w-2 h-2 bg-cyan-400 rounded-full animate-bounce delay-300 opacity-60 blur-[0.5px]"></div>
         <div className="absolute top-48 left-8 w-1.5 h-1.5 bg-teal-300 rounded-full animate-bounce delay-500 opacity-60 blur-[0.5px]"></div>
 
         {/* Header */}
-        <div className="relative bg-gradient-to-r from-slate-900 via-gray-800 to-slate-900 text-white p-6 rounded-b-3xl modern-shadow-lg overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-teal-500/5 via-cyan-500/5 to-teal-500/5"></div>
-          <div className="absolute top-4 left-6 w-8 h-8 bg-teal-400/10 rounded-full animate-pulse blur-sm"></div>
-          <div className="absolute bottom-4 right-6 w-6 h-6 bg-cyan-400/10 rounded-full animate-pulse delay-700 blur-sm"></div>
-
+        <div className="relative bg-white text-center p-8 overflow-hidden">
           <div className="relative z-10">
-            <h1 className="modern-title text-center mb-6 tracking-tight">
+            <h1 className="title text-center mb-6">
               Cartoonify
               <br />
-              <span className="bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">Yourself</span>
+              <span className="bg-gradient-to-r from-[#00C2FF] to-[#FF7B36] bg-clip-text text-transparent">Yourself</span>
             </h1>
 
             {/* Before/After Example */}
@@ -283,20 +279,18 @@ export default function CartoonifyApp() {
               </div>
             </div>
 
-            <p className="text-center text-sm font-medium text-gray-300">
+            <p className="subtitle text-center">
               Transform into your favorite cartoon character
             </p>
           </div>
         </div>
 
-        <div className="p-4 space-y-6">
+        <div className="p-6 gap-8 flex flex-col">
           {/* Step 1: Style Selection */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-teal-400 to-cyan-400 text-white rounded-xl flex items-center justify-center text-sm font-bold modern-shadow cartoon-bounce">
-                1
-              </div>
-              <h2 className="modern-heading">Pick your cartoon style</h2>
+          <div className="animate-fade-slide-in">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="step-marker">1</div>
+              <h2 className="subtitle">Pick your cartoon style</h2>
             </div>
 
             <div className="overflow-x-auto pb-4">
@@ -305,13 +299,10 @@ export default function CartoonifyApp() {
                   <button
                     key={style.id}
                     onClick={() => setSelectedStyle(style.id)}
-                    className={`flex flex-col items-center p-4 rounded-2xl transition-all duration-300 min-w-[100px] transform hover:scale-105 cartoon-card ${
-                      selectedStyle === style.id
-                        ? "modern-card modern-shadow-lg scale-110 cartoon-selected ring-2 ring-teal-400 ring-offset-2 ring-offset-slate-900"
-                        : "modern-card-dark modern-shadow hover:bg-slate-700/50"
+                    className={`sticker-card flex flex-col items-center p-4 min-w-[100px] animate-pop ${
+                      selectedStyle === style.id ? "selected" : ""
                     }`}
                     style={{
-                      minHeight: "44px",
                       animationDelay: `${index * 100}ms`,
                     }}
                   >
@@ -363,17 +354,15 @@ export default function CartoonifyApp() {
 
           {/* Step 2: Upload */}
           {selectedStyle && (
-            <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-teal-400 to-cyan-400 text-white rounded-xl flex items-center justify-center text-sm font-bold modern-shadow cartoon-bounce">
-                  2
-                </div>
-                <h2 className="modern-heading">Upload your photo</h2>
+            <div className="animate-fade-slide-in">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="step-marker">2</div>
+                <h2 className="subtitle">Upload your photo</h2>
               </div>
 
               {uploadedImageUrl ? (
-                <Card className="modern-card modern-shadow-lg cartoon-card border-0">
-                  <CardContent className="p-5">
+                <div className="card animate-pop">
+                  <div className="card-content">
                     <div className="relative">
                       <img
                         src={uploadedImageUrl}
@@ -446,22 +435,21 @@ export default function CartoonifyApp() {
               {!showResult ? (
                 <>
                   {!isGenerating ? (
-                    <Button
+                    <button
                       onClick={handleGenerate}
                       disabled={!hasCredits}
-                      className={`w-full h-14 text-base font-semibold transition-all duration-300 transform hover:scale-105 rounded-2xl ${
+                      className={`pill-button w-full ${
                         hasCredits 
-                          ? 'btn-primary modern-button cartoon-button' 
-                          : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                          ? 'pill-button-primary' 
+                          : 'pill-button-secondary opacity-50 cursor-not-allowed'
                       }`}
                     >
-                      <Sparkles className="w-5 h-5 mr-3 animate-spin" />
+                      <Sparkles className="w-5 h-5" />
                       {hasCredits 
                         ? (isFreeUser ? `Try Free! (${credits} left)` : 'Cartoonify Me!') 
                         : 'Buy Credits to Start'
                       }
-                      <Sparkles className="w-5 h-5 ml-3 animate-spin" />
-                    </Button>
+                    </button>
                   ) : (
                     <Card className="modern-card modern-shadow-lg cartoon-card border-0">
                       <CardContent className="p-8 text-center">
