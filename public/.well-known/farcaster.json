@@ -1,0 +1,17 @@
+{
+    "accountAssociation": {
+      "header": "eyJmaWQiOjE5MTQ2LCJ0eXBlIjoiY3VzdG9keSIsImtleSI6IjB4ZjU2Q2VjODVlNERiYTY0RTJlQTA1ZTRBMzdDZDZkNzZFYzFlRjdBMiJ9",
+      "payload": "eyJkb21haW4iOiJtZXN0aWNrZXItYXBwLnZlcmNlbC5hcHAifQ",
+      "signature": "MHgxYjQ4MDYyZjYyZDVlMWE3YTJiNDgyNzI0YjIzMDkxOWE5NGNhMWZkOGZhMGZmMzM2ZThiYzgyNjUzOGI5ZGE4NjUyMTU5ZWYzYzE5NThiZTBlODVjZmRmYjU0Mjc1Nzg1OWNlODRkOTllMTJiYzdkODI3OTFmZWFjZmQ1MDc1ODFi"
+    },
+    "frame": {
+      "version": "1",
+      "name": "MeSticker",
+      "iconUrl": "https://mesticker-app.vercel.app/cartoon-presets/outputexample.png",
+      "homeUrl": "https://mesticker-app.vercel.app",
+      "imageUrl": "https://mesticker-app.vercel.app/api/frame-image",
+      "buttonTitle": "Launch App",
+      "splashImageUrl": "https://mesticker-app.vercel.app/api/frame-image",
+      "splashBackgroundColor": "#0f172a"
+    }
+}
