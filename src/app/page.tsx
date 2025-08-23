@@ -108,17 +108,57 @@ export default function CartoonifyApp() {
     }, 1200)
 
     try {
-      // TESTING MODE: Skip actual API call and simulate success
-      console.log('Testing mode: Simulating image generation')
+      // Check if we should use testing mode
+      const isTestingMode = process.env.NEXT_PUBLIC_TESTING_MODE === 'true'
       
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 3000))
+      if (isTestingMode) {
+        // TESTING MODE: Skip actual API call and simulate success
+        console.log('Testing mode: Simulating image generation')
+        
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 3000))
+        
+        decrementCredit()
+        
+        clearInterval(interval)
+        // Use a placeholder image for testing
+        setGeneratedImage(uploadedImageUrl || '/cartoon-presets/outputexample.png')
+        setIsGenerating(false)
+        setShowResult(true)
+        return
+      }
+
+      // PRODUCTION MODE: Real API call
+      const formData = new FormData()
+      formData.append('image', uploadedImage)
+      formData.append('style', selectedStyle)
+      
+      console.log('Sending request to /api/stylize with:', {
+        imageSize: uploadedImage.size,
+        imageType: uploadedImage.type,
+        style: selectedStyle
+      })
+      
+      const res = await fetch('/api/stylize', {
+        method: 'POST',
+        body: formData,
+      })
+      
+      console.log('Response status:', res.status, res.statusText)
+      
+      if (!res.ok) {
+        const errorText = await res.text()
+        console.error('API Error Response:', errorText)
+        throw new Error(`Server error: ${res.status} ${res.statusText}`)
+      }
+      
+      const data = await res.json()
+      console.log('Success response received')
       
       decrementCredit()
       
       clearInterval(interval)
-      // Use a placeholder image for testing
-      setGeneratedImage(uploadedImageUrl || '/cartoon-presets/outputexample.png')
+      setGeneratedImage(data.imageUrl)
       setIsGenerating(false)
       setShowResult(true)
       
