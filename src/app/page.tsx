@@ -375,6 +375,7 @@ export default function CartoonifyApp() {
             </div>
           )}
 
+
           {/* Step 3: Generate */}
           {selectedStyle && uploadedImage && (
             <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
