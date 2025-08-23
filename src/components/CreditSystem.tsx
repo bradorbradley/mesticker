@@ -49,11 +49,11 @@ export default function CreditSystem() {
               </div>
               <div>
                 <p className="font-semibold text-gray-900">
-                  {credits} Credits Available
+                  {credits} Credit{credits !== 1 ? 's' : ''} Available
                 </p>
-                {isFreeUser && (
+                {isFreeUser && credits > 0 && (
                   <p className="text-sm text-gray-600">
-                    Free generations remaining
+                    Free generation{credits !== 1 ? 's' : ''} remaining
                   </p>
                 )}
               </div>

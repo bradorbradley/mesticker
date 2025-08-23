@@ -15,7 +15,7 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
 ]
 
 const DEFAULT_STORAGE_KEY = 'mesticker_credits'
-const FREE_CREDITS = 3
+const FREE_CREDITS = 1
 
 export function useCredits() {
   const [credits, setCredits] = useState<number>(0)
@@ -91,7 +91,7 @@ export function useCredits() {
   }
 
   const hasCredits = credits > 0
-  const isFreeUser = credits <= FREE_CREDITS
+  const isFreeUser = credits <= FREE_CREDITS && credits > 0
 
   return {
     credits,

@@ -69,7 +69,7 @@ export default function CartoonifyApp() {
   const [userFid, setUserFid] = useState<number | null>(null)
   const [posting, setPosting] = useState(false)
   
-  const { hasCredits, useCredit: decrementCredit } = useCredits()
+  const { hasCredits, useCredit: decrementCredit, credits, isFreeUser } = useCredits()
 
   useEffect(() => {
     sdk.actions.ready()
@@ -447,7 +447,10 @@ export default function CartoonifyApp() {
                       }`}
                     >
                       <Sparkles className="w-5 h-5 mr-3 animate-spin" />
-                      {hasCredits ? 'Cartoonify Me!' : 'Need Credits'}
+                      {hasCredits 
+                        ? (isFreeUser && credits === 1 ? 'Try Free!' : 'Cartoonify Me!') 
+                        : 'Need Credits'
+                      }
                       <Sparkles className="w-5 h-5 ml-3 animate-spin" />
                     </Button>
                   ) : (
