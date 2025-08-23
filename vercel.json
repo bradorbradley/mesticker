@@ -3,8 +3,5 @@
       "src/app/api/stylize/route.ts": {
         "maxDuration": 300
       }
-    },
-    "projectSettings": {
-      "framework": "nextjs"
     }
 }
