@@ -27,7 +27,7 @@ export default function CreditSystem() {
       })
 
       if (payment) {
-        addCredits(pkg.credits)
+        await addCredits(pkg.credits)
         setSelectedPackage(null)
       }
     } catch (error) {

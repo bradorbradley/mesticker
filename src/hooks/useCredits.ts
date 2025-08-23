@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { sdk } from '@farcaster/miniapp-sdk'
 
 export interface CreditPackage {
   credits: number
@@ -13,35 +14,134 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
   { credits: 15, price: 11, label: "15 Credits", savings: "Save $4" }
 ]
 
-const STORAGE_KEY = 'mesticker_credits'
+const DEFAULT_STORAGE_KEY = 'mesticker_credits'
 const FREE_CREDITS = 3
 
 export function useCredits() {
   const [credits, setCredits] = useState<number>(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [userFid, setUserFid] = useState<number | null>(null)
+  const [storageKey, setStorageKey] = useState<string>(DEFAULT_STORAGE_KEY)
 
+  // Initialize user and credits
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      setCredits(parseInt(stored))
-    } else {
-      setCredits(FREE_CREDITS)
-      localStorage.setItem(STORAGE_KEY, FREE_CREDITS.toString())
+    const initializeUser = async () => {
+      try {
+        // Try to get the current user from Farcaster SDK
+        const context = await sdk.context
+        if (context?.user?.fid) {
+          const fid = context.user.fid
+          setUserFid(fid)
+          const userStorageKey = `mesticker_credits_${fid}`
+          setStorageKey(userStorageKey)
+          
+          // Load credits from server for authenticated user
+          try {
+            const response = await fetch(`/api/credits?userFid=${fid}`)
+            if (response.ok) {
+              const data = await response.json()
+              setCredits(data.credits)
+              // Sync to localStorage as backup
+              localStorage.setItem(userStorageKey, data.credits.toString())
+            } else {
+              // Fallback to localStorage
+              const stored = localStorage.getItem(userStorageKey)
+              setCredits(stored ? parseInt(stored) : FREE_CREDITS)
+            }
+          } catch (error) {
+            console.error('Failed to fetch credits from server:', error)
+            // Fallback to localStorage
+            const stored = localStorage.getItem(userStorageKey)
+            if (stored) {
+              setCredits(parseInt(stored))
+            } else {
+              setCredits(FREE_CREDITS)
+              localStorage.setItem(userStorageKey, FREE_CREDITS.toString())
+            }
+          }
+        } else {
+          // No user logged in, use default storage
+          const stored = localStorage.getItem(DEFAULT_STORAGE_KEY)
+          if (stored) {
+            setCredits(parseInt(stored))
+          } else {
+            setCredits(FREE_CREDITS)
+            localStorage.setItem(DEFAULT_STORAGE_KEY, FREE_CREDITS.toString())
+          }
+        }
+      } catch (error) {
+        console.error('Failed to initialize user context:', error)
+        // Fallback to default storage
+        const stored = localStorage.getItem(DEFAULT_STORAGE_KEY)
+        if (stored) {
+          setCredits(parseInt(stored))
+        } else {
+          setCredits(FREE_CREDITS)
+          localStorage.setItem(DEFAULT_STORAGE_KEY, FREE_CREDITS.toString())
+        }
+      } finally {
+        setIsLoading(false)
+      }
     }
-    setIsLoading(false)
+
+    initializeUser()
   }, [])
 
-  const addCredits = (amount: number) => {
+  const addCredits = async (amount: number) => {
+    if (userFid) {
+      // Update server-side for authenticated users
+      try {
+        const response = await fetch('/api/credits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userFid, credits: amount, action: 'add' })
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          setCredits(data.credits)
+          localStorage.setItem(storageKey, data.credits.toString())
+          return
+        }
+      } catch (error) {
+        console.error('Failed to add credits on server:', error)
+      }
+    }
+    
+    // Fallback to local storage
     const newCredits = credits + amount
     setCredits(newCredits)
-    localStorage.setItem(STORAGE_KEY, newCredits.toString())
+    localStorage.setItem(storageKey, newCredits.toString())
   }
 
-  const useCredit = () => {
+  const useCredit = async () => {
+    if (credits <= 0) return false
+    
+    if (userFid) {
+      // Update server-side for authenticated users
+      try {
+        const response = await fetch('/api/credits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userFid, credits: 1, action: 'use' })
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          setCredits(data.credits)
+          localStorage.setItem(storageKey, data.credits.toString())
+          return true
+        }
+      } catch (error) {
+        console.error('Failed to use credit on server:', error)
+      }
+    }
+    
+    // Fallback to local storage
     if (credits > 0) {
       const newCredits = credits - 1
       setCredits(newCredits)
-      localStorage.setItem(STORAGE_KEY, newCredits.toString())
+      localStorage.setItem(storageKey, newCredits.toString())
       return true
     }
     return false
@@ -57,6 +157,7 @@ export function useCredits() {
     isFreeUser,
     addCredits,
     useCredit,
-    freeCredits: FREE_CREDITS
+    freeCredits: FREE_CREDITS,
+    userFid
   }
 }

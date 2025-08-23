@@ -118,7 +118,7 @@ export default function CartoonifyApp() {
         // Simulate API delay
         await new Promise(resolve => setTimeout(resolve, 3000))
         
-        decrementCredit()
+        await decrementCredit()
         
         clearInterval(interval)
         // Use a placeholder image for testing
@@ -155,7 +155,7 @@ export default function CartoonifyApp() {
       const data = await res.json()
       console.log('Success response received')
       
-      decrementCredit()
+      await decrementCredit()
       
       clearInterval(interval)
       setGeneratedImage(data.imageUrl)
