@@ -9,6 +9,8 @@ import Image from "next/image"
 import { sdk } from '@farcaster/miniapp-sdk'
 import CreditSystem from '@/components/CreditSystem'
 import { useCredits } from '@/hooks/useCredits'
+import ImageRevealSlider from '@/components/ImageRevealSlider'
+import TicTacToeGame from '@/components/TicTacToeGame'
 
 const cartoonStyles = [
   {
@@ -116,22 +118,29 @@ export default function CartoonifyApp() {
     try {
       // Check if we should use testing mode
       const isTestingMode = process.env.NEXT_PUBLIC_TESTING_MODE === 'true'
+      console.log('Testing mode enabled:', isTestingMode)
       
       if (isTestingMode) {
         // TESTING MODE: Skip actual API call and simulate success
-        console.log('Testing mode: Simulating image generation')
+        console.log('Testing mode: Simulating image generation for style:', selectedStyle)
+        console.log('Using uploaded image:', uploadedImageUrl ? 'yes' : 'no')
         
         // Simulate API delay
         await new Promise(resolve => setTimeout(resolve, 3000))
         
         decrementCredit()
+        console.log('Credits after decrement:', credits - 1)
         
         clearInterval(messageInterval)
         clearInterval(timerInterval)
-        // Use a placeholder image for testing
-        setGeneratedImage(uploadedImageUrl || '/cartoon-presets/outputexample.png')
+        
+        // Use uploaded image or fallback to placeholder  
+        const testImage = uploadedImageUrl || '/cartoon-presets/outputexample.png'
+        console.log('Setting test image:', testImage)
+        setGeneratedImage(testImage)
         setIsGenerating(false)
         setShowResult(true)
+        console.log('Testing mode: Generation complete!')
         return
       }
 
@@ -166,7 +175,7 @@ export default function CartoonifyApp() {
       
       clearInterval(messageInterval)
       clearInterval(timerInterval)
-      setGeneratedImage(data.imageUrl)
+      setGeneratedImage(`data:image/png;base64,${data.imageBase64}`)
       setIsGenerating(false)
       setShowResult(true)
       
@@ -237,7 +246,10 @@ export default function CartoonifyApp() {
         <div className="absolute top-48 left-8 w-1.5 h-1.5 bg-teal-300 rounded-full animate-bounce delay-500 opacity-60 blur-[0.5px]"></div>
 
         {/* Header */}
-        <div className="relative bg-white text-center p-8 overflow-hidden">
+        <div className="relative bg-white p-6 rounded-b-3xl overflow-hidden">
+          <div className="absolute top-4 right-6 w-8 h-8 bg-gradient-to-r from-[#00C2FF] to-[#FF7B36] rounded-full animate-bounce opacity-20"></div>
+          <div className="absolute bottom-4 left-6 w-6 h-6 bg-gradient-to-r from-[#6C63FF] to-[#00C2FF] rounded-full animate-bounce delay-300 opacity-20"></div>
+
           <div className="relative z-10">
             <h1 className="title text-center mb-6">
               Cartoonify
@@ -248,32 +260,32 @@ export default function CartoonifyApp() {
             {/* Before/After Example */}
             <div className="flex items-center justify-center gap-4 mb-4">
               <div className="relative transform hover:scale-105 transition-transform">
-                <div className="w-16 h-16 rounded-2xl overflow-hidden modern-shadow border-2 border-white/20 cartoon-bounce">
+                <div className="w-16 h-16 rounded-xl overflow-hidden border-2 border-gray-200">
                   <img
                     src="/cartoon-presets/inputexample.jpg"
                     alt="Before transformation"
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-gradient-to-r from-gray-400 to-gray-600 rounded-full flex items-center justify-center">
+                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-gray-500 rounded-full flex items-center justify-center">
                   <span className="text-xs text-white">📸</span>
                 </div>
               </div>
 
               <div className="flex flex-col items-center">
-                <ArrowRight className="w-6 h-6 text-teal-400 animate-pulse cartoon-wiggle" />
-                <span className="text-xs font-semibold mt-1 text-teal-400">Transform</span>
+                <ArrowRight className="w-6 h-6 text-[#00C2FF] animate-bounce" />
+                <span className="text-xs font-semibold mt-1 text-[#00C2FF]">Transform</span>
               </div>
 
               <div className="relative transform hover:scale-105 transition-transform">
-                <div className="w-16 h-16 rounded-2xl overflow-hidden modern-shadow border-2 border-teal-400/50 cartoon-bounce modern-glow">
+                <div className="w-16 h-16 rounded-xl overflow-hidden border-2 border-[#00C2FF]">
                   <img
                     src="/cartoon-presets/outputexample.png"
                     alt="After transformation"
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-teal-400 to-cyan-400 rounded-full flex items-center justify-center animate-bounce">
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-[#00C2FF] to-[#FF7B36] rounded-full flex items-center justify-center animate-bounce">
                   <Sparkles className="w-2.5 h-2.5 text-white" />
                 </div>
               </div>
@@ -285,11 +297,13 @@ export default function CartoonifyApp() {
           </div>
         </div>
 
-        <div className="p-6 gap-8 flex flex-col">
+        <div className="p-4 space-y-6">
           {/* Step 1: Style Selection */}
-          <div className="animate-fade-slide-in">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="step-marker">1</div>
+          <div className="space-y-4 animate-fade-slide-in">
+            <div className="flex items-center gap-3">
+              <div className="step-marker animate-bounce">
+                1
+              </div>
               <h2 className="subtitle">Pick your cartoon style</h2>
             </div>
 
@@ -299,20 +313,17 @@ export default function CartoonifyApp() {
                   <button
                     key={style.id}
                     onClick={() => setSelectedStyle(style.id)}
-                    className={`sticker-card flex flex-col items-center p-4 min-w-[100px] animate-pop ${
-                      selectedStyle === style.id ? "selected" : ""
+                    className={`flex flex-col items-center p-4 min-w-[100px] ${
+                      selectedStyle === style.id
+                        ? "sticker-card selected animate-pop"
+                        : "sticker-card"
                     }`}
                     style={{
+                      minHeight: "44px",
                       animationDelay: `${index * 100}ms`,
                     }}
                   >
-                    <div
-                      className={`w-14 h-14 rounded-xl overflow-hidden mb-3 transition-all cartoon-bounce ${
-                        selectedStyle === style.id
-                          ? "ring-2 ring-teal-400 modern-glow animate-pulse"
-                          : "ring-1 ring-white/20"
-                      }`}
-                    >
+                    <div className="w-14 h-14 rounded-xl overflow-hidden mb-3">
                       <img
                         src={style.image}
                         alt={style.name}
@@ -333,15 +344,11 @@ export default function CartoonifyApp() {
                         }}
                       />
                     </div>
-                    <span
-                      className={`modern-card-text text-center leading-tight ${
-                        selectedStyle === style.id ? "text-gray-900 font-semibold" : "text-gray-300"
-                      }`}
-                    >
+                    <span className="text-sm font-medium text-center leading-tight">
                       {style.name}
                     </span>
                     {selectedStyle === style.id && (
-                      <Badge className="mt-2 bg-gradient-to-r from-teal-400 to-cyan-400 text-white text-xs animate-bounce border-0 modern-shadow">
+                      <Badge className="mt-2 bg-gradient-to-r from-[#FF7B36] to-[#6C63FF] text-white text-xs animate-bounce border-0">
                         <Heart className="w-3 h-3 mr-1" />
                         Selected
                       </Badge>
@@ -354,54 +361,54 @@ export default function CartoonifyApp() {
 
           {/* Step 2: Upload */}
           {selectedStyle && (
-            <div className="animate-fade-slide-in">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="step-marker">2</div>
+            <div className="space-y-4 animate-fade-slide-in">
+              <div className="flex items-center gap-3">
+                <div className="step-marker animate-bounce">
+                  2
+                </div>
                 <h2 className="subtitle">Upload your photo</h2>
               </div>
 
               {uploadedImageUrl ? (
-                <div className="card animate-pop">
-                  <div className="card-content">
+                <Card className="card">
+                  <CardContent className="card-content">
                     <div className="relative">
                       <img
                         src={uploadedImageUrl}
                         alt="Uploaded photo"
                         className="w-full max-h-80 object-contain rounded-xl bg-gray-50"
                       />
-                      <Badge className="absolute top-3 right-3 bg-gradient-to-r from-green-400 to-emerald-400 text-white font-semibold text-sm animate-bounce border-0 modern-shadow">
+                      <Badge className="absolute top-3 right-3 bg-gradient-to-r from-green-400 to-emerald-400 text-white font-semibold text-sm animate-bounce border-0">
                         <Zap className="w-3 h-3 mr-1" />
                         Ready!
                       </Badge>
-                      <div className="absolute -bottom-2 -right-2 w-7 h-7 bg-gradient-to-r from-teal-400 to-cyan-400 rounded-full flex items-center justify-center animate-spin-slow modern-shadow">
+                      <div className="absolute -bottom-2 -right-2 w-7 h-7 bg-gradient-to-r from-[#00C2FF] to-[#FF7B36] rounded-full flex items-center justify-center animate-bounce">
                         <Star className="w-3.5 h-3.5 text-white" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               ) : (
-                <Card className="modern-card-dark modern-shadow hover:bg-slate-700/30 transition-all duration-300 cartoon-card hover:scale-105 border-0 border-dashed border-teal-400/30">
-                  <CardContent className="p-8">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                      id="image-upload"
-                    />
-                    <label htmlFor="image-upload" className="cursor-pointer">
-                      <div className="flex flex-col items-center gap-4 text-center">
-                        <div className="w-16 h-16 bg-gradient-to-r from-teal-400 to-cyan-400 rounded-2xl flex items-center justify-center modern-shadow cartoon-bounce">
-                          <Upload className="w-8 h-8 text-white" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-white mb-2 text-base">Upload your photo</p>
-                          <p className="text-sm text-gray-400 font-medium">Max 5MB • JPG, PNG supported</p>
-                        </div>
+                <div className="upload-area">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                    id="image-upload"
+                  />
+                  <label htmlFor="image-upload" className="cursor-pointer">
+                    <div className="flex flex-col items-center gap-4 text-center">
+                      <div className="w-16 h-16 bg-gradient-to-r from-[#00C2FF] to-[#0EA5E9] rounded-2xl flex items-center justify-center animate-bounce">
+                        <Upload className="w-8 h-8 text-white" />
                       </div>
-                    </label>
-                  </CardContent>
-                </Card>
+                      <div>
+                        <p className="subtitle mb-2">Upload your photo</p>
+                        <p className="body text-gray-500">Max 5MB • JPG, PNG supported</p>
+                      </div>
+                    </div>
+                  </label>
+                </div>
               )}
             </div>
           )}
@@ -416,17 +423,17 @@ export default function CartoonifyApp() {
 
           {/* Step 3: Generate */}
           {selectedStyle && uploadedImage && (
-            <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-4 animate-fade-slide-in">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-teal-400 to-cyan-400 text-white rounded-xl flex items-center justify-center text-sm font-bold modern-shadow cartoon-bounce">
+                <div className="step-marker animate-bounce">
                   3
                 </div>
-                <h2 className="modern-heading">Create your cartoon</h2>
+                <h2 className="subtitle">Create your cartoon</h2>
               </div>
 
               {error && (
-                <Card className="modern-card border-red-500 border-2">
-                  <CardContent className="p-4">
+                <Card className="card border-red-500 border-2">
+                  <CardContent className="card-content">
                     <p className="text-red-600 font-semibold text-center">{error}</p>
                   </CardContent>
                 </Card>
@@ -438,81 +445,93 @@ export default function CartoonifyApp() {
                     <button
                       onClick={handleGenerate}
                       disabled={!hasCredits}
-                      className={`pill-button w-full ${
+                      className={`w-full pill-button ${
                         hasCredits 
                           ? 'pill-button-primary' 
-                          : 'pill-button-secondary opacity-50 cursor-not-allowed'
+                          : 'pill-button:disabled'
                       }`}
                     >
-                      <Sparkles className="w-5 h-5" />
+                      <Sparkles className="w-5 h-5 animate-spin" />
                       {hasCredits 
                         ? (isFreeUser ? `Try Free! (${credits} left)` : 'Cartoonify Me!') 
                         : 'Buy Credits to Start'
                       }
+                      <Sparkles className="w-5 h-5 animate-spin" />
                     </button>
                   ) : (
-                    <Card className="modern-card modern-shadow-lg cartoon-card border-0">
-                      <CardContent className="p-8 text-center">
-                        <div className="space-y-6">
-                          <div className="w-20 h-20 bg-gradient-to-r from-teal-400 to-cyan-400 rounded-2xl mx-auto flex items-center justify-center animate-pulse modern-shadow">
-                            <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-                          </div>
-                          <div>
-                            <p className="font-semibold text-gray-900 mb-2 text-lg">{loadingMessages[loadingStep]}</p>
-                            <div className="text-2xl font-mono font-bold text-teal-600 mb-4">
-                              {elapsedTime.toFixed(1)}s
+                    <div className="space-y-4">
+                      {/* Generation Status */}
+                      <Card className="card">
+                        <CardContent className="card-content text-center">
+                          <div className="space-y-4">
+                            <div className="w-16 h-16 bg-gradient-to-r from-[#00C2FF] to-[#0EA5E9] rounded-2xl mx-auto flex items-center justify-center animate-bounce">
+                              <div className="loading-spinner"></div>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-3">
-                              <div
-                                className="bg-gradient-to-r from-teal-400 to-cyan-400 h-full rounded-full transition-all duration-300 animate-pulse"
-                                style={{ width: `${Math.min((elapsedTime / 30) * 100, 100)}%` }}
-                              ></div>
+                            <div>
+                              <p className="subtitle mb-2">{loadingMessages[loadingStep]}</p>
+                              <div className="text-xl font-mono font-bold text-[#00C2FF] mb-3">
+                                {elapsedTime.toFixed(1)}s
+                              </div>
+                              <div className="progress-bar">
+                                <div
+                                  className="progress-fill"
+                                  style={{ width: `${Math.min((elapsedTime / 30) * 100, 100)}%` }}
+                                ></div>
+                              </div>
                             </div>
-                            <p className="text-sm text-gray-500 mt-2">
-                              Creating your cartoon masterpiece...
-                            </p>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                        </CardContent>
+                      </Card>
+                      
+                      {/* Tic-Tac-Toe Game */}
+                      <div className="animate-fade-slide-in">
+                        <TicTacToeGame
+                          playerImage={uploadedImageUrl!}
+                          opponentImage={cartoonStyles.find(style => style.id === selectedStyle)?.image || '/cartoon-presets/heyarnold.png'}
+                          opponentName={selectedStyle}
+                          autoEnd={!isGenerating || showResult}
+                          onGameEnd={() => {
+                            if (generatedImage) {
+                              setShowResult(true)
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
                   )}
                 </>
               ) : generatedImage && (
                 <div className="space-y-6">
                   {/* Success Header */}
                   <div className="text-center">
-                    <Badge className="bg-gradient-to-r from-green-400 to-emerald-400 text-white font-semibold text-base px-6 py-3 animate-bounce rounded-xl border-0 modern-shadow">
+                    <Badge className="bg-gradient-to-r from-green-400 to-emerald-400 text-white font-semibold text-base px-6 py-3 animate-bounce rounded-xl border-0">
                       <Sparkles className="w-4 h-4 mr-2" />
                       Cartoon complete!
                     </Badge>
                   </div>
 
-                  {/* Result Image */}
-                  <Card className="modern-card modern-shadow-lg cartoon-card border-0">
-                    <CardContent className="p-5">
-                      <div className="relative">
-                        <img
-                          src={generatedImage}
-                          alt="Generated cartoon"
-                          className="w-full max-h-80 object-contain rounded-xl bg-gray-50"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent rounded-xl"></div>
-                        <Badge className="absolute bottom-4 left-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold border-0 rounded-lg modern-shadow">
-                          {cartoonStyles.find((s) => s.id === selectedStyle)?.name} Style
-                        </Badge>
-                        <div className="absolute top-4 right-4 w-7 h-7 bg-gradient-to-r from-teal-400 to-cyan-400 rounded-full flex items-center justify-center animate-bounce modern-shadow">
-                          <Star className="w-3.5 h-3.5 text-white" />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  {/* Interactive Image Reveal Slider */}
+                  <div className="space-y-4">
+                    <ImageRevealSlider
+                      beforeSrc={uploadedImageUrl!}
+                      afterSrc={generatedImage}
+                      altBefore="Original"
+                      altAfter={`${cartoonStyles.find((s) => s.id === selectedStyle)?.name} Style`}
+                      height={380}
+                      initial={75}
+                      className="mx-auto"
+                    />
+                    
+                    <div className="text-center">
+                      <p className="body text-gray-500">Drag the slider or tap to compare • Use arrow keys for fine control</p>
+                    </div>
+                  </div>
 
                   {/* Action Buttons */}
-                  <div className="space-y-4">
+                  <div className="space-y-4 animate-fade-slide-in">
                     <div className="grid grid-cols-2 gap-3">
-                      <Button
-                        variant="outline"
-                        className="h-11 btn-secondary modern-button font-semibold transition-all duration-300 rounded-xl cartoon-button bg-transparent"
+                      <button
+                        className="pill-button pill-button-secondary"
                         onClick={async () => {
                           try {
                             // For external URLs, we need to fetch and convert to blob
@@ -534,17 +553,16 @@ export default function CartoonifyApp() {
                           }
                         }}
                       >
-                        <Download className="w-4 h-4 mr-2" />
+                        <Download className="w-4 h-4" />
                         Save
-                      </Button>
-                      <Button
-                        variant="outline"
+                      </button>
+                      <button
                         onClick={handleTryAgain}
-                        className="h-11 btn-secondary modern-button font-semibold transition-all duration-300 rounded-xl cartoon-button bg-transparent"
+                        className="pill-button pill-button-secondary"
                       >
-                        <RotateCcw className="w-4 h-4 mr-2" />
+                        <RotateCcw className="w-4 h-4" />
                         Try Again
-                      </Button>
+                      </button>
                     </div>
                   </div>
                 </div>
