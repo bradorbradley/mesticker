@@ -35,29 +35,14 @@ export function useCredits() {
           const userStorageKey = `mesticker_credits_${fid}`
           setStorageKey(userStorageKey)
           
-          // Load credits from server for authenticated user
-          try {
-            const response = await fetch(`/api/credits?userFid=${fid}`)
-            if (response.ok) {
-              const data = await response.json()
-              setCredits(data.credits)
-              // Sync to localStorage as backup
-              localStorage.setItem(userStorageKey, data.credits.toString())
-            } else {
-              // Fallback to localStorage
-              const stored = localStorage.getItem(userStorageKey)
-              setCredits(stored ? parseInt(stored) : FREE_CREDITS)
-            }
-          } catch (error) {
-            console.error('Failed to fetch credits from server:', error)
-            // Fallback to localStorage
-            const stored = localStorage.getItem(userStorageKey)
-            if (stored) {
-              setCredits(parseInt(stored))
-            } else {
-              setCredits(FREE_CREDITS)
-              localStorage.setItem(userStorageKey, FREE_CREDITS.toString())
-            }
+          // Load credits for this specific user (simplified)
+          const stored = localStorage.getItem(userStorageKey)
+          if (stored) {
+            setCredits(parseInt(stored))
+          } else {
+            // New user gets free credits
+            setCredits(FREE_CREDITS)
+            localStorage.setItem(userStorageKey, FREE_CREDITS.toString())
           }
         } else {
           // No user logged in, use default storage
@@ -87,57 +72,15 @@ export function useCredits() {
     initializeUser()
   }, [])
 
-  const addCredits = async (amount: number) => {
-    if (userFid) {
-      // Update server-side for authenticated users
-      try {
-        const response = await fetch('/api/credits', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userFid, credits: amount, action: 'add' })
-        })
-        
-        if (response.ok) {
-          const data = await response.json()
-          setCredits(data.credits)
-          localStorage.setItem(storageKey, data.credits.toString())
-          return
-        }
-      } catch (error) {
-        console.error('Failed to add credits on server:', error)
-      }
-    }
-    
-    // Fallback to local storage
+  const addCredits = (amount: number) => {
+    // Simple local storage approach for now
     const newCredits = credits + amount
     setCredits(newCredits)
     localStorage.setItem(storageKey, newCredits.toString())
   }
 
-  const useCredit = async () => {
-    if (credits <= 0) return false
-    
-    if (userFid) {
-      // Update server-side for authenticated users
-      try {
-        const response = await fetch('/api/credits', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userFid, credits: 1, action: 'use' })
-        })
-        
-        if (response.ok) {
-          const data = await response.json()
-          setCredits(data.credits)
-          localStorage.setItem(storageKey, data.credits.toString())
-          return true
-        }
-      } catch (error) {
-        console.error('Failed to use credit on server:', error)
-      }
-    }
-    
-    // Fallback to local storage
+  const useCredit = () => {
+    // Simple local storage approach for now
     if (credits > 0) {
       const newCredits = credits - 1
       setCredits(newCredits)
