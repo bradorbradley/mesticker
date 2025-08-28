@@ -274,7 +274,7 @@ export default function TicTacToeGame({
         {!gameStarted && !autoEnd && (
           <div className="text-center">
             <p className="text-xs text-gray-500 leading-relaxed">
-              Play while your cartoon generates! {opponentName} goes first, then it's your turn. 
+              Play while your cartoon generates! {opponentName} goes first, then it&apos;s your turn. 
               Try to get 3 in a row! 🎯
             </p>
           </div>
