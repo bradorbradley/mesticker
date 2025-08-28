@@ -4,14 +4,30 @@
       "payload": "eyJkb21haW4iOiJtZXN0aWNrZXItYXBwLnZlcmNlbC5hcHAifQ",
       "signature": "MHgxYjQ4MDYyZjYyZDVlMWE3YTJiNDgyNzI0YjIzMDkxOWE5NGNhMWZkOGZhMGZmMzM2ZThiYzgyNjUzOGI5ZGE4NjUyMTU5ZWYzYzE5NThiZTBlODVjZmRmYjU0Mjc1Nzg1OWNlODRkOTllMTJiYzdkODI3OTFmZWFjZmQ1MDc1ODFi"
     },
-    "frame": {
+    "miniapp": {
       "version": "1",
-      "name": "MeSticker",
-      "iconUrl": "https://mesticker-app.vercel.app/cartoon-presets/outputexample.png",
+      "name": "MESticker",
+      "iconUrl": "https://mesticker-app.vercel.app/icon.png",
       "homeUrl": "https://mesticker-app.vercel.app",
-      "imageUrl": "https://mesticker-app.vercel.app/api/frame-image",
-      "buttonTitle": "Launch App",
-      "splashImageUrl": "https://mesticker-app.vercel.app/api/frame-image",
-      "splashBackgroundColor": "#0f172a"
+      "imageUrl": "https://mesticker-app.vercel.app/icon.png",
+      "buttonTitle": "🎨 Create Sticker",
+      "splashImageUrl": "https://mesticker-app.vercel.app/icon.png",
+      "splashBackgroundColor": "#ffffff",
+      "subtitle": "Turn your photos into cartoon stickers",
+      "description": "Transform your selfies into fun cartoon-style stickers with AI. Choose from various cartoon styles and share your creations.",
+      "primaryCategory": "entertainment",
+      "tags": [
+        "ai",
+        "cartoon",
+        "stickers",
+        "photo",
+        "art",
+        "generator"
+      ],
+      "heroImageUrl": "https://mesticker-app.vercel.app/icon.png",
+      "tagline": "AI-powered cartoon sticker creator",
+      "ogTitle": "MESticker - AI Cartoon Sticker Generator",
+      "ogDescription": "Transform your selfies into fun cartoon-style stickers with AI",
+      "ogImageUrl": "https://mesticker-app.vercel.app/icon.png"
     }
 }
