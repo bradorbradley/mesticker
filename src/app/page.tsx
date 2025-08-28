@@ -186,6 +186,17 @@ export default function CartoonifyApp() {
           throw new Error('Rate limit exceeded. Please wait a moment before trying again.')
         } else if (res.status === 401) {
           throw new Error('Authentication failed. Please check your API key.')
+        } else if (res.status === 400) {
+          // Try to parse the error response for better messaging
+          try {
+            const errorData = JSON.parse(errorText)
+            if (errorData.error && errorData.error.includes('safety filters')) {
+              throw new Error('This image was blocked by content safety filters. Please try a different photo.')
+            }
+          } catch (e) {
+            // Fall back to generic 400 error
+          }
+          throw new Error(`Image processing failed: ${res.status} ${res.statusText}`)
         } else {
           throw new Error(`Server error: ${res.status} ${res.statusText}`)
         }

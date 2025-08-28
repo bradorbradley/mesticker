@@ -88,6 +88,14 @@ export async function POST(request: NextRequest) {
       }, { status: 401 })
     }
     
+    if (error.message && error.message.includes('moderation_blocked')) {
+      console.error(`[${requestId}] Content moderation block detected!`)
+      return NextResponse.json({ 
+        error: 'Image was rejected by content safety filters. Please try a different image.', 
+        details: 'OpenAI safety system blocked this content'
+      }, { status: 400 })
+    }
+    
     return NextResponse.json({ 
       error: 'Failed to generate image', 
       details: error.message 
