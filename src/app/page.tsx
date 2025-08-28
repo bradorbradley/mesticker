@@ -95,6 +95,12 @@ export default function CartoonifyApp() {
       return
     }
     
+    // Prevent concurrent requests (double-click protection)
+    if (isGenerating) {
+      console.log('Request already in progress, ignoring...')
+      return
+    }
+    
     setIsGenerating(true)
     setShowResult(false)
     setError(null)
@@ -145,8 +151,16 @@ export default function CartoonifyApp() {
       }
 
       // PRODUCTION MODE: Real API call
+      // Create fresh FormData and File to avoid stream consumption issues
       const formData = new FormData()
-      formData.append('image', uploadedImage)
+      
+      // Create fresh File from the current uploaded image to avoid stream reuse
+      const freshImageFile = new File([uploadedImage], uploadedImage.name, {
+        type: uploadedImage.type,
+        lastModified: uploadedImage.lastModified
+      })
+      
+      formData.append('image', freshImageFile)
       formData.append('style', selectedStyle)
       
       console.log('Sending request to /api/stylize with:', {
@@ -158,6 +172,7 @@ export default function CartoonifyApp() {
       const res = await fetch('/api/stylize', {
         method: 'POST',
         body: formData,
+        signal: AbortSignal.timeout(90000), // 90 second timeout
       })
       
       console.log('Response status:', res.status, res.statusText)
@@ -165,7 +180,15 @@ export default function CartoonifyApp() {
       if (!res.ok) {
         const errorText = await res.text()
         console.error('API Error Response:', errorText)
-        throw new Error(`Server error: ${res.status} ${res.statusText}`)
+        
+        // Handle specific error types
+        if (res.status === 429) {
+          throw new Error('Rate limit exceeded. Please wait a moment before trying again.')
+        } else if (res.status === 401) {
+          throw new Error('Authentication failed. Please check your API key.')
+        } else {
+          throw new Error(`Server error: ${res.status} ${res.statusText}`)
+        }
       }
       
       const data = await res.json()
