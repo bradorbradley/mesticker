@@ -1,31 +1,50 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 export function MiniAppProvider({ children }: { children: React.ReactNode }) {
-  const [isReady, setIsReady] = useState(false)
-
   useEffect(() => {
+    // Check if we're in a Farcaster Mini App context
+    const isInMiniApp = typeof window !== 'undefined' && 
+      (window.location.search.includes('miniApp=true') || 
+       window.location.pathname.includes('/miniapp') ||
+       window.parent !== window) // Loaded in iframe
+
+    if (!isInMiniApp) {
+      console.log('Not in mini app context, skipping SDK initialization')
+      return
+    }
+
     const initializeMiniApp = async () => {
-      if (typeof window === 'undefined') return
-      
       try {
+        console.log('Loading Farcaster Mini App SDK...')
         const { sdk } = await import('@farcaster/miniapp-sdk')
         
-        console.log('Mini App SDK loaded, calling ready...')
+        console.log('SDK loaded, calling ready()...')
         
-        // Call ready immediately
-        await sdk.actions.ready()
-        setIsReady(true)
-        console.log('Mini App ready signal sent')
+        // Multiple attempts to ensure ready is called
+        const callReady = async () => {
+          try {
+            await sdk.actions.ready()
+            console.log('✅ Mini App ready() called successfully')
+          } catch (error) {
+            console.error('❌ Error calling ready():', error)
+            // Try again after a delay
+            setTimeout(callReady, 500)
+          }
+        }
+
+        // Call ready immediately and also after a short delay
+        callReady()
+        setTimeout(callReady, 100)
+        setTimeout(callReady, 500)
         
       } catch (error) {
-        console.log('Mini App SDK not available:', error)
-        setIsReady(true) // Still show the app even if SDK fails
+        console.error('Failed to load Mini App SDK:', error)
       }
     }
 
-    // Wait for DOM to be ready
+    // Initialize when DOM is ready
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initializeMiniApp)
     } else {
