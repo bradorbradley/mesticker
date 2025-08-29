@@ -3,5 +3,12 @@
       "src/app/api/stylize/route.ts": {
         "maxDuration": 300
       }
-    }
+    },
+    "redirects": [
+      {
+        "source": "/.well-known/farcaster.json",
+        "destination": "https://api.farcaster.xyz/miniapps/hosted-manifest/0198f33b-7a20-b996-3668-1f18ad3eb92a",
+        "statusCode": 307
+      }
+    ]
 }
