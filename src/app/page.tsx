@@ -6,10 +6,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ArrowRight, Upload, Download, Share2, RotateCcw, Sparkles, Zap, Star, Heart } from "lucide-react"
 import Image from "next/image"
-import { getWallet } from '@/lib/wallet'
-import { isMiniApp } from '@/lib/env'
+import { sdk } from '@farcaster/miniapp-sdk'
 import CreditSystem from '@/components/CreditSystem'
-import ConnectWallet from '@/components/ConnectWallet'
 import { useCredits } from '@/hooks/useCredits'
 import ImageRevealSlider from '@/components/ImageRevealSlider'
 import TicTacToeGame from '@/components/TicTacToeGame'
@@ -77,18 +75,18 @@ export default function CartoonifyApp() {
   const { hasCredits, useCredit: decrementCredit, credits, isFreeUser } = useCredits()
 
   useEffect(() => {
-    // Initialize wallet system
-    const initializeWallet = async () => {
+    // Simple Farcaster SDK ready call
+    const initializeFarcaster = async () => {
       try {
-        const wallet = await getWallet()
-        await wallet.ready()
-        console.log('✅ Wallet system initialized successfully!')
+        console.log('🚀 Calling sdk.actions.ready()...')
+        await sdk.actions.ready()
+        console.log('✅ Farcaster ready!')
       } catch (error) {
-        console.error('❌ Error initializing wallet:', error)
+        console.error('❌ Farcaster ready failed:', error)
       }
     }
     
-    initializeWallet()
+    initializeFarcaster()
   }, [])
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -244,15 +242,14 @@ export default function CartoonifyApp() {
 
   const handleFarcasterAuth = async () => {
     try {
-      const wallet = await getWallet()
-      const address = await wallet.getAddress()
-      if (address) {
+      const context = await sdk.context
+      if (context.user) {
         setIsAuthenticated(true)
-        setUserFid(12345) // You can get actual FID from Farcaster context if in mini app
+        setUserFid(context.user.fid)
       }
     } catch (error) {
-      console.error('Wallet auth failed:', error)
-      setError('Failed to authenticate with wallet')
+      console.error('Farcaster auth failed:', error)
+      setError('Failed to authenticate with Farcaster')
     }
   }
 
@@ -266,15 +263,7 @@ export default function CartoonifyApp() {
         text: `Check out my ${selectedStyle} style avatar created with MeSticker! 🎨 #MeSticker #${selectedStyle?.replace(/\\s+/g, '') || 'Cartoon'}`
       }
 
-      const isInMiniApp = await isMiniApp()
-      if (isInMiniApp) {
-        // Use Farcaster SDK for sharing in mini app
-        const { sdk } = await import('@farcaster/miniapp-sdk')
-        await sdk.actions.openUrl(`https://warpcast.com/~/compose?text=${encodeURIComponent(shareData.text)}&embeds[]=${encodeURIComponent(shareData.imageUrl)}`)
-      } else {
-        // Open in new window for web
-        window.open(`https://warpcast.com/~/compose?text=${encodeURIComponent(shareData.text)}&embeds[]=${encodeURIComponent(shareData.imageUrl)}`, '_blank')
-      }
+      await sdk.actions.openUrl(`https://warpcast.com/~/compose?text=${encodeURIComponent(shareData.text)}&embeds[]=${encodeURIComponent(shareData.imageUrl)}`)
       
     } catch (error) {
       console.error('Failed to share to Farcaster:', error)
@@ -354,9 +343,6 @@ export default function CartoonifyApp() {
         </div>
 
         <div className="p-4 space-y-6">
-          {/* Connect Wallet (Web Only) */}
-          <ConnectWallet />
-
           {/* Step 1: Style Selection */}
           <div className="space-y-4 animate-fade-slide-in">
             <div className="flex items-center gap-3">
