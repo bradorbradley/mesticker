@@ -75,7 +75,18 @@ export default function CartoonifyApp() {
   const { hasCredits, useCredit: decrementCredit, credits, isFreeUser } = useCredits()
 
   useEffect(() => {
-    sdk.actions.ready()
+    // Initialize Farcaster Mini App
+    const initializeFarcaster = async () => {
+      try {
+        console.log('🚀 Calling sdk.actions.ready()...')
+        await sdk.actions.ready()
+        console.log('✅ sdk.actions.ready() completed successfully!')
+      } catch (error) {
+        console.error('❌ Error calling sdk.actions.ready():', error)
+      }
+    }
+    
+    initializeFarcaster()
   }, [])
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
