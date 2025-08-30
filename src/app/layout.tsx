@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     images: ['/cartoon-presets/outputexample.png'],
   },
   other: {
-    // Mini App embed metadata (new format)
+    // Mini App embed metadata (new format) - v2
     'fc:miniapp': JSON.stringify({
       version: "1",
       imageUrl: "https://mesticker-app.vercel.app/api/frame-image",
