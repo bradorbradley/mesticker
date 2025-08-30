@@ -15,19 +15,36 @@ export const metadata: Metadata = {
     images: ['/cartoon-presets/outputexample.png'],
   },
   other: {
-    'fc:frame': 'vNext',
-    'fc:frame:image': 'https://mesticker-app.vercel.app/api/frame-image',
-    'fc:frame:image:aspect_ratio': '1.91:1',
-    'fc:frame:button:1': 'Launch MeSticker',
-    'fc:frame:button:1:action': 'link',
-    'fc:frame:button:1:target': 'https://mesticker-app.vercel.app',
-    'of:version': 'vNext',
-    'of:accepts:xmtp': '2024-02-01',
-    'of:image': 'https://mesticker-app.vercel.app/api/frame-image',
-    'of:image:aspect_ratio': '1.91:1',
-    'of:button:1': 'Launch MeSticker',
-    'of:button:1:action': 'link',
-    'of:button:1:target': 'https://mesticker-app.vercel.app',
+    // Mini App embed metadata (new format)
+    'fc:miniapp': JSON.stringify({
+      version: "1",
+      imageUrl: "https://mesticker-app.vercel.app/api/frame-image",
+      button: {
+        title: "🎨 Create Sticker",
+        action: {
+          type: "launch_miniapp",
+          url: "https://mesticker-app.vercel.app",
+          name: "MeSticker",
+          splashImageUrl: "https://mesticker-app.vercel.app/icon.png",
+          splashBackgroundColor: "#ffffff"
+        }
+      }
+    }),
+    // Backward compatibility
+    'fc:frame': JSON.stringify({
+      version: "1",
+      imageUrl: "https://mesticker-app.vercel.app/api/frame-image",
+      button: {
+        title: "🎨 Create Sticker",
+        action: {
+          type: "launch_frame",
+          url: "https://mesticker-app.vercel.app",
+          name: "MeSticker",
+          splashImageUrl: "https://mesticker-app.vercel.app/icon.png",
+          splashBackgroundColor: "#ffffff"
+        }
+      }
+    }),
   },
 }
 
