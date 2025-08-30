@@ -11,6 +11,7 @@ import CreditSystem from '@/components/CreditSystem'
 import { useCredits } from '@/hooks/useCredits'
 import ImageRevealSlider from '@/components/ImageRevealSlider'
 import TicTacToeGame from '@/components/TicTacToeGame'
+import { WalletConnect } from '@/components/WalletConnect'
 
 const cartoonStyles = [
   {
@@ -58,7 +59,7 @@ const loadingMessages = [
   "🎪 Almost ready to show!",
 ]
 
-export default function CartoonifyApp() {
+export default function MeStickerApp() {
   const [selectedStyle, setSelectedStyle] = useState("Hey Arnold")
   const [uploadedImage, setUploadedImage] = useState<File | null>(null)
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null)
@@ -284,6 +285,7 @@ export default function CartoonifyApp() {
 
   return (
     <div className="min-h-screen bg-white overflow-x-hidden">
+      <WalletConnect />
       <div className="max-w-md mx-auto bg-white min-h-screen relative">
         {/* Floating modern elements */}
         <div className="absolute top-20 left-4 w-3 h-3 bg-teal-400 rounded-full animate-bounce opacity-60 blur-[0.5px]"></div>
@@ -297,9 +299,9 @@ export default function CartoonifyApp() {
 
           <div className="relative z-10">
             <h1 className="title text-center mb-6">
-              Cartoonify
+              MeSticker
               <br />
-              <span className="bg-gradient-to-r from-[#00C2FF] to-[#FF7B36] bg-clip-text text-transparent">Yourself</span>
+              <span className="bg-gradient-to-r from-[#00C2FF] to-[#FF7B36] bg-clip-text text-transparent">Cartoonify Yourself</span>
             </h1>
 
             {/* Before/After Example */}
@@ -498,7 +500,7 @@ export default function CartoonifyApp() {
                     >
                       <Sparkles className="w-5 h-5 animate-spin" />
                       {hasCredits 
-                        ? (isFreeUser ? `Try Free! (${credits} left)` : 'Cartoonify Me!') 
+                        ? (isFreeUser ? `Try Free! (${credits} left)` : 'MeSticker Me!') 
                         : 'Buy Credits to Start'
                       }
                       <Sparkles className="w-5 h-5 animate-spin" />

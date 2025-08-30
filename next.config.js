@@ -3,6 +3,15 @@ const nextConfig = {
     images: {
       domains: ['localhost'],
     },
+    async redirects() {
+      return [
+        {
+          source: '/.well-known/farcaster.json',
+          destination: 'https://api.farcaster.xyz/miniapps/hosted-manifest/0198fc52-a93d-71c5-3a7f-05be4d705a62',
+          permanent: false, // Use temporary redirect (307) so you can change it later
+        },
+      ]
+    },
     async headers() {
       return [
         {

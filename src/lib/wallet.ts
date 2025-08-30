@@ -15,12 +15,11 @@ class FarcasterWallet implements WalletAPI {
   }
 
   async getAddress(): Promise<string> {
-    const context = await sdk.context
-    if (context.user?.custody) {
-      return context.user.custody
-    }
-    // Fallback to wallet provider if available
+    // Use wallet provider to get address
     const provider = await sdk.wallet.getEthereumProvider()
+    if (!provider) {
+      throw new Error('No Ethereum provider available in Mini App')
+    }
     const accounts = await provider.request({ method: 'eth_requestAccounts' })
     return accounts[0]
   }
