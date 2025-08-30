@@ -8,47 +8,33 @@ import { useAccount } from 'wagmi'
 
 export function WalletConnect() {
   const [isMiniApp, setIsMiniApp] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
   const { isConnected } = useAccount()
 
   useEffect(() => {
-    const checkIfMiniApp = async () => {
+    // Check if we're in a Mini App by looking for specific indicators
+    const checkIfMiniApp = () => {
       try {
-        // Check if we're in a Farcaster environment
-        // Multiple ways to detect this
-        const context = await Promise.race([
-          sdk.context,
-          new Promise((_, reject) => setTimeout(() => reject('timeout'), 1000))
-        ])
+        // Check for Farcaster-specific indicators
+        const userAgent = navigator.userAgent.toLowerCase()
+        const isFarcasterApp = userAgent.includes('farcaster') || 
+                              userAgent.includes('warpcast') ||
+                              window.location.href.includes('farcaster.xyz')
         
-        if (context?.client?.clientFid || context?.user?.fid) {
-          setIsMiniApp(true)
-        } else {
-          setIsMiniApp(false)
-        }
+        // Check if we're in an iframe (common for Mini Apps)
+        const isInIframe = window !== window.parent
+        
+        setIsMiniApp(isFarcasterApp || (isInIframe && window.location.href.includes('farcaster')))
       } catch (error) {
-        // If we can't access Farcaster context or it times out, we're on web
-        console.log('Not in Mini App environment:', error)
+        // Default to showing wallet connect if we can't detect
         setIsMiniApp(false)
-      } finally {
-        setIsLoading(false)
       }
     }
 
-    // Also check for iframe context (common in Mini Apps)
-    const isInIframe = window !== window.parent
-    
-    if (isInIframe) {
-      checkIfMiniApp()
-    } else {
-      // If not in iframe, likely web
-      setIsMiniApp(false)
-      setIsLoading(false)
-    }
+    checkIfMiniApp()
   }, [])
 
-  // Don't render anything while loading or if we're in a Mini App
-  if (isLoading || isMiniApp) {
+  // Show wallet connect for web users (default to showing it)
+  if (isMiniApp) {
     return null
   }
 
