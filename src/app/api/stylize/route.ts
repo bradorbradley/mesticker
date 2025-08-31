@@ -20,6 +20,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`[${requestId}] Processing image generation - Size: ${image.size} bytes, Style: ${style}`)
 
+    // Convert File to Buffer immediately to avoid stream consumption issues
+    const arrayBuffer = await image.arrayBuffer()
+    const imageBuffer = Buffer.from(arrayBuffer)
+
     // Create the prompt based on selected style
     const stylePrompts = {
       'Hey Arnold': 'Transform this person into Hey Arnold cartoon style with football head shape, simple lines, and 90s Nickelodeon animation aesthetic',
@@ -34,9 +38,9 @@ export async function POST(request: NextRequest) {
     const prompt = stylePrompts[style as keyof typeof stylePrompts] || 
       `Transform this person into ${style} cartoon style`
 
-    // Use centralized editImage function
+    // Use centralized editImage function with Buffer
     console.log(`[${requestId}] Calling OpenAI API...`)
-    const response = await editImage(image, prompt)
+    const response = await editImage(imageBuffer, prompt)
     console.log(`[${requestId}] OpenAI API call completed successfully`)
 
     if (!response.data || response.data.length === 0) {
@@ -68,7 +72,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ imageBase64 })
 
   } catch (error: any) {
-    const requestId = 'unknown'
+    const requestId = Math.random().toString(36).substring(7)
     console.error(`[${requestId}] Stylize API Error:`, error)
     
     // Check for specific OpenAI error types
