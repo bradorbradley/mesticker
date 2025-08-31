@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Wallet, ConnectWallet } from '@coinbase/onchainkit/wallet'
+import { Wallet, ConnectWallet, WalletDropdown, WalletDropdownLink, WalletDropdownDisconnect } from '@coinbase/onchainkit/wallet'
 import { Avatar, Name } from '@coinbase/onchainkit/identity'
 import { sdk } from '@farcaster/miniapp-sdk'
 import { useAccount } from 'wagmi'
@@ -52,6 +52,9 @@ export function WalletConnect() {
             'Connect Wallet'
           )}
         </ConnectWallet>
+        <WalletDropdown>
+          <WalletDropdownDisconnect />
+        </WalletDropdown>
       </Wallet>
     </div>
   )

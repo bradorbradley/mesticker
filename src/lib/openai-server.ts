@@ -40,6 +40,8 @@ export async function editImage(
   form.append('n', n.toString())
 
   try {
+    console.log('Making OpenAI API call with form data size:', form.getLengthSync?.() || 'unknown')
+    
     const response = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
       headers: {

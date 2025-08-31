@@ -24,8 +24,19 @@ export default function TicTacToeGame({
   onGameEnd,
   autoEnd = false 
 }: TicTacToeGameProps) {
+  // Get previous game count to alternate who goes first
+  const [gameCount, setGameCount] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return parseInt(localStorage.getItem('tictactoe_games') || '0')
+    }
+    return 0
+  })
+  
+  // Alternate who goes first: AI first game, then human alternates
+  const firstPlayer = gameCount % 2 === 0 ? 'ai' : 'human'
+  
   const [board, setBoard] = useState<Board>(Array(9).fill(null))
-  const [currentPlayer, setCurrentPlayer] = useState<Player>('ai')
+  const [currentPlayer, setCurrentPlayer] = useState<Player>(firstPlayer)
   const [winner, setWinner] = useState<Player | 'tie' | null>(null)
   const [gameStarted, setGameStarted] = useState(false)
   const [moveCount, setMoveCount] = useState(0)
@@ -117,8 +128,15 @@ export default function TicTacToeGame({
   }
 
   const resetGame = () => {
+    const newGameCount = gameCount + 1
+    setGameCount(newGameCount)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('tictactoe_games', newGameCount.toString())
+    }
+    
+    const newFirstPlayer = newGameCount % 2 === 0 ? 'ai' : 'human'
     setBoard(Array(9).fill(null))
-    setCurrentPlayer('ai')
+    setCurrentPlayer(newFirstPlayer)
     setWinner(null)
     setGameStarted(false)
     setMoveCount(0)
@@ -129,11 +147,14 @@ export default function TicTacToeGame({
     if (!gameStarted && !autoEnd) {
       const timer = setTimeout(() => {
         setGameStarted(true)
-        makeAIMove()
+        // Only make AI move if AI goes first
+        if (firstPlayer === 'ai') {
+          makeAIMove()
+        }
       }, 1000)
       return () => clearTimeout(timer)
     }
-  }, [gameStarted, makeAIMove, autoEnd])
+  }, [gameStarted, makeAIMove, autoEnd, firstPlayer])
 
   // AI move logic
   useEffect(() => {
@@ -232,7 +253,7 @@ export default function TicTacToeGame({
             </div>
             <div className="text-left">
               <p className="text-sm font-medium text-blue-600">{opponentName}</p>
-              <p className="text-xs text-gray-500">Goes first</p>
+              <p className="text-xs text-gray-500">{firstPlayer === 'ai' ? 'Goes first' : 'Goes second'}</p>
             </div>
           </div>
           
@@ -241,7 +262,7 @@ export default function TicTacToeGame({
           <div className="flex items-center gap-2">
             <div className="text-right">
               <p className="text-sm font-medium text-green-600">You</p>
-              <p className="text-xs text-gray-500">Goes second</p>
+              <p className="text-xs text-gray-500">{firstPlayer === 'human' ? 'Goes first' : 'Goes second'}</p>
             </div>
             <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-green-400">
               <img src={playerImage} alt="You" className="w-full h-full object-cover" />
@@ -274,7 +295,7 @@ export default function TicTacToeGame({
         {!gameStarted && !autoEnd && (
           <div className="text-center">
             <p className="text-xs text-gray-500 leading-relaxed">
-              Play while your cartoon generates! {opponentName} goes first, then it&apos;s your turn. 
+              Play while your cartoon generates! {firstPlayer === 'ai' ? `${opponentName} goes first, then it's your turn` : `You go first, then ${opponentName} responds`}. 
               Try to get 3 in a row! 🎯
             </p>
           </div>
