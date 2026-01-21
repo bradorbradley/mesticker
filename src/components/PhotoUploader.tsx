@@ -109,14 +109,19 @@ export default function PhotoUploader({
     )
   }
 
+  const handleClick = () => {
+    inputRef.current?.click()
+  }
+
   return (
     <div className={cn("space-y-2", className)}>
       <div
+        onClick={handleClick}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "upload-area transition-all duration-200",
+          "upload-area transition-all duration-200 cursor-pointer",
           isDragging && "drag-over border-[#00C2FF] bg-blue-50"
         )}
       >
@@ -126,9 +131,8 @@ export default function PhotoUploader({
           accept="image/jpeg,image/png,image/webp"
           onChange={handleFileChange}
           className="hidden"
-          id="photo-upload"
         />
-        <label htmlFor="photo-upload" className="cursor-pointer block">
+        <div className="pointer-events-none">
           <div className="flex flex-col items-center gap-4 text-center">
             <div className="w-16 h-16 bg-gradient-to-r from-[#00C2FF] to-[#0EA5E9] rounded-2xl flex items-center justify-center">
               <Upload className="w-8 h-8 text-white" />
@@ -145,7 +149,7 @@ export default function PhotoUploader({
               </p>
             </div>
           </div>
-        </label>
+        </div>
       </div>
       {error && (
         <p className="text-sm text-red-500 text-center">{error}</p>
