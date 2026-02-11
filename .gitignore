@@ -26,5 +26,8 @@ scripts/ralph/progress.txt
 scripts/ralph/.last-branch
 scripts/ralph/archive/
 
+# TypeScript
+tsconfig.tsbuildinfo
+
 # Claude
 .claude/
