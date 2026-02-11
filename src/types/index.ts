@@ -1,31 +1,48 @@
-export interface User {
-    id: string
-    email: string
-    walletAddress?: string
-  }
-  
-  export interface ArtStyle {
-    id: string
-    name: string
-    description: string
-    preview: string
-    price: number
-  }
-  
-  export interface StickerOrder {
-    id: string
-    userId: string
-    imageUrl: string
-    styleId: string
-    status: 'pending' | 'processing' | 'completed' | 'shipped'
-    paymentStatus: 'pending' | 'paid' | 'failed'
-    transactionHash?: string
-    createdAt: Date
-    updatedAt: Date
-  }
-  
-  export interface ImageUpload {
-    file: File
-    preview: string
-    processed?: string
-  }
+export interface StylePreset {
+  id: string;
+  name: string;
+  description: string;
+  previewImage: string;
+  prompt: string;
+}
+
+export interface Creation {
+  id: string;
+  createdAt: string;
+  originalImage: string;
+  generatedImage: string;
+  stylePreset: string;
+  ordered: boolean;
+}
+
+export interface ShippingAddress {
+  name: string;
+  address1: string;
+  address2?: string;
+  city: string;
+  stateCode: string;
+  countryCode: string;
+  zip: string;
+}
+
+export interface Order {
+  id: string;
+  createdAt: string;
+  imageUrl: string;
+  originalImageUrl: string;
+  stylePreset: string;
+  quantity: number;
+  shippingAddress: ShippingAddress;
+  stripePaymentIntentId: string;
+  printfulOrderId?: string;
+  status:
+    | "pending_payment"
+    | "paid"
+    | "submitted_to_printful"
+    | "in_production"
+    | "shipped"
+    | "delivered";
+  totalAmount: number;
+}
+
+export type AppStep = "capture" | "style" | "order";
