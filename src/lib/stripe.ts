@@ -1,69 +1,37 @@
-import Stripe from "stripe"
+import Stripe from "stripe";
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2024-11-20.acacia",
-})
+export function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error("STRIPE_SECRET_KEY is not set");
+  return new Stripe(key);
+}
 
-export async function createPaymentIntent(
-  amount: number, // in cents
-  metadata: Record<string, string> = {}
-): Promise<Stripe.PaymentIntent> {
+// Pack pricing (in cents)
+// Printful kiss-cut sticker cost: ~$2.50/sticker + ~$4.50 shipping
+// We mark up ~50-80% on cost to cover fees + profit
+export const PACK_OPTIONS = [
+  { quantity: 3, pricePerSticker: 499, label: "3 Pack" },   // $4.99/ea = $14.97 total
+  { quantity: 5, pricePerSticker: 349, label: "5 Pack" },   // $3.49/ea = $17.45 total (most popular)
+  { quantity: 10, pricePerSticker: 249, label: "10 Pack" },  // $2.49/ea = $24.90 total (best value)
+] as const;
+
+const SHIPPING_CENTS = 499; // $4.99 flat shipping
+
+export function calculateTotal(quantity: number) {
+  const pack = PACK_OPTIONS.find((p) => p.quantity === quantity);
+  if (!pack) throw new Error(`Invalid pack quantity: ${quantity}`);
+  const subtotal = pack.pricePerSticker * pack.quantity;
+  const shipping = SHIPPING_CENTS;
+  const total = subtotal + shipping;
+  return { subtotal, shipping, total, pricePerSticker: pack.pricePerSticker };
+}
+
+export async function createPaymentIntent(amountCents: number, metadata: Record<string, string>) {
+  const stripe = getStripe();
   return stripe.paymentIntents.create({
-    amount,
+    amount: amountCents,
     currency: "usd",
-    automatic_payment_methods: {
-      enabled: true,
-    },
     metadata,
-  })
-}
-
-export async function retrievePaymentIntent(
-  paymentIntentId: string
-): Promise<Stripe.PaymentIntent> {
-  return stripe.paymentIntents.retrieve(paymentIntentId)
-}
-
-export async function createCheckoutSession(
-  imageUrl: string,
-  priceInCents: number,
-  successUrl: string,
-  cancelUrl: string,
-  metadata: Record<string, string> = {}
-): Promise<Stripe.Checkout.Session> {
-  return stripe.checkout.sessions.create({
-    payment_method_types: ["card"],
-    line_items: [
-      {
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: "Custom Sticker",
-            description: "AI-generated stylized portrait sticker",
-            images: [imageUrl],
-          },
-          unit_amount: priceInCents,
-        },
-        quantity: 1,
-      },
-    ],
-    mode: "payment",
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-    shipping_address_collection: {
-      allowed_countries: ["US", "CA", "GB", "AU", "DE", "FR", "ES", "IT", "NL"],
-    },
-    metadata,
-  })
-}
-
-export async function constructWebhookEvent(
-  payload: string | Buffer,
-  signature: string
-): Promise<Stripe.Event> {
-  return stripe.webhooks.constructEvent(
-    payload,
-    signature,
-    process.env.STRIPE_WEBHOOK_SECRET || ""
-  )
+    automatic_payment_methods: { enabled: true },
+  });
 }

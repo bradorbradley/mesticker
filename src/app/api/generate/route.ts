@@ -1,85 +1,58 @@
-import { NextRequest, NextResponse } from "next/server"
-import { generateSticker } from "@/lib/gemini"
-import { uploadImage } from "@/lib/cloudinary"
-import { STYLE_PRESETS, StylePresetKey } from "@/lib/constants"
-import { trackGeneration } from "@/lib/supabase"
+import { NextRequest, NextResponse } from "next/server";
+import { removeBackground } from "@/lib/removebg";
+import { generateStickerImage } from "@/lib/gemini";
+import { stylePresets } from "@/lib/presets";
 
-export const maxDuration = 60 // 60 seconds max for Vercel
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData()
-    const imageFile = formData.get("image") as File | null
-    const style = formData.get("style") as string | null
+    const { image, styleId } = await request.json();
 
-    if (!imageFile) {
+    if (!image || !styleId) {
       return NextResponse.json(
-        { error: "No image provided" },
+        { error: "Missing image or styleId" },
         { status: 400 }
-      )
+      );
     }
 
-    if (!style || !(style in STYLE_PRESETS)) {
+    const preset = stylePresets.find((p) => p.id === styleId);
+    if (!preset) {
       return NextResponse.json(
         { error: "Invalid style preset" },
         { status: 400 }
-      )
+      );
     }
 
-    // Convert image to base64
-    const arrayBuffer = await imageFile.arrayBuffer()
-    const base64Image = Buffer.from(arrayBuffer).toString("base64")
-
-    // Get style prompt
-    const stylePreset = STYLE_PRESETS[style as StylePresetKey]
-    const prompt = stylePreset.prompt
-
-    console.log(`Generating sticker with style: ${style}`)
-
-    // Generate styled image using Gemini
-    const generatedImageBase64 = await generateSticker(base64Image, prompt)
-
-    // Upload to Cloudinary
-    const imageUrl = await uploadImage(generatedImageBase64, "mesticker/stickers")
-
-    console.log(`Sticker generated and uploaded: ${imageUrl}`)
-
-    // Track generation (optional - won't fail if Supabase not configured)
-    try {
-      await trackGeneration(style, imageUrl)
-    } catch (e) {
-      console.log("Supabase tracking skipped:", e)
+    // Step 1: Remove background (optional — skip if API key not configured)
+    let processedImage = image;
+    let bgRemoved = false;
+    if (process.env.REMOVEBG_API_KEY) {
+      try {
+        processedImage = await removeBackground(image);
+        bgRemoved = true;
+      } catch (e) {
+        console.warn("Background removal failed, continuing without it:", e);
+      }
     }
 
-    // Generate a unique generation ID
-    const generationId = `gen_${Date.now()}_${Math.random().toString(36).substring(7)}`
+    // Step 2: Apply style with Gemini
+    // If background wasn't removed, tell Gemini to handle it
+    const prompt = bgRemoved
+      ? preset.prompt
+      : `${preset.prompt} First remove the background from the photo, then apply the style.`;
+    const styledImage = await generateStickerImage(processedImage, prompt);
 
     return NextResponse.json({
-      imageUrl,
-      generationId,
-      style: stylePreset.name,
-    })
-  } catch (error: any) {
-    console.error("Generation error:", error)
-
-    // Handle specific errors
-    if (error.message?.includes("SAFETY")) {
-      return NextResponse.json(
-        { error: "Image was blocked by content safety filters. Please try a different photo." },
-        { status: 400 }
-      )
-    }
-
-    if (error.message?.includes("rate limit") || error.message?.includes("429")) {
-      return NextResponse.json(
-        { error: "Rate limit exceeded. Please wait a moment and try again." },
-        { status: 429 }
-      )
-    }
-
+      originalImage: image,
+      generatedImage: styledImage,
+      stylePreset: styleId,
+    });
+  } catch (error) {
+    console.error("Generate error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to generate sticker" },
+      { error: error instanceof Error ? error.message : "Generation failed" },
       { status: 500 }
-    )
+    );
   }
 }

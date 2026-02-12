@@ -1,35 +1,28 @@
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
-
-const inter = Inter({ subsets: ['latin'] })
+import type { Metadata, Viewport } from "next";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: 'MeSticker - Custom AI Stickers',
-  description: 'Turn your photos into custom AI-generated stickers. Choose from 6 unique styles and get premium stickers shipped to your door.',
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
-  openGraph: {
-    title: 'MeSticker - Custom AI Stickers',
-    description: 'Turn your photos into custom AI-generated stickers. Choose from 6 unique styles and get premium stickers shipped to your door.',
-    images: ['/og-image.png'],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'MeSticker - Custom AI Stickers',
-    description: 'Turn your photos into custom AI-generated stickers.',
-  },
-}
+  title: "MeSticker — Turn yourself into a cartoon sticker",
+  description:
+    "Upload a photo, pick a style, and get a custom cartoon sticker shipped to your door.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: "#6C63FF",
+};
 
 export default function RootLayout({
   children,
-}: {
-  children: React.ReactNode
-}) {
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        {children}
-      </body>
+      <body className="min-h-dvh bg-background antialiased">{children}</body>
     </html>
-  )
+  );
 }

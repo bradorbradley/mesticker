@@ -1,10 +1,33 @@
-node_modules
+# Dependencies
+node_modules/
 
-# Next.js build files
-.next
-.vercel
+# Next.js
+.next/
+out/
+
+# Vercel
+.vercel/
 
 # Environment files
 .env
 .env.local
-*.env
+.env*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Ralph runtime files
+scripts/ralph/progress.txt
+scripts/ralph/.last-branch
+scripts/ralph/archive/
+
+# TypeScript
+tsconfig.tsbuildinfo
+
+# Claude
+.claude/

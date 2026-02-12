@@ -1,138 +1,337 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { ArrowRight, Sparkles, Camera, Star, Truck } from "lucide-react"
-import PhotoUploader from "@/components/PhotoUploader"
-import { STYLE_PRESETS } from "@/lib/constants"
+import { useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import ProgressSteps from "@/components/progress-steps";
+import CameraCapture from "@/components/camera-capture";
+import StyleCarousel from "@/components/style-carousel";
+import LoadingState from "@/components/loading-state";
+import OrderForm from "@/components/order-form";
+import PaymentForm from "@/components/payment-form";
+import OrderConfirmation from "@/components/order-confirmation";
+import ImageRevealSlider from "@/components/image-reveal";
+import Gallery from "@/components/gallery";
+import { useCreations } from "@/hooks/use-creations";
+import type { AppStep, StylePreset, ShippingAddress, Creation } from "@/types";
 
-export default function LandingPage() {
-  const router = useRouter()
-  const [uploadedImage, setUploadedImage] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+const pageVariants = {
+  enter: { opacity: 0, x: 30 },
+  center: { opacity: 1, x: 0 },
+  exit: { opacity: 0, x: -30 },
+};
 
-  const handleImageSelect = (file: File, previewUrl: string) => {
-    setUploadedImage(file)
-    setImagePreview(previewUrl)
-  }
+export default function Home() {
+  const [step, setStep] = useState<AppStep>("capture");
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [selectedStyle, setSelectedStyle] = useState<StylePreset | null>(null);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
-  const handleContinue = () => {
-    if (imagePreview) {
-      // Store image in session storage for the next page
-      sessionStorage.setItem("uploadedImage", imagePreview)
-      if (uploadedImage) {
-        // Convert file to base64 and store
-        const reader = new FileReader()
-        reader.onloadend = () => {
-          sessionStorage.setItem("uploadedImageBase64", reader.result as string)
-          router.push("/create")
-        }
-        reader.readAsDataURL(uploadedImage)
+  // Order state
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [orderAmount, setOrderAmount] = useState(0);
+  const [orderQuantity, setOrderQuantity] = useState(0);
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [paymentComplete, setPaymentComplete] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  const { creations, addCreation } = useCreations();
+
+  const handleCapture = useCallback((imageBase64: string) => {
+    setCapturedImage(imageBase64);
+    setStep("style");
+  }, []);
+
+  const handleGenerate = useCallback(async () => {
+    if (!capturedImage || !selectedStyle) return;
+
+    setIsGenerating(true);
+    setGenerateError(null);
+
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image: capturedImage,
+          styleId: selectedStyle.id,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Generation failed");
       }
-    }
-  }
 
-  const styleExamples = Object.values(STYLE_PRESETS).slice(0, 3)
+      const data = await res.json();
+      setGeneratedImage(data.generatedImage);
+
+      addCreation({
+        originalImage: capturedImage,
+        generatedImage: data.generatedImage,
+        stylePreset: selectedStyle.id,
+        ordered: false,
+      });
+    } catch (error) {
+      setGenerateError(
+        error instanceof Error ? error.message : "Something went wrong"
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [capturedImage, selectedStyle, addCreation]);
+
+  const handleOrderSubmit = useCallback(
+    async (quantity: number, address: ShippingAddress) => {
+      if (!generatedImage) return;
+
+      setIsCreatingOrder(true);
+      setPaymentError(null);
+
+      try {
+        const res = await fetch("/api/order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: generatedImage, quantity, address }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Order creation failed");
+        }
+
+        const data = await res.json();
+        setClientSecret(data.clientSecret);
+        setOrderAmount(data.amount);
+        setOrderQuantity(quantity);
+      } catch (error) {
+        setPaymentError(
+          error instanceof Error ? error.message : "Something went wrong"
+        );
+      } finally {
+        setIsCreatingOrder(false);
+      }
+    },
+    [generatedImage]
+  );
+
+  const handlePaymentSuccess = useCallback(() => {
+    setPaymentComplete(true);
+  }, []);
+
+  const handleNewSticker = useCallback(() => {
+    setCapturedImage(null);
+    setSelectedStyle(null);
+    setGeneratedImage(null);
+    setClientSecret(null);
+    setOrderAmount(0);
+    setOrderQuantity(0);
+    setPaymentComplete(false);
+    setPaymentError(null);
+    setGenerateError(null);
+    setStep("capture");
+  }, []);
+
+  const handleGallerySelect = useCallback((creation: Creation) => {
+    setCapturedImage(creation.originalImage);
+    setGeneratedImage(creation.generatedImage);
+    setSelectedStyle(null);
+    setClientSecret(null);
+    setPaymentError(null);
+    setPaymentComplete(false);
+    setStep("style");
+  }, []);
+
+  const goBack = useCallback(() => {
+    if (step === "style") {
+      setGeneratedImage(null);
+      setSelectedStyle(null);
+      setGenerateError(null);
+      setStep("capture");
+    } else if (step === "order") {
+      setClientSecret(null);
+      setPaymentError(null);
+      setStep("style");
+    }
+  }, [step]);
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="max-w-md mx-auto px-4 py-8">
-        {/* Hero Section */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-[#00C2FF]/10 to-[#FF7B36]/10 rounded-full mb-4">
-            <Sparkles className="w-4 h-4 text-[#FF7B36]" />
-            <span className="text-sm font-medium text-gray-700">AI-Powered Stickers</span>
-          </div>
-
-          <h1 className="title mb-4">
-            Turn Your Photos Into
-            <br />
-            <span className="bg-gradient-to-r from-[#00C2FF] to-[#FF7B36] bg-clip-text text-transparent">
-              Custom Stickers
-            </span>
-          </h1>
-
-          <p className="subtitle mb-6">
-            Upload a photo, choose a style, and get beautiful AI-generated stickers shipped to your door
-          </p>
-        </div>
-
-        {/* Example Transformations */}
-        <div className="flex justify-center gap-3 mb-8">
-          <div className="flex items-center gap-2">
-            <div className="w-12 h-12 rounded-lg overflow-hidden border-2 border-gray-200">
-              <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
-                <Camera className="w-5 h-5 text-gray-500" />
-              </div>
-            </div>
-            <ArrowRight className="w-5 h-5 text-[#00C2FF]" />
-            <div className="flex -space-x-2">
-              {styleExamples.map((style, i) => (
-                <div
-                  key={style.id}
-                  className="w-12 h-12 rounded-lg border-2 border-white shadow-md bg-gradient-to-br from-pink-200 to-purple-200 flex items-center justify-center"
-                  style={{ zIndex: 3 - i }}
-                >
-                  <span className="text-lg">
-                    {style.id === "watercolor" ? "🎨" : style.id === "ghibli" ? "🌸" : "✨"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Upload Section */}
-        <div className="space-y-6">
-          <PhotoUploader
-            onImageSelect={handleImageSelect}
-            selectedImage={imagePreview}
-            onClear={() => {
-              setUploadedImage(null)
-              setImagePreview(null)
-            }}
-          />
-
-          {imagePreview && (
+    <main className="min-h-dvh bg-background">
+      <div className="mx-auto max-w-md px-4 py-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          {step !== "capture" && !paymentComplete ? (
             <button
-              onClick={handleContinue}
-              className="w-full pill-button pill-button-primary animate-fade-slide-in"
+              onClick={goBack}
+              className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
             >
-              <span>Choose Your Style</span>
-              <ArrowRight className="w-5 h-5" />
+              <ArrowLeft size={16} />
             </button>
+          ) : (
+            <div className="w-8" />
           )}
+          <h1 className="text-xl font-bold text-primary">MeSticker</h1>
+          <div className="w-8" />
         </div>
 
-        {/* Features */}
-        <div className="mt-12 grid grid-cols-3 gap-4 text-center">
-          <div className="space-y-2">
-            <div className="w-10 h-10 mx-auto bg-gradient-to-br from-[#00C2FF]/20 to-[#00C2FF]/10 rounded-lg flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-[#00C2FF]" />
-            </div>
-            <p className="text-xs font-medium text-gray-600">6 Unique Styles</p>
-          </div>
-          <div className="space-y-2">
-            <div className="w-10 h-10 mx-auto bg-gradient-to-br from-[#FF7B36]/20 to-[#FF7B36]/10 rounded-lg flex items-center justify-center">
-              <Star className="w-5 h-5 text-[#FF7B36]" />
-            </div>
-            <p className="text-xs font-medium text-gray-600">Premium Quality</p>
-          </div>
-          <div className="space-y-2">
-            <div className="w-10 h-10 mx-auto bg-gradient-to-br from-[#6C63FF]/20 to-[#6C63FF]/10 rounded-lg flex items-center justify-center">
-              <Truck className="w-5 h-5 text-[#6C63FF]" />
-            </div>
-            <p className="text-xs font-medium text-gray-600">Fast Shipping</p>
-          </div>
-        </div>
+        {/* Progress */}
+        {!paymentComplete && (
+          <ProgressSteps current={step} className="mb-6" />
+        )}
 
-        {/* Pricing Hint */}
-        <div className="mt-8 text-center">
-          <p className="text-sm text-gray-500">
-            Starting at <span className="font-semibold text-gray-700">$9.99</span> per sticker
-          </p>
-        </div>
+        {/* Content */}
+        <AnimatePresence mode="wait">
+          {/* Step 1: Capture */}
+          {step === "capture" && (
+            <motion.div
+              key="capture"
+              variants={pageVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.2 }}
+            >
+              <CameraCapture onCapture={handleCapture} />
+              <Gallery creations={creations} onSelect={handleGallerySelect} className="mt-6" />
+            </motion.div>
+          )}
+
+          {/* Step 2: Style */}
+          {step === "style" && (
+            <motion.div
+              key="style"
+              variants={pageVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.2 }}
+            >
+              {isGenerating ? (
+                <LoadingState />
+              ) : generatedImage && capturedImage ? (
+                <div className="flex flex-col gap-4">
+                  <ImageRevealSlider
+                    beforeSrc={capturedImage}
+                    afterSrc={generatedImage}
+                    height={350}
+                  />
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => {
+                        setGeneratedImage(null);
+                        setSelectedStyle(null);
+                      }}
+                    >
+                      Try Another Style
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      onClick={() => setStep("order")}
+                    >
+                      Order Stickers
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {capturedImage && (
+                    <div className="w-full aspect-square rounded-2xl overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={capturedImage}
+                        alt="Captured photo"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <h2 className="font-semibold mb-2">Choose a style</h2>
+                    <StyleCarousel
+                      selected={selectedStyle?.id ?? null}
+                      onSelect={setSelectedStyle}
+                    />
+                  </div>
+                  {generateError && (
+                    <p className="text-sm text-red-500 text-center">
+                      {generateError}
+                    </p>
+                  )}
+                  <Button
+                    size="lg"
+                    className="w-full"
+                    disabled={!selectedStyle}
+                    onClick={handleGenerate}
+                  >
+                    <Sparkles size={18} className="mr-2" />
+                    Generate Sticker
+                  </Button>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* Step 3: Order */}
+          {step === "order" && (
+            <motion.div
+              key="order"
+              variants={pageVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.2 }}
+            >
+              {paymentComplete ? (
+                <OrderConfirmation
+                  imageUrl={generatedImage || ""}
+                  quantity={orderQuantity}
+                  onNewSticker={handleNewSticker}
+                />
+              ) : clientSecret ? (
+                <div>
+                  {paymentError && (
+                    <p className="text-sm text-red-500 text-center mb-4">
+                      {paymentError}
+                    </p>
+                  )}
+                  <PaymentForm
+                    clientSecret={clientSecret}
+                    amount={orderAmount}
+                    onSuccess={handlePaymentSuccess}
+                    onError={setPaymentError}
+                  />
+                </div>
+              ) : (
+                <div>
+                  {generatedImage && (
+                    <div className="w-full rounded-2xl overflow-hidden mb-4 h-48 flex items-center justify-center bg-muted">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={generatedImage}
+                        alt="Your sticker"
+                        className="h-full object-contain"
+                      />
+                    </div>
+                  )}
+                  {paymentError && (
+                    <p className="text-sm text-red-500 text-center mb-4">
+                      {paymentError}
+                    </p>
+                  )}
+                  <OrderForm
+                    onSubmit={handleOrderSubmit}
+                    isLoading={isCreatingOrder}
+                  />
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-    </div>
-  )
+    </main>
+  );
 }

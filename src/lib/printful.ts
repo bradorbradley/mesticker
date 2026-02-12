@@ -1,154 +1,59 @@
-const PRINTFUL_BASE_URL = "https://api.printful.com"
+import { ShippingAddress } from "@/types";
 
-// Die-cut sticker variant ID - verify in Printful catalog
-const STICKER_VARIANT_ID = 10163 // 3"x3" die-cut sticker
+const PRINTFUL_API = "https://api.printful.com";
 
-interface ShippingAddress {
-  name: string
-  address: string
-  city: string
-  state: string
-  zip: string
-  country: string
+function getHeaders() {
+  const token = process.env.PRINTFUL_ACCESS_TOKEN;
+  if (!token) throw new Error("PRINTFUL_ACCESS_TOKEN is not set");
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    "X-PF-Store-Id": process.env.PRINTFUL_STORE_ID || "",
+  };
 }
 
-interface PrintfulOrderItem {
-  variant_id: number
-  quantity: number
-  files: {
-    type: string
-    url: string
-  }[]
-}
-
-interface PrintfulOrder {
-  recipient: {
-    name: string
-    address1: string
-    city: string
-    state_code: string
-    country_code: string
-    zip: string
-  }
-  items: PrintfulOrderItem[]
-}
-
-interface PrintfulOrderResponse {
-  code: number
-  result: {
-    id: number
-    external_id: string
-    status: string
-    shipping: string
-    created: number
-    updated: number
-    recipient: {
-      name: string
-      address1: string
-      city: string
-      state_code: string
-      country_code: string
-      zip: string
-    }
-    items: {
-      id: number
-      external_id: string
-      variant_id: number
-      quantity: number
-    }[]
-  }
-}
+// Kiss-cut sticker product/variant IDs from Printful catalog
+// Product 358 = Kiss-cut stickers, variant 10163 = 3"x3"
+const STICKER_VARIANT_ID = 10163;
 
 export async function createPrintfulOrder(
   imageUrl: string,
-  shipping: ShippingAddress
-): Promise<PrintfulOrderResponse> {
-  const orderData: PrintfulOrder = {
-    recipient: {
-      name: shipping.name,
-      address1: shipping.address,
-      city: shipping.city,
-      state_code: shipping.state,
-      country_code: shipping.country,
-      zip: shipping.zip,
-    },
-    items: [
-      {
-        variant_id: STICKER_VARIANT_ID,
-        quantity: 1,
-        files: [
-          {
-            type: "default",
-            url: imageUrl,
-          },
-        ],
-      },
-    ],
-  }
-
-  const response = await fetch(`${PRINTFUL_BASE_URL}/orders`, {
+  quantity: number,
+  address: ShippingAddress
+) {
+  const response = await fetch(`${PRINTFUL_API}/orders`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.PRINTFUL_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(orderData),
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Printful API error: ${response.status} - ${errorText}`)
-  }
-
-  return response.json()
-}
-
-export async function getPrintfulOrder(
-  orderId: number
-): Promise<PrintfulOrderResponse> {
-  const response = await fetch(`${PRINTFUL_BASE_URL}/orders/${orderId}`, {
-    headers: {
-      Authorization: `Bearer ${process.env.PRINTFUL_API_KEY}`,
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch order: ${response.status}`)
-  }
-
-  return response.json()
-}
-
-export async function getShippingRates(
-  shipping: ShippingAddress,
-  imageUrl: string
-): Promise<any> {
-  const response = await fetch(`${PRINTFUL_BASE_URL}/shipping/rates`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.PRINTFUL_API_KEY}`,
-      "Content-Type": "application/json",
-    },
+    headers: getHeaders(),
     body: JSON.stringify({
       recipient: {
-        address1: shipping.address,
-        city: shipping.city,
-        state_code: shipping.state,
-        country_code: shipping.country,
-        zip: shipping.zip,
+        name: address.name,
+        address1: address.address1,
+        address2: address.address2 || undefined,
+        city: address.city,
+        state_code: address.stateCode,
+        country_code: address.countryCode,
+        zip: address.zip,
       },
       items: [
         {
           variant_id: STICKER_VARIANT_ID,
-          quantity: 1,
+          quantity,
+          files: [
+            {
+              type: "default",
+              url: imageUrl,
+            },
+          ],
         },
       ],
     }),
-  })
+  });
 
   if (!response.ok) {
-    throw new Error(`Failed to get shipping rates: ${response.status}`)
+    const error = await response.text();
+    throw new Error(`Printful API error (${response.status}): ${error}`);
   }
 
-  return response.json()
+  const data = await response.json();
+  return data.result;
 }

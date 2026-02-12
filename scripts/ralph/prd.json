@@ -1,0 +1,353 @@
+{
+  "project": "MeSticker",
+  "branchName": "ralph/mesticker-mvp",
+  "description": "MeSticker MVP — Photo to cartoon sticker web app with AI generation, Stripe payments, and Printful fulfillment",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Install shadcn components and set up base layout",
+      "description": "As a developer, I need the core UI component library installed and a responsive mobile-first layout shell so that all subsequent features have a consistent foundation to build on.",
+      "acceptanceCriteria": [
+        "Install shadcn/ui components: button, card, dialog, input, select, badge, progress, skeleton, sheet, separator, label",
+        "Create a base layout in src/app/page.tsx with a centered container max-w-md for mobile-first design",
+        "Add the 3-step progress indicator component at src/components/progress-steps.tsx showing Capture → Style → Order steps",
+        "The progress indicator accepts a currentStep prop of type AppStep and highlights the active step with the primary color (#6C63FF)",
+        "Page renders with the progress indicator and a placeholder for each step",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Camera capture component with photo upload",
+      "description": "As a user, I want to take a photo with my camera or upload one from my gallery so that I can turn it into a sticker.",
+      "acceptanceCriteria": [
+        "Create src/components/camera-capture.tsx component",
+        "Component shows a live camera viewfinder using getUserMedia API with a preference for the user-facing (selfie) camera",
+        "Large circular shutter button at the bottom center to capture a photo",
+        "Gallery/upload button at the bottom-left that opens a file picker for existing photos (accept image/jpeg, image/png)",
+        "Camera toggle button (front/back) at the bottom-right using the Lucide SwitchCamera icon",
+        "After capture or upload, show a preview of the photo with 'Use This Photo' and 'Retake' buttons",
+        "Component calls an onPhotoSelected(imageDataUrl: string) callback with the captured/uploaded image as a data URL",
+        "Graceful fallback if camera access is denied — show only the upload button with a message",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Style preset data and swipeable carousel",
+      "description": "As a user, I want to browse different cartoon styles by swiping through a carousel so that I can pick the style I like best.",
+      "acceptanceCriteria": [
+        "Create src/lib/presets.ts with an array of StylePreset objects for these styles: Spongebob, Family Guy, The Simpsons, Rick and Morty, Hey Arnold, Renaissance Painting, Anime",
+        "Each preset has: id, name, description, previewImage path (pointing to /presets/{id}.png), and a detailed prompt string for image generation",
+        "The prompts should instruct the AI to transform the person in the photo into that specific art style while preserving their likeness, pose, and expression",
+        "Create src/components/style-carousel.tsx with a horizontal swipeable carousel of style cards",
+        "Use Framer Motion for smooth drag/swipe physics with spring animations",
+        "Each card shows the style name, a brief description, and a colored placeholder (since we don't have preview images yet — use a gradient background with an emoji or Lucide icon as placeholder)",
+        "Tapping a card selects it (highlighted border + checkmark badge)",
+        "Selected style is passed via onStyleSelected(preset: StylePreset) callback",
+        "A 'Create My Sticker' button appears below the carousel when a style is selected",
+        "Carousel is touch-friendly with momentum scrolling",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Main page flow with step-by-step navigation",
+      "description": "As a user, I want to move through the app step by step (Capture → Style → Order) on a single page so that the experience feels smooth and guided.",
+      "acceptanceCriteria": [
+        "Refactor src/app/page.tsx into a stateful single-page app with step management",
+        "Use React state to track: currentStep (AppStep), capturedImage (string | null), selectedStyle (StylePreset | null), generatedImage (string | null)",
+        "Step 1 (Capture): Shows CameraCapture component. On photo selected, advances to Step 2",
+        "Step 2 (Style): Shows the captured photo at the top (small preview) + StyleCarousel below. On 'Create My Sticker' click, triggers generation (placeholder for now — just show a loading state then advance to Step 3)",
+        "Step 3 (Order): Shows placeholder order screen with the generated image",
+        "Use Framer Motion AnimatePresence for smooth transitions between steps (fade + slide up)",
+        "Progress indicator updates to reflect current step",
+        "User can tap completed steps in the progress indicator to go back",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Loading state component with playful animations",
+      "description": "As a user, I want to see a fun animated loading screen while my sticker is being generated so that the wait feels magical rather than boring.",
+      "acceptanceCriteria": [
+        "Create src/components/loading-state.tsx component",
+        "Shows a pulsing/animated container with the user's original photo gently bouncing or rotating",
+        "Cycles through playful messages like: 'Sprinkling cartoon dust...', 'Drawing your features...', 'Adding the finishing touches...', 'Almost there...'",
+        "Messages rotate every 2-3 seconds with a fade transition (Framer Motion)",
+        "A subtle progress indicator (animated dots or a shimmer bar) shows activity",
+        "Component accepts a styleName prop to personalize messages (e.g., 'Entering the Simpsons universe...')",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Remove.bg background removal integration",
+      "description": "As a developer, I need a server-side function to remove the background from a user's photo so that the generated sticker has a clean transparent background.",
+      "acceptanceCriteria": [
+        "Create src/lib/removebg.ts with a removeBackground(imageBase64: string) function",
+        "Function sends the base64-encoded image to the remove.bg API (https://api.remove.bg/v1.0/removebg)",
+        "Sends image as base64 in the request body with 'image_file_b64' field, format 'png', size 'auto'",
+        "Returns the result as a base64-encoded PNG string",
+        "Uses REMOVEBG_API_KEY from environment variables",
+        "Handles API errors gracefully with descriptive error messages",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Gemini image generation integration",
+      "description": "As a developer, I need a server-side function to transform a photo into a specific cartoon style using the Gemini API so that users get their styled sticker image.",
+      "acceptanceCriteria": [
+        "Create src/lib/gemini.ts with a generateStyledImage(imageBase64: string, prompt: string) function",
+        "Uses the @google/genai package to call the Gemini API",
+        "Uses the 'gemini-2.0-flash-exp' model (or latest image-generation-capable model) with responseModalities including 'image'",
+        "Sends the user's photo (as inline base64 data) along with the style prompt",
+        "The prompt instructs Gemini to transform the person into the specified art style while preserving likeness",
+        "Extracts the generated image from response.candidates[0].content.parts, finding the part with inlineData",
+        "Returns the generated image as a base64-encoded string",
+        "Uses GOOGLE_GENERATIVE_AI_API_KEY from environment variables",
+        "Handles API errors gracefully",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Image generation API route",
+      "description": "As a developer, I need a /api/generate endpoint that orchestrates the full image generation pipeline so that the frontend can trigger generation with one call.",
+      "acceptanceCriteria": [
+        "Create src/app/api/generate/route.ts as a POST endpoint",
+        "Accepts JSON body: { imageBase64: string, presetId: string }",
+        "Looks up the style preset by ID to get the prompt",
+        "Pipeline: (1) remove background via removebg.ts → (2) generate styled image via gemini.ts",
+        "Returns JSON: { generatedImage: string (base64), originalWithoutBg: string (base64) }",
+        "Returns appropriate error status codes (400 for bad input, 500 for pipeline failures)",
+        "Each pipeline step has try/catch with specific error messages so failures are debuggable",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Wire up image generation to the UI with reveal",
+      "description": "As a user, I want to see my generated cartoon sticker revealed in a satisfying before/after slider so that the transformation feels magical.",
+      "acceptanceCriteria": [
+        "When user clicks 'Create My Sticker' in Step 2, call POST /api/generate with the captured image and selected preset ID",
+        "Show the LoadingState component while the API call is in progress",
+        "On success, transition to a reveal screen showing the ImageRevealSlider (already exists at src/components/image-reveal.tsx)",
+        "The slider shows the original photo on the left and the generated cartoon on the right",
+        "Below the reveal, show a 'Order Stickers' button to proceed to Step 3 and a 'Save Image' button to download the generated image",
+        "On API error, show an error message with a 'Try Again' button that returns to Step 2",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Printful integration for sticker orders",
+      "description": "As a developer, I need server-side functions to look up sticker products, estimate costs, and create orders via the Printful API.",
+      "acceptanceCriteria": [
+        "Create src/lib/printful.ts with these functions: getKissCutStickerVariants(), estimateOrderCost(variantId, quantity, imageUrl, address), createOrder(variantId, quantity, imageUrl, address, confirm)",
+        "getKissCutStickerVariants() queries GET /products to find kiss-cut sticker products and returns available variant IDs with their sizes and prices",
+        "estimateOrderCost() calls POST /orders/estimate-costs with the variant, quantity, image file URL, and recipient address",
+        "createOrder() calls POST /orders with confirm flag to submit the order for fulfillment",
+        "All functions use PRINTFUL_ACCESS_TOKEN and PRINTFUL_STORE_ID from environment variables",
+        "Auth header: Authorization: Bearer {token}, X-PF-Store-Id: {storeId}",
+        "Base URL: https://api.printful.com",
+        "Handle rate limits (120/min) and API errors gracefully",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Image storage for generated stickers",
+      "description": "As a developer, I need to store generated sticker images at a public URL so that Printful can access them for printing.",
+      "acceptanceCriteria": [
+        "Create src/lib/storage.ts with an uploadImage(imageBase64: string, filename: string) function",
+        "Function stores the image and returns a publicly accessible URL",
+        "Use Vercel Blob (@vercel/blob) if BLOB_READ_WRITE_TOKEN is set",
+        "If Blob token is not available, fall back to storing the base64 image in a local /tmp file and serving it via a simple API route (for development)",
+        "Create src/app/api/images/[id]/route.ts as the fallback serving endpoint that reads from /tmp",
+        "Update /api/generate to also store the generated image and return the public URL alongside the base64",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Stripe payment integration",
+      "description": "As a developer, I need server-side Stripe integration to create payment intents and handle webhooks so that users can pay for their sticker orders.",
+      "acceptanceCriteria": [
+        "Create src/lib/stripe.ts with: createPaymentIntent(amount, currency, metadata), verifyWebhookSignature(body, signature)",
+        "createPaymentIntent() creates a Stripe PaymentIntent with the given amount in cents and metadata (orderId, imageUrl, etc)",
+        "verifyWebhookSignature() verifies the Stripe webhook signature using STRIPE_WEBHOOK_SECRET",
+        "Uses STRIPE_SECRET_KEY from environment variables",
+        "Amount calculation: Printful cost + shipping + our margin (start with $2.00 margin)",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Order form with quantity selection and shipping address",
+      "description": "As a user, I want to select how many stickers I want and enter my shipping address so that I can place an order.",
+      "acceptanceCriteria": [
+        "Create src/components/order-form.tsx component",
+        "Shows the generated sticker image as a preview with a subtle drop shadow and slight rotation to look like a real sticker",
+        "Quantity selector with preset options: 3 stickers, 5 stickers, 10 stickers — each showing a price (can be placeholder prices for now)",
+        "Shipping address form with fields: name, address line 1, address line 2 (optional), city, state, zip code, country (default US)",
+        "Use shadcn Input, Select, Label, and Sheet (bottom sheet on mobile) components",
+        "Form validation: all required fields must be filled, zip code format validation",
+        "A 'Review Order' button that shows an order summary before payment",
+        "Component calls onOrderSubmit({ quantity, address, variantId }) callback",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Order and payment API routes",
+      "description": "As a developer, I need API routes to create orders with cost estimation and handle Stripe payment confirmation to submit orders to Printful.",
+      "acceptanceCriteria": [
+        "Create src/app/api/order/route.ts as a POST endpoint",
+        "Accepts: { imageUrl, variantId, quantity, address }",
+        "Calls Printful estimateOrderCost to get the real cost",
+        "Adds our margin to calculate total price",
+        "Creates a Stripe PaymentIntent for the total amount",
+        "Returns: { clientSecret, orderId, breakdown: { itemCost, shipping, margin, total } }",
+        "Create src/app/api/order/confirm/route.ts as a POST endpoint for Stripe webhooks",
+        "Verifies the webhook signature",
+        "On payment_intent.succeeded: extracts metadata, calls Printful createOrder with confirm: true",
+        "Returns 200 on success",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Stripe payment UI and checkout flow",
+      "description": "As a user, I want to pay for my stickers with a credit card so that my order gets placed and shipped.",
+      "acceptanceCriteria": [
+        "Install @stripe/react-stripe-js and @stripe/stripe-js (already in package.json)",
+        "Create src/components/payment-form.tsx using Stripe's PaymentElement",
+        "Wire up the order flow: user submits order form → call /api/order → get clientSecret → show Stripe PaymentElement → on success show confirmation",
+        "Create src/components/order-confirmation.tsx showing: order success message, sticker preview, estimated delivery (5-7 business days), order ID",
+        "Add a 'Save Image' button to download the generated image to device",
+        "Add a 'Create Another' button that resets the app to Step 1",
+        "Show confetti animation (Framer Motion) on successful order",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Local gallery of past creations",
+      "description": "As a user, I want to see my past creations saved locally so that I can revisit or reorder them.",
+      "acceptanceCriteria": [
+        "Create src/hooks/use-creations.ts hook that reads/writes Creation[] to localStorage",
+        "Automatically save each generation to localStorage after successful image generation",
+        "Create src/components/gallery.tsx component showing past creations in a grid",
+        "Each gallery item shows a small preview of the generated image, the style name, and the date",
+        "Tapping a gallery item shows the full image with options to: order stickers, save image, delete from gallery",
+        "Add a gallery icon button in the top-right of the app header that opens the gallery as a sheet/dialog",
+        "Limit storage to 20 most recent creations to avoid localStorage overflow",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Animations polish and mobile optimization",
+      "description": "As a user, I want the app to feel smooth, responsive, and delightful on my phone so that the experience is joyful.",
+      "acceptanceCriteria": [
+        "Add Framer Motion page transitions between all steps (fade + slide animations)",
+        "Add spring physics to the style carousel swipe with proper velocity-based momentum",
+        "Add a press/scale animation to the shutter button",
+        "Add a gentle floating/wobble animation to the sticker preview in the order step",
+        "Ensure all touch targets are at least 44x44px for mobile accessibility",
+        "Test that the camera viewfinder fills the viewport width on mobile",
+        "Ensure no horizontal scroll occurs on any screen",
+        "Add proper viewport meta (already in layout.tsx) and test on mobile viewport sizes",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Error handling and edge cases",
+      "description": "As a user, I want clear error messages and graceful recovery when something goes wrong so that I'm never stuck.",
+      "acceptanceCriteria": [
+        "Camera permission denied: show a friendly message with instructions and the upload-only fallback",
+        "Image generation failure: show error with 'Try Again' button, don't lose the captured photo or selected style",
+        "Stripe payment failure: show error message, allow retry without re-entering address",
+        "Network errors: show a generic 'Connection issue' toast with retry",
+        "Create a simple toast/notification component at src/components/ui/toast.tsx for displaying errors and success messages",
+        "All API routes return structured error JSON: { error: string, code: string }",
+        "Typecheck passes",
+        "Build passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
