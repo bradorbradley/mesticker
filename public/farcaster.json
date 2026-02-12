@@ -1,0 +1,12 @@
+{
+  "version": "v1",
+  "name": "MeSticker",
+  "description": "Transform into your favorite cartoon character and share on Farcaster!",
+  "icon": "https://mesticker-app.vercel.app/icon.png",
+  "splash": {
+    "imageUrl": "https://mesticker-app.vercel.app/icon.png",
+    "backgroundColor": "#1"
+  },
+  "homeUrl": "https://mesticker-app.vercel.app",
+  "miniAppUrl": "https://mesticker-app.vercel.app"
+}
