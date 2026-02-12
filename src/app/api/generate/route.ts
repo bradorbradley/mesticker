@@ -24,11 +24,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 1: Remove background
-    const noBgImage = await removeBackground(image);
+    // Step 1: Remove background (optional — skip if API key not configured)
+    let processedImage = image;
+    let bgRemoved = false;
+    if (process.env.REMOVEBG_API_KEY) {
+      try {
+        processedImage = await removeBackground(image);
+        bgRemoved = true;
+      } catch (e) {
+        console.warn("Background removal failed, continuing without it:", e);
+      }
+    }
 
     // Step 2: Apply style with Gemini
-    const styledImage = await generateStickerImage(noBgImage, preset.prompt);
+    // If background wasn't removed, tell Gemini to handle it
+    const prompt = bgRemoved
+      ? preset.prompt
+      : `${preset.prompt} First remove the background from the photo, then apply the style.`;
+    const styledImage = await generateStickerImage(processedImage, prompt);
 
     return NextResponse.json({
       originalImage: image,
