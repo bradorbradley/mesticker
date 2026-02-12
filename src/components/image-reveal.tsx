@@ -225,7 +225,10 @@ export default function ImageRevealSlider({
 
       {allImagesLoaded && (
         <>
-          <div className="absolute top-4 left-4 bg-black/50 text-white px-3 py-1 rounded-lg text-sm font-semibold">
+          <div
+            className="absolute top-4 left-4 bg-black/50 text-white px-3 py-1 rounded-lg text-sm font-semibold transition-opacity duration-200"
+            style={{ opacity: position < 80 ? 1 : 0 }}
+          >
             {altBefore}
           </div>
           <div

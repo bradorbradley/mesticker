@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Minus, Plus, Truck } from "lucide-react";
+import { Truck, Check, Star } from "lucide-react";
 import { ShippingAddress } from "@/types";
+import { cn } from "@/lib/utils";
 
 interface OrderFormProps {
   onSubmit: (quantity: number, address: ShippingAddress) => void;
@@ -14,8 +15,16 @@ interface OrderFormProps {
   className?: string;
 }
 
+const PACKS = [
+  { quantity: 3, pricePerSticker: 4.99, label: "3 Pack", tag: null },
+  { quantity: 5, pricePerSticker: 3.49, label: "5 Pack", tag: "Most Popular" },
+  { quantity: 10, pricePerSticker: 2.49, label: "10 Pack", tag: "Best Value" },
+];
+
+const SHIPPING = 4.99;
+
 export default function OrderForm({ onSubmit, isLoading, className }: OrderFormProps) {
-  const [quantity, setQuantity] = useState(3);
+  const [selectedPack, setSelectedPack] = useState(1); // default to 5-pack
   const [address, setAddress] = useState<ShippingAddress>({
     name: "",
     address1: "",
@@ -26,14 +35,13 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
     zip: "",
   });
 
-  const stickerPrice = 9.99;
-  const shipping = 4.99;
-  const subtotal = stickerPrice * quantity;
-  const total = subtotal + shipping;
+  const pack = PACKS[selectedPack];
+  const subtotal = pack.pricePerSticker * pack.quantity;
+  const total = subtotal + SHIPPING;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(quantity, address);
+    onSubmit(pack.quantity, address);
   };
 
   const updateField = (field: keyof ShippingAddress, value: string) => {
@@ -42,40 +50,41 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
 
   return (
     <form onSubmit={handleSubmit} className={className}>
-      <Card className="mb-4">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Quantity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                disabled={quantity <= 1}
-              >
-                <Minus size={16} />
-              </Button>
-              <span className="text-xl font-bold w-8 text-center">{quantity}</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => setQuantity(Math.min(50, quantity + 1))}
-              >
-                <Plus size={16} />
-              </Button>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-muted-foreground">${stickerPrice.toFixed(2)} each</p>
-              <p className="font-semibold">${subtotal.toFixed(2)}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Pack Selector */}
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        {PACKS.map((p, i) => (
+          <button
+            key={p.quantity}
+            type="button"
+            onClick={() => setSelectedPack(i)}
+            className={cn(
+              "relative rounded-xl border-2 p-3 text-center transition-all",
+              selectedPack === i
+                ? "border-primary bg-primary/5 shadow-md"
+                : "border-border hover:border-primary/40"
+            )}
+          >
+            {p.tag && (
+              <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+                {p.tag}
+              </span>
+            )}
+            {selectedPack === i && (
+              <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                <Check size={10} className="text-white" />
+              </div>
+            )}
+            <p className="text-lg font-bold">{p.quantity}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">stickers</p>
+            <p className="text-sm font-semibold text-primary mt-1">
+              ${p.pricePerSticker.toFixed(2)}
+              <span className="text-[10px] text-muted-foreground font-normal">/ea</span>
+            </p>
+          </button>
+        ))}
+      </div>
 
+      {/* Shipping Address */}
       <Card className="mb-4">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -160,16 +169,19 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
         </CardContent>
       </Card>
 
+      {/* Order Summary */}
       <Card className="mb-4">
         <CardContent className="pt-6">
           <div className="space-y-1 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Subtotal ({quantity} stickers)</span>
+              <span className="text-muted-foreground">
+                {pack.quantity} stickers x ${pack.pricePerSticker.toFixed(2)}
+              </span>
               <span>${subtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Shipping</span>
-              <span>${shipping.toFixed(2)}</span>
+              <span>${SHIPPING.toFixed(2)}</span>
             </div>
             <div className="flex justify-between pt-2 border-t border-border font-semibold text-base">
               <span>Total</span>

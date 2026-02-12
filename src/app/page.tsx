@@ -14,7 +14,7 @@ import OrderConfirmation from "@/components/order-confirmation";
 import ImageRevealSlider from "@/components/image-reveal";
 import Gallery from "@/components/gallery";
 import { useCreations } from "@/hooks/use-creations";
-import type { AppStep, StylePreset, ShippingAddress } from "@/types";
+import type { AppStep, StylePreset, ShippingAddress, Creation } from "@/types";
 
 const pageVariants = {
   enter: { opacity: 0, x: 30 },
@@ -135,6 +135,16 @@ export default function Home() {
     setStep("capture");
   }, []);
 
+  const handleGallerySelect = useCallback((creation: Creation) => {
+    setCapturedImage(creation.originalImage);
+    setGeneratedImage(creation.generatedImage);
+    setSelectedStyle(null);
+    setClientSecret(null);
+    setPaymentError(null);
+    setPaymentComplete(false);
+    setStep("style");
+  }, []);
+
   const goBack = useCallback(() => {
     if (step === "style") {
       setGeneratedImage(null);
@@ -185,7 +195,7 @@ export default function Home() {
               transition={{ duration: 0.2 }}
             >
               <CameraCapture onCapture={handleCapture} />
-              <Gallery creations={creations} className="mt-6" />
+              <Gallery creations={creations} onSelect={handleGallerySelect} className="mt-6" />
             </motion.div>
           )}
 

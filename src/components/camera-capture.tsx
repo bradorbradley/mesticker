@@ -28,6 +28,7 @@ export default function CameraCapture({ onCapture, className }: CameraCapturePro
       });
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        await videoRef.current.play().catch(() => {});
       }
       setStream(mediaStream);
       setCameraActive(true);

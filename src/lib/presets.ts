@@ -2,51 +2,75 @@ import { StylePreset } from "@/types";
 
 export const stylePresets: StylePreset[] = [
   {
-    id: "cartoon-pop",
-    name: "Cartoon Pop",
-    description: "Bold outlines, bright colors, classic cartoon vibes",
-    previewImage: "/presets/cartoon-pop.png",
+    id: "3d-animated",
+    name: "3D Animated",
+    description: "Stylized 3D CGI with big expressive eyes and soft lighting",
+    previewImage: "/presets/3d-animated.jpg",
     prompt:
-      "Transform this photo into a bold cartoon-style sticker illustration. Use thick black outlines, vibrant saturated colors, and simplified features. Make it look like a fun cartoon character with exaggerated proportions. The style should be similar to a vinyl sticker you'd put on a laptop. Keep the person's likeness recognizable. White background.",
+      "Transform this photo into a stylized 3D CGI animated character sticker. The character should have smooth rounded plastic-like features, very large round expressive eyes with glossy light reflections in the irises, soft subsurface scattering on the skin giving it a warm translucent glow, and slightly exaggerated proportions (larger head, smaller body). Use warm soft cinematic lighting, vibrant saturated colors, and smooth 3D-rendered hair with visible strand volume. The overall look should be cute, appealing, and family-friendly like a modern animated film character. White background.",
   },
   {
-    id: "anime",
-    name: "Anime",
-    description: "Japanese anime-inspired with big expressive eyes",
-    previewImage: "/presets/anime.png",
+    id: "spongebob",
+    name: "Bikini Bottom",
+    description: "Wacky undersea cartoon with bold outlines and goofy expressions",
+    previewImage: "/presets/spongebob.webp",
     prompt:
-      "Transform this photo into a Japanese anime-style sticker illustration. Use the characteristic anime art style with large expressive eyes, smooth shading, and clean lines. Keep hair and clothing details stylized but recognizable. The person should look like an anime character while maintaining their likeness. White background.",
+      "Transform this photo into a wacky cartoon character sticker in the visual style of an underwater cartoon world. Use very thick bold black outlines, extremely bright saturated colors (heavy yellows, blues, reds), and completely flat coloring with minimal shading. The character should have huge round bulging eyes, exaggerated buck teeth or a giant grin, and a square or boxy body shape. Features should be wildly exaggerated and goofy. The art style should be simple, bold, and energetic with a fun undersea cartoon vibe. White background.",
   },
   {
-    id: "pixel-art",
-    name: "Pixel Art",
-    description: "Retro 16-bit pixel art style",
-    previewImage: "/presets/pixel-art.png",
+    id: "simpsons",
+    name: "Springfield",
+    description: "Yellow-skinned cartoon with overbites and bulging eyes",
+    previewImage: "/presets/simpsons.jpg",
     prompt:
-      "Transform this photo into a retro pixel art style sticker illustration, like a 16-bit video game character portrait. Use a limited color palette with visible pixels, but keep the person recognizable. Make it look like a classic RPG character portrait. White background.",
+      "Transform this photo into a cartoon character sticker with bright YELLOW skin (this is critical - the skin must be yellow), large bulging round white eyes with small black pupils, and a pronounced overbite on the upper lip. The head shape should be rounded and simple. Use clean medium-weight black outlines, flat solid colors with absolutely no gradients or shading, and a very simple minimalist art style. The character should have only 4 fingers on each hand. Keep the features extremely simple and iconic. White background.",
   },
   {
-    id: "watercolor",
-    name: "Watercolor",
-    description: "Soft watercolor painting with gentle washes",
-    previewImage: "/presets/watercolor.png",
+    id: "family-guy",
+    name: "Quahog",
+    description: "Round-headed cartoon with thick outlines and flat colors",
+    previewImage: "/presets/family-guy.webp",
     prompt:
-      "Transform this photo into a beautiful watercolor portrait sticker illustration. Use soft, flowing watercolor washes with visible brush strokes and gentle color bleeding. Keep the person's features recognizable but with an artistic, painterly quality. Use a harmonious color palette. White background.",
+      "Transform this photo into a cartoon character sticker with a very round spherical head shape, tiny oval eyes placed close together near the nose, and a prominent large chin and jawline. Use very thick bold black outlines, completely flat solid colors with absolutely zero gradients or shading, and stocky blocky body proportions. The art style should be simple and geometric with bold shapes. The character should have a slightly smug or deadpan expression. The overall look should be clean, flat, and boldly outlined. White background.",
+  },
+  {
+    id: "rick-morty",
+    name: "Dimension C-137",
+    description: "Sci-fi cartoon with droopy eyes, clean lines, and muted colors",
+    previewImage: "/presets/rick-morty.webp",
+    prompt:
+      "Transform this photo into a cartoon character sticker in the style of an adult animated sci-fi comedy. Use clean simple line art with thin-to-medium black outlines, flat muted desaturated colors (greens, blues, grays, pale skin tones), and droopy oval-shaped eyes with tiny black dot pupils. Add prominent wrinkles, expression lines, and a slightly disheveled look. The character should have a unibrow or connected eyebrows, messy unkempt hair, and a hint of drool or stressed expression. The art style should be clean, simple, slightly grotesque, with visible imperfections in the character design. White background.",
+  },
+  {
+    id: "picasso",
+    name: "Cubist",
+    description: "Abstract geometric portrait with fragmented features",
+    previewImage: "/presets/picasso.webp",
+    prompt:
+      "Transform this photo into an abstract cubist-style portrait sticker. Fragment the face into bold geometric angular shapes, showing multiple perspectives and viewpoints simultaneously (front and side views combined). Rearrange facial features abstractly - eyes at different levels, nose displaced to the side, mouth at an angle. Use bold contrasting colors (greens, yellows, reds, purples, blues) with thick black outlines separating each geometric segment. The style should have visible brushstroke-like texture and feel like an early 20th century avant-garde painting. White background.",
+  },
+  {
+    id: "renaissance",
+    name: "Renaissance",
+    description: "Classical oil painting with dramatic chiaroscuro lighting",
+    previewImage: "/presets/renaissance.jpg",
+    prompt:
+      "Transform this photo into a Renaissance-style classical oil painting portrait sticker. Use realistic oil painting technique with visible brushwork texture, rich warm earth tones, and dramatic chiaroscuro lighting (deep dark shadows contrasting with warm golden highlights). Dress the subject in elaborate period clothing with fine details like ruff collars, velvet fabrics, and pearl jewelry. The background should be dark and moody. The subject should look noble and dignified, as if sitting for a 16th-century court portrait by an Italian or Flemish master. White background.",
   },
   {
     id: "chibi",
     name: "Chibi",
-    description: "Adorable chibi style with a big head and tiny body",
-    previewImage: "/presets/chibi.png",
+    description: "Adorable miniature character with a huge head and tiny body",
+    previewImage: "/presets/chibi.jpg",
     prompt:
-      "Transform this photo into an adorable chibi-style sticker illustration. Give the character a very large head (about 1:1 ratio with the body), big sparkly eyes, and a tiny cute body. Use bright cheerful colors and clean outlines. Keep the person recognizable through their hair, accessories, and outfit. White background.",
+      "Transform this photo into an adorable chibi-style sticker illustration. The character must have an extremely oversized head (roughly 1.5-2x the size of the body), big round sparkling blue or colorful eyes with white highlight reflections, a tiny cute stubby body with short limbs, and rosy pink blushing cheeks. Use clean smooth outlines, soft pleasant colors, and simplified hair with nice volume. The character should have a cute kawaii expression (smiling, waving, or peace sign). Keep the person recognizable through their hair color, style, and outfit details. White background.",
   },
   {
-    id: "comic-book",
-    name: "Comic Book",
-    description: "Classic American comic book halftone style",
-    previewImage: "/presets/comic-book.png",
+    id: "random",
+    name: "Surprise Me!",
+    description: "A random unique artistic style chosen just for you",
+    previewImage: "",
     prompt:
-      "Transform this photo into a classic American comic book style sticker illustration. Use bold ink lines, dramatic shading with halftone dot patterns, and a limited but punchy color palette. The person should look like a superhero comic character. White background.",
+      "Transform this photo into a creative and unique sticker illustration using a surprising and unexpected art style. You can choose any distinctive style such as: art nouveau, pop art, vaporwave, stained glass, paper cut-out, woodblock print, graffiti street art, pixel art, watercolor, or any other visually striking style. Make it bold, eye-catching, and sticker-worthy. The result should be surprising and delightful. White background.",
   },
 ];
