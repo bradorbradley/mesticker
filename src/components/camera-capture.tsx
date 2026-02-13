@@ -26,10 +26,7 @@ export default function CameraCapture({ onCapture, className }: CameraCapturePro
         video: { facingMode, width: { ideal: 1080 }, height: { ideal: 1080 } },
         audio: false,
       });
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        await videoRef.current.play().catch(() => {});
-      }
+      // Store stream and show the video element first
       setStream(mediaStream);
       setCameraActive(true);
     } catch {
@@ -44,6 +41,14 @@ export default function CameraCapture({ onCapture, className }: CameraCapturePro
     }
     setCameraActive(false);
   }, [stream]);
+
+  // Attach stream to video element once both exist after render
+  useEffect(() => {
+    if (stream && cameraActive && videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [stream, cameraActive]);
 
   useEffect(() => {
     return () => {
