@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,17 @@ export default function Home() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const { creations, addCreation } = useCreations();
+
+  // Handle return from Stripe redirect (3D Secure, etc.)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") === "success" || params.get("redirect_status") === "succeeded") {
+      setPaymentComplete(true);
+      setStep("order");
+      // Clean up URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const handleCapture = useCallback((imageBase64: string) => {
     setCapturedImage(imageBase64);
