@@ -21,7 +21,7 @@ export async function createPrintfulOrder(
   quantity: number,
   address: ShippingAddress
 ) {
-  const response = await fetch(`${PRINTFUL_API}/orders`, {
+  const response = await fetch(`${PRINTFUL_API}/orders?confirm=true`, {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify({
