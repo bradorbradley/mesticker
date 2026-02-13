@@ -58,7 +58,7 @@ function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "cl
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <PaymentElement />
+          <PaymentElement options={{ fields: { billingDetails: { address: "never" } } }} />
           <Button
             type="submit"
             size="lg"
