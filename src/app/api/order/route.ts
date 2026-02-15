@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createPaymentIntent, calculateTotal } from "@/lib/stripe";
 import { uploadImage } from "@/lib/storage";
+import { auth } from "@/lib/auth";
 import { ShippingAddress } from "@/types";
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth();
+
     const {
       image,
       quantity,
@@ -37,6 +40,8 @@ export async function POST(request: NextRequest) {
       stateCode: address.stateCode,
       countryCode: address.countryCode,
       zip: address.zip,
+      // Include user ID in metadata so the webhook can link the order
+      ...(session?.user?.id ? { userId: session.user.id } : {}),
     });
 
     return NextResponse.json({

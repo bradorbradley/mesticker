@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { removeBackground } from "@/lib/removebg";
-import { generateStickerImage } from "@/lib/gemini";
-import { stylePresets } from "@/lib/presets";
+import { generateStickerImage } from "@/lib/openai";
+import { stylePresets, resolvePresetPrompt } from "@/lib/presets";
+import { auth } from "@/lib/auth";
+import { getDb } from "@/lib/db";
+
+const FREE_GENERATION_LIMIT = 3;
 
 export const maxDuration = 60;
 
@@ -24,24 +27,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 1: Remove background (optional — skip if API key not configured)
-    let processedImage = image;
-    let bgRemoved = false;
-    if (process.env.REMOVEBG_API_KEY) {
-      try {
-        processedImage = await removeBackground(image);
-        bgRemoved = true;
-      } catch (e) {
-        console.warn("Background removal failed, continuing without it:", e);
+    // Enforce generation limit for signed-in users (server-side)
+    if (process.env.DATABASE_URL) {
+      const session = await auth();
+      if (session?.user?.id) {
+        const sql = getDb();
+        const [countRow] = await sql`
+          SELECT COUNT(*)::int AS count FROM creations WHERE user_id = ${session.user.id}
+        `;
+        const [orderRow] = await sql`
+          SELECT COUNT(*)::int AS count FROM orders WHERE user_id = ${session.user.id}
+        `;
+        const creationCount = countRow?.count ?? 0;
+        const hasOrdered = (orderRow?.count ?? 0) > 0;
+
+        if (creationCount >= FREE_GENERATION_LIMIT && !hasOrdered) {
+          return NextResponse.json(
+            { error: "FREE_LIMIT_REACHED" },
+            { status: 403 }
+          );
+        }
       }
     }
 
-    // Step 2: Apply style with Gemini
-    // If background wasn't removed, tell Gemini to handle it
-    const prompt = bgRemoved
-      ? preset.prompt
-      : `${preset.prompt} First remove the background from the photo, then apply the style.`;
-    const styledImage = await generateStickerImage(processedImage, prompt);
+    // Resolve the prompt (handles "random" by picking a random real style)
+    const { prompt } = resolvePresetPrompt(styleId);
+
+    // OpenAI gpt-image-1 handles style transfer + transparent background in one call
+    const styledImage = await generateStickerImage(image, prompt);
 
     return NextResponse.json({
       originalImage: image,
