@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft, Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ProgressSteps from "@/components/progress-steps";
 import CameraCapture from "@/components/camera-capture";
@@ -13,8 +14,38 @@ import PaymentForm from "@/components/payment-form";
 import OrderConfirmation from "@/components/order-confirmation";
 import ImageRevealSlider from "@/components/image-reveal";
 import Gallery from "@/components/gallery";
+import UserMenu from "@/components/user-menu";
 import { useCreations } from "@/hooks/use-creations";
 import type { AppStep, StylePreset, ShippingAddress, Creation } from "@/types";
+
+const FREE_GENERATION_LIMIT = 3;
+const GEN_COUNT_KEY = "mesticker-gen-count";
+const HAS_PURCHASED_KEY = "mesticker-has-purchased";
+
+function getLocalGenCount(): number {
+  try {
+    return parseInt(localStorage.getItem(GEN_COUNT_KEY) || "0", 10);
+  } catch {
+    return 0;
+  }
+}
+function incrementLocalGenCount() {
+  try {
+    localStorage.setItem(GEN_COUNT_KEY, String(getLocalGenCount() + 1));
+  } catch {}
+}
+function getLocalHasPurchased(): boolean {
+  try {
+    return localStorage.getItem(HAS_PURCHASED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+function setLocalHasPurchased() {
+  try {
+    localStorage.setItem(HAS_PURCHASED_KEY, "true");
+  } catch {}
+}
 
 const pageVariants = {
   enter: { opacity: 0, x: 30 },
@@ -23,6 +54,7 @@ const pageVariants = {
 };
 
 export default function Home() {
+  const { data: session } = useSession();
   const [step, setStep] = useState<AppStep>("capture");
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<StylePreset | null>(null);
@@ -38,7 +70,39 @@ export default function Home() {
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
-  const { creations, addCreation } = useCreations();
+  // Generation limit
+  const [limitReached, setLimitReached] = useState(false);
+
+  // Creations — localStorage for anonymous, DB for signed-in users
+  const { creations: localCreations, addCreation: addLocalCreation } =
+    useCreations();
+  const [dbCreations, setDbCreations] = useState<Creation[]>([]);
+
+  const isSignedIn = !!session?.user;
+  const displayCreations = isSignedIn ? dbCreations : localCreations;
+
+  // Load creations from DB when signed in
+  useEffect(() => {
+    if (!isSignedIn) return;
+    fetch("/api/creations")
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setDbCreations)
+      .catch(() => {});
+  }, [isSignedIn]);
+
+  // Handle redirect return from Stripe (3DS, Klarna, etc.)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (
+      params.get("payment") === "success" ||
+      params.get("redirect_status") === "succeeded"
+    ) {
+      setPaymentComplete(true);
+      setStep("order");
+      // Clean URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   // Handle return from Stripe redirect (3D Secure, etc.)
   useEffect(() => {
@@ -59,8 +123,19 @@ export default function Home() {
   const handleGenerate = useCallback(async () => {
     if (!capturedImage || !selectedStyle) return;
 
+    // Client-side generation limit check (for anonymous users)
+    if (!isSignedIn) {
+      const count = getLocalGenCount();
+      const purchased = getLocalHasPurchased();
+      if (count >= FREE_GENERATION_LIMIT && !purchased) {
+        setLimitReached(true);
+        return;
+      }
+    }
+
     setIsGenerating(true);
     setGenerateError(null);
+    setLimitReached(false);
 
     try {
       const res = await fetch("/api/generate", {
@@ -74,18 +149,48 @@ export default function Home() {
 
       if (!res.ok) {
         const data = await res.json();
+        // Server-side limit reached (for signed-in users)
+        if (data.error === "FREE_LIMIT_REACHED") {
+          setLimitReached(true);
+          return;
+        }
         throw new Error(data.error || "Generation failed");
       }
 
       const data = await res.json();
       setGeneratedImage(data.generatedImage);
 
-      addCreation({
+      // Track generation count locally
+      incrementLocalGenCount();
+
+      // Save to localStorage (anonymous fallback)
+      addLocalCreation({
         originalImage: capturedImage,
         generatedImage: data.generatedImage,
         stylePreset: selectedStyle.id,
         ordered: false,
       });
+
+      // Save to DB if signed in
+      if (isSignedIn) {
+        try {
+          const saveRes = await fetch("/api/creations", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              originalImage: capturedImage,
+              generatedImage: data.generatedImage,
+              stylePreset: selectedStyle.id,
+            }),
+          });
+          if (saveRes.ok) {
+            const saved = await saveRes.json();
+            setDbCreations((prev) => [saved, ...prev]);
+          }
+        } catch {
+          // DB save failure is non-blocking — localStorage has the backup
+        }
+      }
     } catch (error) {
       setGenerateError(
         error instanceof Error ? error.message : "Something went wrong"
@@ -93,7 +198,7 @@ export default function Home() {
     } finally {
       setIsGenerating(false);
     }
-  }, [capturedImage, selectedStyle, addCreation]);
+  }, [capturedImage, selectedStyle, addLocalCreation, isSignedIn]);
 
   const handleOrderSubmit = useCallback(
     async (quantity: number, address: ShippingAddress) => {
@@ -131,6 +236,8 @@ export default function Home() {
 
   const handlePaymentSuccess = useCallback(() => {
     setPaymentComplete(true);
+    setLimitReached(false);
+    setLocalHasPurchased();
   }, []);
 
   const handleNewSticker = useCallback(() => {
@@ -185,7 +292,7 @@ export default function Home() {
             <div className="w-8" />
           )}
           <h1 className="text-xl font-bold text-primary">MeSticker</h1>
-          <div className="w-8" />
+          <UserMenu />
         </div>
 
         {/* Progress */}
@@ -206,7 +313,7 @@ export default function Home() {
               transition={{ duration: 0.2 }}
             >
               <CameraCapture onCapture={handleCapture} />
-              <Gallery creations={creations} onSelect={handleGallerySelect} className="mt-6" />
+              <Gallery creations={displayCreations} onSelect={handleGallerySelect} className="mt-6" />
             </motion.div>
           )}
 
@@ -272,15 +379,27 @@ export default function Home() {
                       {generateError}
                     </p>
                   )}
-                  <Button
-                    size="lg"
-                    className="w-full"
-                    disabled={!selectedStyle}
-                    onClick={handleGenerate}
-                  >
-                    <Sparkles size={18} className="mr-2" />
-                    Generate Sticker
-                  </Button>
+                  {limitReached ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
+                      <Lock size={24} className="mx-auto mb-2 text-amber-600" />
+                      <p className="font-semibold text-sm text-amber-900">
+                        Free generations used up
+                      </p>
+                      <p className="text-xs text-amber-700 mt-1">
+                        Order any sticker to unlock unlimited generations!
+                      </p>
+                    </div>
+                  ) : (
+                    <Button
+                      size="lg"
+                      className="w-full"
+                      disabled={!selectedStyle}
+                      onClick={handleGenerate}
+                    >
+                      <Sparkles size={18} className="mr-2" />
+                      Generate Sticker
+                    </Button>
+                  )}
                 </div>
               )}
             </motion.div>

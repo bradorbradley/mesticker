@@ -14,7 +14,7 @@ npm run dev                   # http://localhost:3000
 
 - **Framework**: Next.js 15 (App Router), TypeScript, Tailwind CSS
 - **UI**: shadcn/ui components, Lucide icons, Framer Motion animations
-- **Image Pipeline**: remove.bg (background removal) → Gemini API (style transfer) → Vercel Blob (storage)
+- **Image Pipeline**: OpenAI gpt-image-1 (style transfer + transparent background) → Vercel Blob (storage)
 - **Payments**: Stripe (Payment Intents + Payment Element)
 - **Fulfillment**: Printful API (kiss-cut stickers, direct catalog ordering)
 
@@ -45,8 +45,7 @@ src/
   lib/
     utils.ts              # cn() utility
     presets.ts            # Style preset definitions + prompts
-    removebg.ts           # remove.bg API client
-    gemini.ts             # Gemini API client
+    openai.ts             # OpenAI image generation client
     printful.ts           # Printful API client
     stripe.ts             # Stripe server-side helpers
     storage.ts            # Image upload/storage
