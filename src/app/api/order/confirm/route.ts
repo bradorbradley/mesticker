@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createPrintfulOrder } from "@/lib/printful";
+import { getDb } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   const stripe = getStripe();
@@ -25,6 +26,30 @@ export async function POST(request: NextRequest) {
     if (event.type === "payment_intent.succeeded") {
       const paymentIntent = event.data.object;
       const meta = paymentIntent.metadata;
+
+      // Save order to database if user was signed in
+      if (meta?.userId && process.env.DATABASE_URL) {
+        try {
+          const sql = getDb();
+          await sql`
+            INSERT INTO orders (
+              user_id, stripe_payment_intent_id, quantity, amount_cents, image_url,
+              shipping_name, shipping_address1, shipping_address2,
+              shipping_city, shipping_state, shipping_country, shipping_zip,
+              status
+            ) VALUES (
+              ${meta.userId}, ${paymentIntent.id}, ${parseInt(meta.quantity)},
+              ${paymentIntent.amount}, ${meta.imageUrl},
+              ${meta.addressName}, ${meta.address1}, ${meta.address2 || null},
+              ${meta.city}, ${meta.stateCode}, ${meta.countryCode}, ${meta.zip},
+              'paid'
+            )
+          `;
+        } catch (dbError) {
+          // Log but don't fail the webhook — Printful order is more important
+          console.error("Failed to save order to DB:", dbError);
+        }
+      }
 
       if (meta?.imageUrl && meta?.quantity) {
         await createPrintfulOrder(meta.imageUrl, parseInt(meta.quantity), {

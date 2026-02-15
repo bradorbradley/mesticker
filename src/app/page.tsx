@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,8 +14,9 @@ import PaymentForm from "@/components/payment-form";
 import OrderConfirmation from "@/components/order-confirmation";
 import ImageRevealSlider from "@/components/image-reveal";
 import Gallery from "@/components/gallery";
+import UserMenu from "@/components/user-menu";
 import { useCreations } from "@/hooks/use-creations";
-import type { AppStep, StylePreset, ShippingAddress } from "@/types";
+import type { AppStep, StylePreset, ShippingAddress, Creation } from "@/types";
 
 const pageVariants = {
   enter: { opacity: 0, x: 30 },
@@ -23,6 +25,7 @@ const pageVariants = {
 };
 
 export default function Home() {
+  const { data: session } = useSession();
   const [step, setStep] = useState<AppStep>("capture");
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<StylePreset | null>(null);
@@ -38,18 +41,36 @@ export default function Home() {
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
+  // Creations — localStorage for anonymous, DB for signed-in users
+  const { creations: localCreations, addCreation: addLocalCreation } =
+    useCreations();
+  const [dbCreations, setDbCreations] = useState<Creation[]>([]);
+
+  const isSignedIn = !!session?.user;
+  const displayCreations = isSignedIn ? dbCreations : localCreations;
+
+  // Load creations from DB when signed in
+  useEffect(() => {
+    if (!isSignedIn) return;
+    fetch("/api/creations")
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setDbCreations)
+      .catch(() => {});
+  }, [isSignedIn]);
+
   // Handle redirect return from Stripe (3DS, Klarna, etc.)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("payment") === "success" || params.get("redirect_status") === "succeeded") {
+    if (
+      params.get("payment") === "success" ||
+      params.get("redirect_status") === "succeeded"
+    ) {
       setPaymentComplete(true);
       setStep("order");
       // Clean URL
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
-
-  const { creations, addCreation } = useCreations();
 
   const handleCapture = useCallback((imageBase64: string) => {
     setCapturedImage(imageBase64);
@@ -80,12 +101,34 @@ export default function Home() {
       const data = await res.json();
       setGeneratedImage(data.generatedImage);
 
-      addCreation({
+      // Save to localStorage (anonymous fallback)
+      addLocalCreation({
         originalImage: capturedImage,
         generatedImage: data.generatedImage,
         stylePreset: selectedStyle.id,
         ordered: false,
       });
+
+      // Save to DB if signed in
+      if (isSignedIn) {
+        try {
+          const saveRes = await fetch("/api/creations", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              originalImage: capturedImage,
+              generatedImage: data.generatedImage,
+              stylePreset: selectedStyle.id,
+            }),
+          });
+          if (saveRes.ok) {
+            const saved = await saveRes.json();
+            setDbCreations((prev) => [saved, ...prev]);
+          }
+        } catch {
+          // DB save failure is non-blocking — localStorage has the backup
+        }
+      }
     } catch (error) {
       setGenerateError(
         error instanceof Error ? error.message : "Something went wrong"
@@ -93,7 +136,7 @@ export default function Home() {
     } finally {
       setIsGenerating(false);
     }
-  }, [capturedImage, selectedStyle, addCreation]);
+  }, [capturedImage, selectedStyle, addLocalCreation, isSignedIn]);
 
   const handleOrderSubmit = useCallback(
     async (quantity: number, address: ShippingAddress) => {
@@ -175,7 +218,7 @@ export default function Home() {
             <div className="w-8" />
           )}
           <h1 className="text-xl font-bold text-primary">MeSticker</h1>
-          <div className="w-8" />
+          <UserMenu />
         </div>
 
         {/* Progress */}
@@ -196,7 +239,7 @@ export default function Home() {
               transition={{ duration: 0.2 }}
             >
               <CameraCapture onCapture={handleCapture} />
-              <Gallery creations={creations} className="mt-6" />
+              <Gallery creations={displayCreations} className="mt-6" />
             </motion.div>
           )}
 
