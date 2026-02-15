@@ -10,7 +10,7 @@ import {
 import { loadStripe } from "@stripe/stripe-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lock } from "lucide-react";
+import { Lock, Loader2 } from "lucide-react";
 
 const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ""
@@ -27,10 +27,12 @@ function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "cl
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [elementReady, setElementReady] = useState(false);
+  const [elementError, setElementError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || !elementReady) return;
 
     setIsProcessing(true);
     try {
@@ -64,12 +66,30 @@ function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "cl
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <PaymentElement />
+          {!elementReady && !elementError && (
+            <div className="flex items-center justify-center py-8 text-muted-foreground text-sm gap-2">
+              <Loader2 size={16} className="animate-spin" />
+              Loading payment form...
+            </div>
+          )}
+          {elementError && (
+            <p className="text-sm text-red-500 text-center py-4">
+              {elementError}
+            </p>
+          )}
+          <div className={elementReady ? "" : "sr-only"}>
+            <PaymentElement
+              onReady={() => setElementReady(true)}
+              onLoadError={(e) =>
+                setElementError(e.error?.message || "Failed to load payment form")
+              }
+            />
+          </div>
           <Button
             type="submit"
             size="lg"
             className="w-full mt-4"
-            disabled={!stripe || isProcessing}
+            disabled={!stripe || !elementReady || isProcessing}
           >
             {isProcessing ? "Processing..." : `Pay $${(amount / 100).toFixed(2)}`}
           </Button>
