@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,17 @@ export default function Home() {
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  // Handle redirect return from Stripe (3DS, Klarna, etc.)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") === "success" || params.get("redirect_status") === "succeeded") {
+      setPaymentComplete(true);
+      setStep("order");
+      // Clean URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const { creations, addCreation } = useCreations();
 

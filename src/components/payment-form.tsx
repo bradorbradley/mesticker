@@ -1,20 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Elements,
   PaymentElement,
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
-import { loadStripe } from "@stripe/stripe-js";
+import { loadStripe, Stripe } from "@stripe/stripe-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lock, Loader2 } from "lucide-react";
+import { Lock, Loader2, AlertCircle } from "lucide-react";
 
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ""
-);
+const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+const stripePromise: Promise<Stripe | null> = publishableKey
+  ? loadStripe(publishableKey)
+  : Promise.resolve(null);
 
 interface PaymentFormProps {
   clientSecret: string;
@@ -36,7 +37,7 @@ function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "cl
 
     setIsProcessing(true);
     try {
-      const { error } = await stripe.confirmPayment({
+      const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
           return_url: `${window.location.origin}?payment=success`,
@@ -47,8 +48,11 @@ function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "cl
       if (error) {
         onError(error.message || "Payment failed");
         setIsProcessing(false);
-      } else {
+      } else if (paymentIntent && paymentIntent.status === "succeeded") {
         onSuccess();
+      } else {
+        onError("Payment was not completed. Please try again.");
+        setIsProcessing(false);
       }
     } catch (err) {
       console.error("Payment confirmation error:", err);
@@ -100,6 +104,27 @@ function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "cl
 }
 
 export default function PaymentForm(props: PaymentFormProps) {
+  const [stripeError, setStripeError] = useState(false);
+
+  useEffect(() => {
+    stripePromise.then((s) => {
+      if (!s) setStripeError(true);
+    });
+  }, []);
+
+  if (stripeError) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-2 text-red-500 text-sm">
+            <AlertCircle size={16} />
+            <p>Payment system unavailable. Please try again later.</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Elements
       stripe={stripePromise}
