@@ -33,19 +33,25 @@ function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "cl
     if (!stripe || !elements) return;
 
     setIsProcessing(true);
-    const { error } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}?payment=success`,
-      },
-      redirect: "if_required",
-    });
+    try {
+      const { error } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}?payment=success`,
+        },
+        redirect: "if_required",
+      });
 
-    if (error) {
-      onError(error.message || "Payment failed");
+      if (error) {
+        onError(error.message || "Payment failed");
+        setIsProcessing(false);
+      } else {
+        onSuccess();
+      }
+    } catch (err) {
+      console.error("Payment confirmation error:", err);
+      onError(err instanceof Error ? err.message : "Payment failed unexpectedly");
       setIsProcessing(false);
-    } else {
-      onSuccess();
     }
   };
 
