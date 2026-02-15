@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <rect width="200" height="200" rx="24" fill="#F3F0FF"/>
+  <g transform="translate(55, 45)">
+    <!-- Dice face -->
+    <rect x="5" y="5" width="80" height="80" rx="14" fill="#6C63FF" stroke="#5A52E0" stroke-width="3"/>
+    <!-- Dots -->
+    <circle cx="28" cy="28" r="7" fill="white"/>
+    <circle cx="62" cy="28" r="7" fill="white"/>
+    <circle cx="45" cy="45" r="7" fill="white"/>
+    <circle cx="28" cy="62" r="7" fill="white"/>
+    <circle cx="62" cy="62" r="7" fill="white"/>
+  </g>
+  <text x="100" y="160" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" font-weight="700" fill="#6C63FF">Surprise!</text>
+</svg>

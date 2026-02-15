@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateStickerImage } from "@/lib/openai";
-import { stylePresets } from "@/lib/presets";
+import { stylePresets, resolvePresetPrompt } from "@/lib/presets";
+import { auth } from "@/lib/auth";
+import { getDb } from "@/lib/db";
+
+const FREE_GENERATION_LIMIT = 3;
 
 export const maxDuration = 60;
 
@@ -23,8 +27,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Enforce generation limit for signed-in users (server-side)
+    if (process.env.DATABASE_URL) {
+      const session = await auth();
+      if (session?.user?.id) {
+        const sql = getDb();
+        const [countRow] = await sql`
+          SELECT COUNT(*)::int AS count FROM creations WHERE user_id = ${session.user.id}
+        `;
+        const [orderRow] = await sql`
+          SELECT COUNT(*)::int AS count FROM orders WHERE user_id = ${session.user.id}
+        `;
+        const creationCount = countRow?.count ?? 0;
+        const hasOrdered = (orderRow?.count ?? 0) > 0;
+
+        if (creationCount >= FREE_GENERATION_LIMIT && !hasOrdered) {
+          return NextResponse.json(
+            { error: "FREE_LIMIT_REACHED" },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
+    // Resolve the prompt (handles "random" by picking a random real style)
+    const { prompt } = resolvePresetPrompt(styleId);
+
     // OpenAI gpt-image-1 handles style transfer + transparent background in one call
-    const styledImage = await generateStickerImage(image, preset.prompt);
+    const styledImage = await generateStickerImage(image, prompt);
 
     return NextResponse.json({
       originalImage: image,

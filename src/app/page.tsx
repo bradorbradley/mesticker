@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft, Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ProgressSteps from "@/components/progress-steps";
 import CameraCapture from "@/components/camera-capture";
@@ -17,6 +17,35 @@ import Gallery from "@/components/gallery";
 import UserMenu from "@/components/user-menu";
 import { useCreations } from "@/hooks/use-creations";
 import type { AppStep, StylePreset, ShippingAddress, Creation } from "@/types";
+
+const FREE_GENERATION_LIMIT = 3;
+const GEN_COUNT_KEY = "mesticker-gen-count";
+const HAS_PURCHASED_KEY = "mesticker-has-purchased";
+
+function getLocalGenCount(): number {
+  try {
+    return parseInt(localStorage.getItem(GEN_COUNT_KEY) || "0", 10);
+  } catch {
+    return 0;
+  }
+}
+function incrementLocalGenCount() {
+  try {
+    localStorage.setItem(GEN_COUNT_KEY, String(getLocalGenCount() + 1));
+  } catch {}
+}
+function getLocalHasPurchased(): boolean {
+  try {
+    return localStorage.getItem(HAS_PURCHASED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+function setLocalHasPurchased() {
+  try {
+    localStorage.setItem(HAS_PURCHASED_KEY, "true");
+  } catch {}
+}
 
 const pageVariants = {
   enter: { opacity: 0, x: 30 },
@@ -40,6 +69,9 @@ export default function Home() {
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  // Generation limit
+  const [limitReached, setLimitReached] = useState(false);
 
   // Creations — localStorage for anonymous, DB for signed-in users
   const { creations: localCreations, addCreation: addLocalCreation } =
@@ -80,8 +112,19 @@ export default function Home() {
   const handleGenerate = useCallback(async () => {
     if (!capturedImage || !selectedStyle) return;
 
+    // Client-side generation limit check (for anonymous users)
+    if (!isSignedIn) {
+      const count = getLocalGenCount();
+      const purchased = getLocalHasPurchased();
+      if (count >= FREE_GENERATION_LIMIT && !purchased) {
+        setLimitReached(true);
+        return;
+      }
+    }
+
     setIsGenerating(true);
     setGenerateError(null);
+    setLimitReached(false);
 
     try {
       const res = await fetch("/api/generate", {
@@ -95,11 +138,19 @@ export default function Home() {
 
       if (!res.ok) {
         const data = await res.json();
+        // Server-side limit reached (for signed-in users)
+        if (data.error === "FREE_LIMIT_REACHED") {
+          setLimitReached(true);
+          return;
+        }
         throw new Error(data.error || "Generation failed");
       }
 
       const data = await res.json();
       setGeneratedImage(data.generatedImage);
+
+      // Track generation count locally
+      incrementLocalGenCount();
 
       // Save to localStorage (anonymous fallback)
       addLocalCreation({
@@ -174,6 +225,8 @@ export default function Home() {
 
   const handlePaymentSuccess = useCallback(() => {
     setPaymentComplete(true);
+    setLimitReached(false);
+    setLocalHasPurchased();
   }, []);
 
   const handleNewSticker = useCallback(() => {
@@ -305,15 +358,27 @@ export default function Home() {
                       {generateError}
                     </p>
                   )}
-                  <Button
-                    size="lg"
-                    className="w-full"
-                    disabled={!selectedStyle}
-                    onClick={handleGenerate}
-                  >
-                    <Sparkles size={18} className="mr-2" />
-                    Generate Sticker
-                  </Button>
+                  {limitReached ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
+                      <Lock size={24} className="mx-auto mb-2 text-amber-600" />
+                      <p className="font-semibold text-sm text-amber-900">
+                        Free generations used up
+                      </p>
+                      <p className="text-xs text-amber-700 mt-1">
+                        Order any sticker to unlock unlimited generations!
+                      </p>
+                    </div>
+                  ) : (
+                    <Button
+                      size="lg"
+                      className="w-full"
+                      disabled={!selectedStyle}
+                      onClick={handleGenerate}
+                    >
+                      <Sparkles size={18} className="mr-2" />
+                      Generate Sticker
+                    </Button>
+                  )}
                 </div>
               )}
             </motion.div>
