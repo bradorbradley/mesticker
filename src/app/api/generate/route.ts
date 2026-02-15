@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { removeBackground } from "@/lib/removebg";
-import { generateStickerImage } from "@/lib/gemini";
+import { generateStickerImage } from "@/lib/openai";
 import { stylePresets } from "@/lib/presets";
 
 export const maxDuration = 60;
@@ -24,24 +23,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 1: Remove background (optional — skip if API key not configured)
-    let processedImage = image;
-    let bgRemoved = false;
-    if (process.env.REMOVEBG_API_KEY) {
-      try {
-        processedImage = await removeBackground(image);
-        bgRemoved = true;
-      } catch (e) {
-        console.warn("Background removal failed, continuing without it:", e);
-      }
-    }
-
-    // Step 2: Apply style with Gemini
-    // If background wasn't removed, tell Gemini to handle it
-    const prompt = bgRemoved
-      ? preset.prompt
-      : `${preset.prompt} First remove the background from the photo, then apply the style.`;
-    const styledImage = await generateStickerImage(processedImage, prompt);
+    // OpenAI gpt-image-1 handles style transfer + transparent background in one call
+    const styledImage = await generateStickerImage(image, preset.prompt);
 
     return NextResponse.json({
       originalImage: image,

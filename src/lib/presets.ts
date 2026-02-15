@@ -7,7 +7,7 @@ export const stylePresets: StylePreset[] = [
     description: "Bold outlines, bright colors, classic cartoon vibes",
     previewImage: "/presets/cartoon-pop.png",
     prompt:
-      "Transform this photo into a bold cartoon-style sticker illustration. Use thick black outlines, vibrant saturated colors, and simplified features. Make it look like a fun cartoon character with exaggerated proportions. The style should be similar to a vinyl sticker you'd put on a laptop. Keep the person's likeness recognizable. White background.",
+      "Transform this photo into a bold cartoon-style sticker portrait. Thick black outlines, vibrant saturated colors, simplified but expressive features. Classic cartoon character look with slightly exaggerated proportions. Preserve the person's face, hairstyle, and any accessories so they are clearly recognizable. Sticker-ready with a clean outline edge.",
   },
   {
     id: "anime",
@@ -15,7 +15,7 @@ export const stylePresets: StylePreset[] = [
     description: "Japanese anime-inspired with big expressive eyes",
     previewImage: "/presets/anime.png",
     prompt:
-      "Transform this photo into a Japanese anime-style sticker illustration. Use the characteristic anime art style with large expressive eyes, smooth shading, and clean lines. Keep hair and clothing details stylized but recognizable. The person should look like an anime character while maintaining their likeness. White background.",
+      "Transform this photo into a Japanese anime-style sticker portrait. Large expressive eyes, smooth cel-shaded coloring, clean precise linework. Stylize the hair with flowing anime strands and add subtle highlights. Keep the person's face shape, hairstyle, and clothing recognizable. Sticker-ready with a clean outline edge.",
   },
   {
     id: "pixel-art",
@@ -23,7 +23,7 @@ export const stylePresets: StylePreset[] = [
     description: "Retro 16-bit pixel art style",
     previewImage: "/presets/pixel-art.png",
     prompt:
-      "Transform this photo into a retro pixel art style sticker illustration, like a 16-bit video game character portrait. Use a limited color palette with visible pixels, but keep the person recognizable. Make it look like a classic RPG character portrait. White background.",
+      "Transform this photo into a retro 16-bit pixel art sticker portrait, like a classic RPG character. Visible pixel grid, limited color palette, dithered shading. Keep the person recognizable through their hair color, style, and distinguishing features. Sticker-ready with a clean outline edge.",
   },
   {
     id: "watercolor",
@@ -31,7 +31,7 @@ export const stylePresets: StylePreset[] = [
     description: "Soft watercolor painting with gentle washes",
     previewImage: "/presets/watercolor.png",
     prompt:
-      "Transform this photo into a beautiful watercolor portrait sticker illustration. Use soft, flowing watercolor washes with visible brush strokes and gentle color bleeding. Keep the person's features recognizable but with an artistic, painterly quality. Use a harmonious color palette. White background.",
+      "Transform this photo into a soft watercolor sticker portrait. Flowing color washes, visible brushstroke texture, gentle color bleeding at edges. Use a harmonious warm palette. Keep the person's features and likeness clearly recognizable with an artistic painterly quality. Sticker-ready with a clean outline edge.",
   },
   {
     id: "chibi",
@@ -39,7 +39,7 @@ export const stylePresets: StylePreset[] = [
     description: "Adorable chibi style with a big head and tiny body",
     previewImage: "/presets/chibi.png",
     prompt:
-      "Transform this photo into an adorable chibi-style sticker illustration. Give the character a very large head (about 1:1 ratio with the body), big sparkly eyes, and a tiny cute body. Use bright cheerful colors and clean outlines. Keep the person recognizable through their hair, accessories, and outfit. White background.",
+      "Transform this photo into an adorable chibi-style sticker illustration. Very large head with about 1:1 head-to-body ratio, big sparkly eyes, tiny cute body. Bright cheerful colors, clean outlines. Preserve the person's hairstyle, hair color, and outfit so they are recognizable. Sticker-ready with a clean outline edge.",
   },
   {
     id: "comic-book",
@@ -47,6 +47,6 @@ export const stylePresets: StylePreset[] = [
     description: "Classic American comic book halftone style",
     previewImage: "/presets/comic-book.png",
     prompt:
-      "Transform this photo into a classic American comic book style sticker illustration. Use bold ink lines, dramatic shading with halftone dot patterns, and a limited but punchy color palette. The person should look like a superhero comic character. White background.",
+      "Transform this photo into a classic American comic book sticker portrait. Bold ink linework, dramatic shadows, halftone dot shading patterns, punchy limited color palette. The person should look like a superhero comic character while remaining recognizable. Sticker-ready with a clean outline edge.",
   },
 ];
