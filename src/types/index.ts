@@ -25,6 +25,13 @@ export interface ShippingAddress {
   zip: string;
 }
 
+export interface CartItem {
+  creationId: string;
+  generatedImage: string;
+  stylePreset: string;
+  sheets: number;
+}
+
 export interface Order {
   id: string;
   createdAt: string;

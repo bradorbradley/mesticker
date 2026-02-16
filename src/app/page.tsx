@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Lock, Sparkles } from "lucide-react";
@@ -18,7 +18,7 @@ import Gallery from "@/components/gallery";
 import UserMenu from "@/components/user-menu";
 import { useCreations } from "@/hooks/use-creations";
 import { hapticMedium } from "@/lib/haptics";
-import type { AppStep, StylePreset, ShippingAddress, Creation } from "@/types";
+import type { AppStep, StylePreset, ShippingAddress, CartItem, Creation } from "@/types";
 
 const FREE_GENERATION_LIMIT = 3;
 const GEN_COUNT_KEY = "mesticker-gen-count";
@@ -69,7 +69,7 @@ export default function Home() {
   // Order state
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [orderAmount, setOrderAmount] = useState(0);
-  const [orderQuantity, setOrderQuantity] = useState(0);
+  const [orderTotalSheets, setOrderTotalSheets] = useState(0);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -84,6 +84,12 @@ export default function Home() {
 
   const isSignedIn = !!session?.user;
   const displayCreations = isSignedIn ? dbCreations : localCreations;
+
+  // Find the creation matching the currently generated image (for the order form)
+  const currentCreation = useMemo(() => {
+    if (!generatedImage) return null;
+    return displayCreations.find((c) => c.generatedImage === generatedImage) || null;
+  }, [generatedImage, displayCreations]);
 
   // Check if user has seen landing before
   useEffect(() => {
@@ -205,8 +211,8 @@ export default function Home() {
   }, [capturedImage, selectedStyle, addLocalCreation, isSignedIn]);
 
   const handleOrderSubmit = useCallback(
-    async (quantity: number, address: ShippingAddress) => {
-      if (!generatedImage) return;
+    async (items: CartItem[], address: ShippingAddress) => {
+      if (items.length === 0) return;
 
       setIsCreatingOrder(true);
       setPaymentError(null);
@@ -215,7 +221,7 @@ export default function Home() {
         const res = await fetch("/api/order", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: generatedImage, quantity, address }),
+          body: JSON.stringify({ items, address }),
         });
 
         if (!res.ok) {
@@ -226,7 +232,7 @@ export default function Home() {
         const data = await res.json();
         setClientSecret(data.clientSecret);
         setOrderAmount(data.amount);
-        setOrderQuantity(quantity);
+        setOrderTotalSheets(items.reduce((sum, i) => sum + i.sheets, 0));
       } catch (error) {
         setPaymentError(
           error instanceof Error ? error.message : "Something went wrong"
@@ -235,7 +241,7 @@ export default function Home() {
         setIsCreatingOrder(false);
       }
     },
-    [generatedImage]
+    []
   );
 
   const handlePaymentSuccess = useCallback(() => {
@@ -250,7 +256,7 @@ export default function Home() {
     setGeneratedImage(null);
     setClientSecret(null);
     setOrderAmount(0);
-    setOrderQuantity(0);
+    setOrderTotalSheets(0);
     setPaymentComplete(false);
     setPaymentError(null);
     setGenerateError(null);
@@ -451,7 +457,7 @@ export default function Home() {
               {paymentComplete ? (
                 <OrderConfirmation
                   imageUrl={generatedImage || ""}
-                  quantity={orderQuantity}
+                  totalSheets={orderTotalSheets}
                   onNewSticker={handleNewSticker}
                 />
               ) : clientSecret ? (
@@ -470,22 +476,14 @@ export default function Home() {
                 </div>
               ) : (
                 <div>
-                  {generatedImage && (
-                    <div className="w-full rounded-2xl overflow-hidden mb-4 h-48 flex items-center justify-center glass-strong shadow-soft">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={generatedImage}
-                        alt="Your sticker"
-                        className="h-full object-contain"
-                      />
-                    </div>
-                  )}
                   {paymentError && (
                     <p className="text-sm text-red-500 text-center mb-4">
                       {paymentError}
                     </p>
                   )}
                   <OrderForm
+                    currentCreation={currentCreation}
+                    pastCreations={displayCreations}
                     onSubmit={handleOrderSubmit}
                     isLoading={isCreatingOrder}
                   />

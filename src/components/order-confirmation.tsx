@@ -4,21 +4,24 @@ import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { PartyPopper, Package, Sparkles } from "lucide-react";
 import { hapticSuccess } from "@/lib/haptics";
+import { STICKERS_PER_SHEET } from "@/lib/stripe";
 
 interface OrderConfirmationProps {
   imageUrl: string;
-  quantity: number;
+  totalSheets: number;
   onNewSticker: () => void;
 }
 
 export default function OrderConfirmation({
   imageUrl,
-  quantity,
+  totalSheets,
   onNewSticker,
 }: OrderConfirmationProps) {
   useEffect(() => {
     hapticSuccess();
   }, []);
+
+  const totalStickers = totalSheets * STICKERS_PER_SHEET;
 
   return (
     <div className="flex flex-col items-center gap-6 py-6">
@@ -82,7 +85,7 @@ export default function OrderConfirmation({
         <div>
           <p className="font-bold flex items-center gap-2">
             <Package size={16} className="text-primary" />
-            {quantity}x Kiss-Cut Sticker
+            {totalSheets} {totalSheets === 1 ? "sheet" : "sheets"} ({totalStickers} stickers)
           </p>
           <p className="text-sm text-muted-foreground mt-1">
             You&apos;ll get a tracking email when they ship.

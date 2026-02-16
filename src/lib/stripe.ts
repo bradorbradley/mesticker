@@ -6,23 +6,23 @@ export function getStripe() {
   return new Stripe(key);
 }
 
-// Pack pricing (in cents) — shipping is included in price ("free shipping")
+// Sticker sheet pricing — each A4 sheet has 6 kiss-cut 3"x3" stickers
 //
-// Cost breakdown per pack (conservative: $3/sticker + $5 Printful shipping):
-//   3-pack: Printful ~$14.00 + Stripe ~$0.88 = ~$14.88 → sell $19.99 → profit ~$5.11
-//   5-pack: Printful ~$20.00 + Stripe ~$1.17 = ~$21.17 → sell $29.99 → profit ~$8.82
-//  10-pack: Printful ~$35.00 + Stripe ~$1.75 = ~$36.75 → sell $49.99 → profit ~$13.24
-export const PACK_OPTIONS = [
-  { quantity: 3,  totalCents: 1999, label: "3 Pack"  },  // $19.99 ($6.66/ea)
-  { quantity: 5,  totalCents: 2999, label: "5 Pack"  },  // $29.99 ($6.00/ea) — most popular
-  { quantity: 10, totalCents: 4999, label: "10 Pack" },  // $49.99 ($5.00/ea) — best value
-] as const;
+// Cost breakdown per sheet (Printful sticker sheet product 505, A4):
+//   Printful sheet:  ~$10.00
+//   Shipping (1st):  ~$3.99  (additional sheets ~$1.45 ea)
+//   Stripe fees:     ~2.9% + $0.30
+//
+//   1 sheet:  $15.99 → COGS ~$14.50 → profit ~$1.50 (acquisition price)
+//   2 sheets: $31.98 → COGS ~$26.00 → profit ~$6.00
+//   3 sheets: $47.97 → COGS ~$37.50 → profit ~$10.50
+export const STICKERS_PER_SHEET = 6;
+export const SHEET_PRICE_CENTS = 1599; // $15.99 per sheet
 
-export function calculateTotal(quantity: number) {
-  const pack = PACK_OPTIONS.find((p) => p.quantity === quantity);
-  if (!pack) throw new Error(`Invalid pack quantity: ${quantity}`);
-  const pricePerSticker = Math.round(pack.totalCents / pack.quantity);
-  return { subtotal: pack.totalCents, shipping: 0, total: pack.totalCents, pricePerSticker };
+export function calculateSheetTotal(totalSheets: number) {
+  if (totalSheets < 1) throw new Error("Must order at least 1 sheet");
+  const total = totalSheets * SHEET_PRICE_CENTS;
+  return { total, pricePerSheet: SHEET_PRICE_CENTS, totalSheets };
 }
 
 export async function createPaymentIntent(amountCents: number, metadata: Record<string, string>) {

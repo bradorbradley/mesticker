@@ -1,28 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Truck, Check, Package } from "lucide-react";
-import { ShippingAddress } from "@/types";
+import { Truck, Package, Plus, Minus } from "lucide-react";
+import { ShippingAddress, Creation, CartItem } from "@/types";
+import { SHEET_PRICE_CENTS, STICKERS_PER_SHEET } from "@/lib/stripe";
 import { cn } from "@/lib/utils";
+import { hapticLight } from "@/lib/haptics";
 
 interface OrderFormProps {
-  onSubmit: (quantity: number, address: ShippingAddress) => void;
+  currentCreation: Creation | null;
+  pastCreations: Creation[];
+  onSubmit: (items: CartItem[], address: ShippingAddress) => void;
   isLoading?: boolean;
   className?: string;
 }
 
-const PACKS = [
-  { quantity: 3,  totalPrice: 19.99, label: "3 Pack",  tag: null,           save: null },
-  { quantity: 5,  totalPrice: 29.99, label: "5 Pack",  tag: "Most Popular", save: "Save 10%" },
-  { quantity: 10, totalPrice: 49.99, label: "10 Pack", tag: "Best Value",   save: "Save 25%" },
-];
+const sheetPrice = SHEET_PRICE_CENTS / 100;
 
-export default function OrderForm({ onSubmit, isLoading, className }: OrderFormProps) {
-  const [selectedPack, setSelectedPack] = useState(1); // default to 5-pack
+export default function OrderForm({
+  currentCreation,
+  pastCreations,
+  onSubmit,
+  isLoading,
+  className,
+}: OrderFormProps) {
+  // Build initial cart: current creation = 1 sheet, everything else = 0
+  const [quantities, setQuantities] = useState<Record<string, number>>(() => {
+    const q: Record<string, number> = {};
+    if (currentCreation) q[currentCreation.id] = 1;
+    return q;
+  });
 
   const [address, setAddress] = useState<ShippingAddress>({
     name: "",
@@ -34,12 +45,47 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
     zip: "",
   });
 
-  const pack = PACKS[selectedPack];
-  const perSticker = pack.totalPrice / pack.quantity;
+  // All unique creations (current first, then past — deduplicated)
+  const allCreations = useMemo(() => {
+    const seen = new Set<string>();
+    const result: Creation[] = [];
+    if (currentCreation) {
+      seen.add(currentCreation.id);
+      result.push(currentCreation);
+    }
+    for (const c of pastCreations) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        result.push(c);
+      }
+    }
+    return result;
+  }, [currentCreation, pastCreations]);
+
+  const setQty = (id: string, delta: number) => {
+    hapticLight();
+    setQuantities((prev) => {
+      const current = prev[id] || 0;
+      const next = Math.max(0, Math.min(10, current + delta));
+      return { ...prev, [id]: next };
+    });
+  };
+
+  const totalSheets = Object.values(quantities).reduce((sum, q) => sum + q, 0);
+  const totalPrice = totalSheets * sheetPrice;
+  const totalStickers = totalSheets * STICKERS_PER_SHEET;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(pack.quantity, address);
+    const items: CartItem[] = allCreations
+      .filter((c) => (quantities[c.id] || 0) > 0)
+      .map((c) => ({
+        creationId: c.id,
+        generatedImage: c.generatedImage,
+        stylePreset: c.stylePreset,
+        sheets: quantities[c.id],
+      }));
+    onSubmit(items, address);
   };
 
   const updateField = (field: keyof ShippingAddress, value: string) => {
@@ -48,44 +94,79 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
 
   return (
     <form onSubmit={handleSubmit} className={className}>
-      {/* Pack Selector */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        {PACKS.map((p, i) => (
-          <button
-            key={p.quantity}
-            type="button"
-            onClick={() => setSelectedPack(i)}
-            className={cn(
-              "relative rounded-xl border-2 p-3 text-center transition-all",
-              selectedPack === i
-                ? "border-primary bg-primary/5 shadow-md"
-                : "border-border hover:border-primary/40"
-            )}
-          >
-            {p.tag && (
-              <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
-                {p.tag}
-              </span>
-            )}
-            {selectedPack === i && (
-              <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
-                <Check size={10} className="text-white" />
+      {/* Sticker selection with quantity steppers */}
+      <div className="space-y-2 mb-4">
+        {allCreations.map((creation, i) => {
+          const qty = quantities[creation.id] || 0;
+          const isCurrent = currentCreation?.id === creation.id;
+          return (
+            <div
+              key={creation.id}
+              className={cn(
+                "flex items-center gap-3 p-3 rounded-xl border-2 transition-all",
+                qty > 0
+                  ? "border-primary bg-primary/5 shadow-sm"
+                  : "border-border"
+              )}
+            >
+              {/* Sticker thumbnail */}
+              <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 border border-border shadow-soft">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={creation.generatedImage}
+                  alt={`Sticker ${i + 1}`}
+                  className="w-full h-full object-cover"
+                />
               </div>
-            )}
-            <p className="text-lg font-bold">{p.quantity}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">stickers</p>
-            <p className="text-sm font-bold mt-1">${p.totalPrice.toFixed(2)}</p>
-            {p.save && (
-              <p className="text-[10px] font-semibold text-green-600 mt-0.5">{p.save}</p>
-            )}
-          </button>
-        ))}
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate">
+                  {isCurrent ? "This sticker" : creation.stylePreset}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {STICKERS_PER_SHEET} stickers per sheet
+                </p>
+              </div>
+
+              {/* +/- stepper */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setQty(creation.id, -1)}
+                  disabled={qty === 0}
+                  className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center transition-all",
+                    qty > 0
+                      ? "bg-muted hover:bg-muted-foreground/20 text-foreground"
+                      : "bg-muted/50 text-muted-foreground/40"
+                  )}
+                >
+                  <Minus size={14} />
+                </button>
+                <span className="w-6 text-center text-sm font-bold tabular-nums">
+                  {qty}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setQty(creation.id, 1)}
+                  disabled={qty >= 10}
+                  className="w-8 h-8 rounded-full bg-primary/10 hover:bg-primary/20 text-primary flex items-center justify-center transition-all"
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Free Shipping Banner */}
+      {/* Sheet info banner */}
       <div className="flex items-center justify-center gap-2 py-2 mb-4 rounded-xl bg-green-50 border border-green-200 text-green-700">
         <Package size={14} />
-        <span className="text-xs font-semibold">Free shipping on all orders</span>
+        <span className="text-xs font-semibold">
+          ${sheetPrice.toFixed(2)}/sheet &middot; {STICKERS_PER_SHEET} stickers each &middot; Free shipping
+        </span>
       </div>
 
       {/* Shipping Address */}
@@ -179,9 +260,9 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
           <div className="space-y-1 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">
-                {pack.quantity} stickers @ ${perSticker.toFixed(2)}/ea
+                {totalSheets} {totalSheets === 1 ? "sheet" : "sheets"} ({totalStickers} stickers)
               </span>
-              <span>${pack.totalPrice.toFixed(2)}</span>
+              <span>${totalPrice.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Shipping</span>
@@ -189,14 +270,23 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
             </div>
             <div className="flex justify-between pt-2 border-t border-border font-semibold text-base">
               <span>Total</span>
-              <span>${pack.totalPrice.toFixed(2)}</span>
+              <span>${totalPrice.toFixed(2)}</span>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
-        {isLoading ? "Creating order..." : `Pay $${pack.totalPrice.toFixed(2)}`}
+      <Button
+        type="submit"
+        size="lg"
+        className="w-full"
+        disabled={isLoading || totalSheets === 0}
+      >
+        {isLoading
+          ? "Creating order..."
+          : totalSheets === 0
+            ? "Select at least 1 sheet"
+            : `Pay $${totalPrice.toFixed(2)}`}
       </Button>
     </form>
   );

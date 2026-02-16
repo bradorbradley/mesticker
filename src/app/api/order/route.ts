@@ -1,38 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPaymentIntent, calculateTotal } from "@/lib/stripe";
+import { createPaymentIntent, calculateSheetTotal } from "@/lib/stripe";
 import { uploadImage } from "@/lib/storage";
 import { auth } from "@/lib/auth";
-import { ShippingAddress } from "@/types";
+import { ShippingAddress, CartItem } from "@/types";
 
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
 
     const {
-      image,
-      quantity,
+      items,
       address,
     }: {
-      image: string;
-      quantity: number;
+      items: CartItem[];
       address: ShippingAddress;
     } = await request.json();
 
-    if (!image || !quantity || !address) {
+    if (!items?.length || !address) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    // Upload image to get a public URL (needed for Printful later)
-    const imageUrl = await uploadImage(image);
+    // Upload each sticker image and build metadata for the webhook
+    const uploadedItems: { imageUrl: string; sheets: number }[] = [];
+    for (const item of items) {
+      const imageUrl = await uploadImage(item.generatedImage);
+      uploadedItems.push({ imageUrl, sheets: item.sheets });
+    }
 
-    // Calculate total and create Stripe payment intent
-    const { total } = calculateTotal(quantity);
-    const paymentIntent = await createPaymentIntent(total, {
-      imageUrl,
-      quantity: String(quantity),
+    // Calculate total
+    const totalSheets = items.reduce((sum, i) => sum + i.sheets, 0);
+    const { total } = calculateSheetTotal(totalSheets);
+
+    // Encode items into Stripe metadata (keyed by index)
+    const metadata: Record<string, string> = {
+      itemCount: String(uploadedItems.length),
       addressName: address.name,
       address1: address.address1,
       address2: address.address2 || "",
@@ -40,14 +44,19 @@ export async function POST(request: NextRequest) {
       stateCode: address.stateCode,
       countryCode: address.countryCode,
       zip: address.zip,
-      // Include user ID in metadata so the webhook can link the order
       ...(session?.user?.id ? { userId: session.user.id } : {}),
-    });
+    };
+
+    for (let i = 0; i < uploadedItems.length; i++) {
+      metadata[`item_${i}_imageUrl`] = uploadedItems[i].imageUrl;
+      metadata[`item_${i}_sheets`] = String(uploadedItems[i].sheets);
+    }
+
+    const paymentIntent = await createPaymentIntent(total, metadata);
 
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
       amount: total,
-      imageUrl,
     });
   } catch (error) {
     console.error("Order error:", error);
