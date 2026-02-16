@@ -29,6 +29,7 @@ export interface ShippingAddress {
 export interface CartItem {
   creationId: string;
   imageUrl?: string;
+  generatedImage?: string;
   stylePreset: string;
   sheets: number;
 }

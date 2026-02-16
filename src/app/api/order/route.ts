@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createPaymentIntent, calculateSheetTotal } from "@/lib/stripe";
+import { uploadImage } from "@/lib/storage";
 import { auth } from "@/lib/auth";
-import { ShippingAddress, CartItem } from "@/types";
+import { ShippingAddress } from "@/types";
+
+interface OrderItem {
+  imageUrl?: string;
+  generatedImage?: string;
+  sheets: number;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,7 +18,7 @@ export async function POST(request: NextRequest) {
       items,
       address,
     }: {
-      items: CartItem[];
+      items: OrderItem[];
       address: ShippingAddress;
     } = await request.json();
 
@@ -22,16 +29,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Images are pre-uploaded during generation — just use the URLs
+    // Ensure every item has a public image URL — upload on-the-fly if missing
     const uploadedItems: { imageUrl: string; sheets: number }[] = [];
     for (const item of items) {
-      if (!item.imageUrl) {
+      let url = item.imageUrl;
+      if (!url && item.generatedImage) {
+        // Blob upload failed during generation — retry now
+        url = await uploadImage(item.generatedImage);
+      }
+      if (!url) {
         return NextResponse.json(
-          { error: "Missing image URL — please regenerate your sticker" },
+          { error: "Missing image — please regenerate your sticker" },
           { status: 400 }
         );
       }
-      uploadedItems.push({ imageUrl: item.imageUrl, sheets: item.sheets });
+      uploadedItems.push({ imageUrl: url, sheets: item.sheets });
     }
 
     // Calculate total

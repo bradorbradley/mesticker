@@ -472,9 +472,9 @@ export default function Home() {
               ) : clientSecret ? (
                 <div>
                   {paymentError && (
-                    <p className="text-sm text-red-500 text-center mb-4">
-                      {paymentError}
-                    </p>
+                    <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-center mb-4">
+                      <p className="text-sm font-semibold text-red-600">{paymentError}</p>
+                    </div>
                   )}
                   <PaymentForm
                     clientSecret={clientSecret}
@@ -486,9 +486,9 @@ export default function Home() {
               ) : (
                 <div>
                   {paymentError && (
-                    <p className="text-sm text-red-500 text-center mb-4">
-                      {paymentError}
-                    </p>
+                    <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-center mb-4">
+                      <p className="text-sm font-semibold text-red-600">{paymentError}</p>
+                    </div>
                   )}
                   <OrderForm
                     currentCreation={currentCreation}

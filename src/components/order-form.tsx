@@ -82,6 +82,7 @@ export default function OrderForm({
       .map((c) => ({
         creationId: c.id,
         imageUrl: c.imageUrl,
+        generatedImage: c.generatedImage,
         stylePreset: c.stylePreset,
         sheets: quantities[c.id],
       }));
