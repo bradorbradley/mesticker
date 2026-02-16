@@ -24,6 +24,7 @@ export async function GET() {
     createdAt: r.created_at,
     originalImage: r.original_image_url,
     generatedImage: r.generated_image_url,
+    imageUrl: r.generated_image_url,
     stylePreset: r.style_preset,
     ordered: r.ordered,
   }));
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const { originalImage, generatedImage, stylePreset } = await request.json();
+  const { originalImage, generatedImage, imageUrl, stylePreset } = await request.json();
 
   if (!originalImage || !generatedImage || !stylePreset) {
     return NextResponse.json(
@@ -47,10 +48,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Upload both images to blob storage to get persistent URLs
+  // Use pre-uploaded URL if available, otherwise upload to blob storage
   const [originalUrl, generatedUrl] = await Promise.all([
     uploadImage(originalImage),
-    uploadImage(generatedImage),
+    imageUrl ? Promise.resolve(imageUrl) : uploadImage(generatedImage),
   ]);
 
   const id = `cr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
     createdAt: new Date().toISOString(),
     originalImage: originalUrl,
     generatedImage: generatedUrl,
+    imageUrl: generatedUrl,
     stylePreset,
     ordered: false,
   });

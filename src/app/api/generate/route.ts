@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateStickerImage } from "@/lib/openai";
 import { stylePresets, resolvePresetPrompt } from "@/lib/presets";
+import { uploadImage } from "@/lib/storage";
 import { auth } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 
@@ -56,10 +57,19 @@ export async function POST(request: NextRequest) {
     // OpenAI gpt-image-1 handles style transfer + transparent background in one call
     const styledImage = await generateStickerImage(image, prompt);
 
+    // Pre-upload to blob storage so the order API doesn't need base64
+    let imageUrl: string | undefined;
+    try {
+      imageUrl = await uploadImage(styledImage);
+    } catch (e) {
+      console.error("Image upload failed (non-fatal):", e);
+    }
+
     return NextResponse.json({
       originalImage: image,
       generatedImage: styledImage,
       stylePreset: styleId,
+      imageUrl,
     });
   } catch (error) {
     console.error("Generate error:", error);

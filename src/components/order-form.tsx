@@ -81,7 +81,7 @@ export default function OrderForm({
       .filter((c) => (quantities[c.id] || 0) > 0)
       .map((c) => ({
         creationId: c.id,
-        generatedImage: c.generatedImage,
+        imageUrl: c.imageUrl,
         stylePreset: c.stylePreset,
         sheets: quantities[c.id],
       }));

@@ -178,6 +178,7 @@ export default function Home() {
       addLocalCreation({
         originalImage: capturedImage,
         generatedImage: data.generatedImage,
+        imageUrl: data.imageUrl,
         stylePreset: selectedStyle.id,
         ordered: false,
       });
@@ -190,6 +191,7 @@ export default function Home() {
             body: JSON.stringify({
               originalImage: capturedImage,
               generatedImage: data.generatedImage,
+              imageUrl: data.imageUrl,
               stylePreset: selectedStyle.id,
             }),
           });
@@ -225,8 +227,16 @@ export default function Home() {
         });
 
         if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || "Order creation failed");
+          let errorMsg = "Order creation failed";
+          try {
+            const data = await res.json();
+            errorMsg = data.error || errorMsg;
+          } catch {
+            // Response wasn't JSON (e.g. "Request Entity Too Large")
+            const text = await res.text().catch(() => "");
+            if (text) errorMsg = text;
+          }
+          throw new Error(errorMsg);
         }
 
         const data = await res.json();

@@ -11,6 +11,7 @@ export interface Creation {
   createdAt: string;
   originalImage: string;
   generatedImage: string;
+  imageUrl?: string;
   stylePreset: string;
   ordered: boolean;
 }
@@ -27,7 +28,7 @@ export interface ShippingAddress {
 
 export interface CartItem {
   creationId: string;
-  generatedImage: string;
+  imageUrl?: string;
   stylePreset: string;
   sheets: number;
 }

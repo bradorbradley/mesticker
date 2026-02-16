@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createPaymentIntent, calculateSheetTotal } from "@/lib/stripe";
-import { uploadImage } from "@/lib/storage";
 import { auth } from "@/lib/auth";
 import { ShippingAddress, CartItem } from "@/types";
 
@@ -23,11 +22,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upload each sticker image and build metadata for the webhook
+    // Images are pre-uploaded during generation — just use the URLs
     const uploadedItems: { imageUrl: string; sheets: number }[] = [];
     for (const item of items) {
-      const imageUrl = await uploadImage(item.generatedImage);
-      uploadedItems.push({ imageUrl, sheets: item.sheets });
+      if (!item.imageUrl) {
+        return NextResponse.json(
+          { error: "Missing image URL — please regenerate your sticker" },
+          { status: 400 }
+        );
+      }
+      uploadedItems.push({ imageUrl: item.imageUrl, sheets: item.sheets });
     }
 
     // Calculate total
