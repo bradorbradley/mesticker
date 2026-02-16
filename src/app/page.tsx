@@ -23,7 +23,6 @@ import type { AppStep, StylePreset, ShippingAddress, CartItem, Creation } from "
 const FREE_GENERATION_LIMIT = 3;
 const GEN_COUNT_KEY = "mesticker-gen-count";
 const HAS_PURCHASED_KEY = "mesticker-has-purchased";
-const SEEN_LANDING_KEY = "mesticker-seen-landing";
 
 function getLocalGenCount(): number {
   try {
@@ -91,14 +90,6 @@ export default function Home() {
     return displayCreations.find((c) => c.generatedImage === generatedImage) || null;
   }, [generatedImage, displayCreations]);
 
-  // Check if user has seen landing before
-  useEffect(() => {
-    try {
-      if (localStorage.getItem(SEEN_LANDING_KEY) === "true") {
-        setShowLanding(false);
-      }
-    } catch {}
-  }, []);
 
   // Load creations from DB when signed in
   useEffect(() => {
@@ -125,9 +116,6 @@ export default function Home() {
 
   const handleLandingStart = useCallback(() => {
     setShowLanding(false);
-    try {
-      localStorage.setItem(SEEN_LANDING_KEY, "true");
-    } catch {}
   }, []);
 
   const handleCapture = useCallback((imageBase64: string) => {
