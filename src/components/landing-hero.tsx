@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Camera, Sparkles, Package, ChevronDown } from "lucide-react";
 import { hapticMedium } from "@/lib/haptics";
+import ImageRevealSlider from "@/components/image-reveal";
 
 interface LandingHeroProps {
   onStart: () => void;
@@ -37,6 +38,34 @@ const steps = [
     color: "from-accent-cyan to-primary",
   },
 ];
+
+const exampleStickers = [
+  { src: "/presets/3d-animated.jpg", label: "Pixar" },
+  { src: "/presets/simpsons.jpg", label: "Simpsons" },
+  { src: "/presets/spongebob.webp", label: "SpongeBob" },
+  { src: "/presets/rick-morty.webp", label: "Rick & Morty" },
+  { src: "/presets/chibi.jpg", label: "Chibi" },
+  { src: "/presets/family-guy.webp", label: "Family Guy" },
+];
+
+// Simple SVG placeholder for the "before" side of the demo slider
+const DEMO_BEFORE_SVG = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#e8ddd0"/>
+      <stop offset="100%" stop-color="#c9b99a"/>
+    </linearGradient>
+    <radialGradient id="face" cx="0.5" cy="0.4" r="0.5">
+      <stop offset="0%" stop-color="#d4b896"/>
+      <stop offset="100%" stop-color="#c4a882"/>
+    </radialGradient>
+  </defs>
+  <rect width="400" height="400" fill="url(#bg)"/>
+  <circle cx="200" cy="155" r="65" fill="url(#face)"/>
+  <ellipse cx="200" cy="340" rx="90" ry="75" fill="url(#face)"/>
+  <ellipse cx="200" cy="155" r="70" ry="45" cy="110" fill="#8b7355" opacity="0.7"/>
+  <text x="200" y="390" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#8b7355" opacity="0.6">Your photo</text>
+</svg>`)}`;
 
 export default function LandingHero({ onStart }: LandingHeroProps) {
   return (
@@ -99,6 +128,27 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
           <span className="font-semibold text-foreground">For real.</span> We ship it to you.
         </motion.p>
 
+        {/* Interactive demo slider */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.35 }}
+          className="mt-8 w-full max-w-xs"
+        >
+          <ImageRevealSlider
+            beforeSrc={DEMO_BEFORE_SVG}
+            afterSrc="/presets/3d-animated.jpg"
+            altBefore="Your photo"
+            altAfter="Sticker"
+            height={260}
+            initial={30}
+            showGlow
+          />
+          <p className="text-center text-xs text-muted-foreground mt-2">
+            Slide to see the magic
+          </p>
+        </motion.div>
+
         {/* CTA Button */}
         <motion.button
           initial={{ opacity: 0, scale: 0.8 }}
@@ -109,7 +159,7 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
             hapticMedium();
             onStart();
           }}
-          className="mt-8 btn-gradient px-10 py-4 rounded-2xl text-lg font-bold shadow-glow"
+          className="mt-6 btn-gradient px-10 py-4 rounded-2xl text-lg font-bold shadow-glow"
         >
           Try it free
         </motion.button>
@@ -124,12 +174,49 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
         </motion.p>
       </div>
 
+      {/* Example stickers gallery */}
+      <div className="px-6 pb-8">
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.75 }}
+          className="text-xs font-semibold uppercase tracking-wider text-muted-foreground text-center mb-4"
+        >
+          Pick from popular styles
+        </motion.p>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8, duration: 0.5 }}
+          className="flex gap-3 overflow-x-auto no-scrollbar pb-2 -mx-2 px-2"
+        >
+          {exampleStickers.map((ex) => (
+            <div
+              key={ex.label}
+              className="flex-shrink-0 w-28 group"
+            >
+              <div className="w-28 h-28 rounded-2xl overflow-hidden shadow-card border-2 border-white/60">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={ex.src}
+                  alt={`${ex.label} style example`}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <p className="text-xs font-semibold text-center mt-1.5 text-muted-foreground">
+                {ex.label}
+              </p>
+            </div>
+          ))}
+        </motion.div>
+      </div>
+
       {/* How it works */}
       <div className="px-6 pb-10">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
+          transition={{ delay: 0.9 }}
           className="flex items-center justify-center gap-1 mb-6 text-muted-foreground"
         >
           <span className="text-xs font-semibold uppercase tracking-wider">How it works</span>
@@ -142,7 +229,7 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
               key={step.title}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.9 + i * 0.15, duration: 0.4 }}
+              transition={{ delay: 1.0 + i * 0.15, duration: 0.4 }}
               className="flex items-center gap-4 glass-strong rounded-2xl p-4 shadow-soft"
             >
               <div
