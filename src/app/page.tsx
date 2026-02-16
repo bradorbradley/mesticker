@@ -100,13 +100,22 @@ export default function Home() {
       .catch(() => {});
   }, [isSignedIn]);
 
-  // Handle redirect return from Stripe
+  // Handle redirect return from Stripe (e.g. Link, Klarna, etc.)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (
       params.get("payment") === "success" ||
       params.get("redirect_status") === "succeeded"
     ) {
+      // Trigger order fulfillment for redirect-based payments
+      const piId = params.get("payment_intent");
+      if (piId) {
+        fetch("/api/order/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentIntentId: piId }),
+        }).catch((err) => console.error("Order confirm call failed:", err));
+      }
       setPaymentComplete(true);
       setStep("order");
       setShowLanding(false);

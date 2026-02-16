@@ -49,6 +49,12 @@ function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "cl
         onError(error.message || "Payment failed");
         setIsProcessing(false);
       } else if (paymentIntent && paymentIntent.status === "succeeded") {
+        // Trigger Printful order creation — don't block the success UI on this
+        fetch("/api/order/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentIntentId: paymentIntent.id }),
+        }).catch((err) => console.error("Order confirm call failed:", err));
         onSuccess();
       } else {
         onError("Payment was not completed. Please try again.");
