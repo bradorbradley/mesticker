@@ -98,7 +98,6 @@ export default function OrderForm({
       <div className="space-y-2 mb-4">
         {allCreations.map((creation, i) => {
           const qty = quantities[creation.id] || 0;
-          const isCurrent = currentCreation?.id === creation.id;
           return (
             <div
               key={creation.id}
@@ -121,9 +120,6 @@ export default function OrderForm({
 
               {/* Info */}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">
-                  {isCurrent ? "This sticker" : creation.stylePreset}
-                </p>
                 <p className="text-xs text-muted-foreground">
                   {STICKERS_PER_SHEET} stickers per sheet
                 </p>

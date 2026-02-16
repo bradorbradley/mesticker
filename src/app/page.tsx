@@ -9,7 +9,6 @@ import ProgressSteps from "@/components/progress-steps";
 import CameraCapture from "@/components/camera-capture";
 import StyleCarousel from "@/components/style-carousel";
 import LoadingState from "@/components/loading-state";
-import StickerReveal from "@/components/sticker-reveal";
 import OrderForm from "@/components/order-form";
 import PaymentForm from "@/components/payment-form";
 import OrderConfirmation from "@/components/order-confirmation";
@@ -17,6 +16,7 @@ import ImageRevealSlider from "@/components/image-reveal";
 import Gallery from "@/components/gallery";
 import UserMenu from "@/components/user-menu";
 import { useCreations } from "@/hooks/use-creations";
+import { stylePresets } from "@/lib/presets";
 import { hapticMedium } from "@/lib/haptics";
 import type { AppStep, StylePreset, ShippingAddress, CartItem, Creation } from "@/types";
 
@@ -132,6 +132,7 @@ export default function Home() {
 
   const handleCapture = useCallback((imageBase64: string) => {
     setCapturedImage(imageBase64);
+    setSelectedStyle(stylePresets[0]);
     setStep("style");
   }, []);
 
@@ -363,11 +364,12 @@ export default function Home() {
                 <LoadingState photo={capturedImage} />
               ) : generatedImage && capturedImage ? (
                 <div className="flex flex-col gap-4">
-                  <StickerReveal imageUrl={generatedImage} />
                   <ImageRevealSlider
                     beforeSrc={capturedImage}
                     afterSrc={generatedImage}
-                    height={280}
+                    height={380}
+                    initial={99}
+                    showGlow
                   />
                   <div className="flex gap-3">
                     <motion.button
@@ -375,7 +377,7 @@ export default function Home() {
                       className="flex-1 py-3 rounded-xl font-semibold text-sm glass-strong border border-border shadow-soft"
                       onClick={() => {
                         setGeneratedImage(null);
-                        setSelectedStyle(null);
+                        setSelectedStyle(stylePresets[0]);
                       }}
                     >
                       Try Another Style

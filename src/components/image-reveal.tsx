@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import { hapticSuccess } from "@/lib/haptics";
 
 interface ImageRevealSliderProps {
   beforeSrc: string;
@@ -10,6 +11,7 @@ interface ImageRevealSliderProps {
   altAfter?: string;
   initial?: number;
   height?: number;
+  showGlow?: boolean;
   className?: string;
 }
 
@@ -20,6 +22,7 @@ export default function ImageRevealSlider({
   altAfter = "Styled",
   initial = 50,
   height = 420,
+  showGlow,
   className,
 }: ImageRevealSliderProps) {
   const [position, setPosition] = useState(initial);
@@ -32,8 +35,12 @@ export default function ImageRevealSlider({
   const containerRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(null);
+  const hasPlayedHaptic = useRef(false);
 
   const allImagesLoaded = imagesLoaded.before && imagesLoaded.after;
+
+  // Glow intensity: 0 at 50%, 1 at 100%
+  const glowIntensity = showGlow ? Math.max(0, (position - 50) / 50) : 0;
 
   useEffect(() => {
     const beforeImg = new Image();
@@ -47,6 +54,14 @@ export default function ImageRevealSlider({
     beforeImg.src = beforeSrc;
     afterImg.src = afterSrc;
   }, [beforeSrc, afterSrc]);
+
+  // Haptic on first reveal
+  useEffect(() => {
+    if (showGlow && allImagesLoaded && !hasPlayedHaptic.current) {
+      hasPlayedHaptic.current = true;
+      hapticSuccess();
+    }
+  }, [showGlow, allImagesLoaded]);
 
   const getClipPath = useCallback(() => {
     return `inset(0 ${100 - position}% 0 0)`;
@@ -180,10 +195,16 @@ export default function ImageRevealSlider({
     <div
       ref={containerRef}
       className={cn(
-        "relative overflow-hidden rounded-2xl bg-white shadow-lg cursor-pointer select-none",
+        "relative overflow-hidden rounded-2xl bg-white cursor-pointer select-none transition-shadow duration-300",
+        glowIntensity > 0 ? "shadow-glow-lg" : "shadow-lg",
         className
       )}
-      style={{ height }}
+      style={{
+        height,
+        boxShadow: glowIntensity > 0
+          ? `0 0 ${30 * glowIntensity}px ${10 * glowIntensity}px rgba(124, 92, 252, ${0.3 * glowIntensity}), 0 0 ${60 * glowIntensity}px ${20 * glowIntensity}px rgba(255, 107, 157, ${0.15 * glowIntensity})`
+          : undefined,
+      }}
       onClick={(e) => handleTap(e.clientX)}
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
@@ -222,6 +243,17 @@ export default function ImageRevealSlider({
         }}
         draggable={false}
       />
+
+      {/* Sticker sheen overlay — visible when sticker side is revealed */}
+      {showGlow && glowIntensity > 0 && (
+        <div
+          className="sticker-sheen absolute inset-0 pointer-events-none"
+          style={{
+            clipPath: getClipPath(),
+            opacity: glowIntensity * 0.6,
+          }}
+        />
+      )}
 
       {allImagesLoaded && (
         <>
