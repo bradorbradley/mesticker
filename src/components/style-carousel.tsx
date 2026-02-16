@@ -1,11 +1,17 @@
 "use client";
 
-import { useRef } from "react";
-import { motion } from "framer-motion";
+import { useState, useCallback } from "react";
+import {
+  motion,
+  useMotionValue,
+  useTransform,
+  type PanInfo,
+} from "framer-motion";
 import { cn } from "@/lib/utils";
 import { StylePreset } from "@/types";
 import { stylePresets } from "@/lib/presets";
-import { Check } from "lucide-react";
+import { hapticLight } from "@/lib/haptics";
+import { ChevronLeft, ChevronRight, Shuffle } from "lucide-react";
 
 interface StyleCarouselProps {
   selected: string | null;
@@ -13,54 +19,195 @@ interface StyleCarouselProps {
   className?: string;
 }
 
+/** Colors mapped to each style for the card accent */
+const styleColors: Record<string, string> = {
+  pixar: "from-blue-400 to-cyan-300",
+  spongebob: "from-yellow-300 to-amber-400",
+  simpsons: "from-yellow-400 to-yellow-500",
+  "rick-and-morty": "from-green-400 to-emerald-500",
+  "family-guy": "from-sky-400 to-blue-500",
+  "scooby-doo": "from-orange-400 to-amber-500",
+  chibi: "from-pink-300 to-rose-400",
+  random: "from-primary to-accent-pink",
+};
+
 export default function StyleCarousel({
   selected,
   onSelect,
   className,
 }: StyleCarouselProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, [-200, 0, 200], [-12, 0, 12]);
+  const opacity = useTransform(x, [-200, -100, 0, 100, 200], [0.5, 0.8, 1, 0.8, 0.5]);
+
+  const goTo = useCallback(
+    (newIndex: number) => {
+      const wrapped =
+        ((newIndex % stylePresets.length) + stylePresets.length) %
+        stylePresets.length;
+      setCurrentIndex(wrapped);
+      hapticLight();
+    },
+    []
+  );
+
+  const handleDragEnd = useCallback(
+    (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+      const threshold = 50;
+      if (info.offset.x < -threshold) {
+        goTo(currentIndex + 1);
+      } else if (info.offset.x > threshold) {
+        goTo(currentIndex - 1);
+      }
+    },
+    [currentIndex, goTo]
+  );
+
+  const handleSelect = useCallback(() => {
+    hapticLight();
+    onSelect(stylePresets[currentIndex]);
+  }, [currentIndex, onSelect]);
+
+  const preset = stylePresets[currentIndex];
+  const isSelected = selected === preset.id;
+  const gradientClass = styleColors[preset.id] || "from-primary to-accent-pink";
+  const isRandom = preset.id === "random";
 
   return (
-    <div className={cn("w-full", className)}>
-      <div
-        ref={scrollRef}
-        className="flex gap-3 overflow-x-auto no-scrollbar pb-2 px-1 snap-x snap-mandatory"
-      >
-        {stylePresets.map((preset) => {
-          const isSelected = selected === preset.id;
+    <div className={cn("flex flex-col items-center", className)}>
+      {/* Card stack area */}
+      <div className="relative w-full h-[320px] flex items-center justify-center">
+        {/* Background cards (peeking behind) */}
+        {[-1, 1].map((offset) => {
+          const idx =
+            ((currentIndex + offset) % stylePresets.length +
+              stylePresets.length) %
+            stylePresets.length;
+          const bgPreset = stylePresets[idx];
           return (
-            <motion.button
-              key={preset.id}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => onSelect(preset)}
-              className={cn(
-                "flex-shrink-0 w-[140px] snap-center rounded-xl border-2 p-3 transition-all text-left relative",
-                isSelected
-                  ? "border-primary bg-primary/5 shadow-md"
-                  : "border-border bg-surface hover:border-primary/40"
-              )}
+            <div
+              key={`bg-${offset}`}
+              className="absolute w-[260px] h-[300px] rounded-3xl overflow-hidden shadow-soft"
+              style={{
+                transform: `translateX(${offset * 20}px) scale(0.9) rotate(${offset * 3}deg)`,
+                zIndex: 0,
+                opacity: 0.4,
+              }}
             >
-              {isSelected && (
-                <div className="absolute top-2 right-2 z-10 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-                  <Check size={12} className="text-white" />
-                </div>
-              )}
-              <div className="w-full aspect-square rounded-lg bg-muted overflow-hidden mb-2">
+              <div
+                className={`w-full h-full bg-gradient-to-br ${styleColors[bgPreset.id] || "from-gray-200 to-gray-300"}`}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={preset.previewImage}
-                  alt={preset.name}
-                  className="w-full h-full object-cover"
+                  src={bgPreset.previewImage}
+                  alt=""
+                  className="w-full h-full object-cover opacity-60"
                 />
               </div>
-              <p className="font-semibold text-sm truncate">{preset.name}</p>
-              <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5 leading-tight">
-                {preset.description}
-              </p>
-            </motion.button>
+            </div>
           );
         })}
+
+        {/* Active card — draggable */}
+        <motion.div
+          key={currentIndex}
+          className={cn(
+            "absolute w-[280px] h-[320px] rounded-3xl overflow-hidden cursor-grab active:cursor-grabbing z-10",
+            isSelected ? "ring-4 ring-primary shadow-glow" : "shadow-card"
+          )}
+          style={{ x, rotate, opacity }}
+          drag="x"
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.7}
+          onDragEnd={handleDragEnd}
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 300, damping: 25 }}
+          onClick={handleSelect}
+          whileTap={{ scale: 0.97 }}
+        >
+          {/* Card background gradient */}
+          <div className={`absolute inset-0 bg-gradient-to-br ${gradientClass} opacity-90`} />
+
+          {/* Preview image */}
+          {!isRandom ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={preset.previewImage}
+              alt={preset.name}
+              className="absolute inset-0 w-full h-full object-cover"
+              draggable={false}
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Shuffle size={80} className="text-white/40" />
+            </div>
+          )}
+
+          {/* Bottom info overlay */}
+          <div className="absolute bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-black/70 via-black/30 to-transparent">
+            <h3 className="font-display text-2xl font-bold text-white drop-shadow-md">
+              {preset.name}
+            </h3>
+            <p className="text-white/80 text-sm mt-0.5">{preset.description}</p>
+          </div>
+
+          {/* Selected indicator */}
+          {isSelected && (
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white shadow-lg flex items-center justify-center"
+            >
+              <div className="w-5 h-5 rounded-full gradient-primary" />
+            </motion.div>
+          )}
+
+          {/* Glossy sheen */}
+          <div className="sticker-sheen absolute inset-0 pointer-events-none" />
+        </motion.div>
       </div>
+
+      {/* Navigation dots + arrows */}
+      <div className="flex items-center gap-4 mt-4">
+        <button
+          onClick={() => goTo(currentIndex - 1)}
+          className="w-9 h-9 rounded-full glass-strong flex items-center justify-center shadow-soft active:scale-90 transition-transform"
+          aria-label="Previous style"
+        >
+          <ChevronLeft size={18} className="text-muted-foreground" />
+        </button>
+
+        <div className="flex gap-1.5">
+          {stylePresets.map((p, i) => (
+            <button
+              key={p.id}
+              onClick={() => goTo(i)}
+              className={cn(
+                "h-2 rounded-full transition-all duration-300",
+                i === currentIndex
+                  ? "w-6 gradient-primary"
+                  : "w-2 bg-border hover:bg-primary/30"
+              )}
+              aria-label={`Go to ${p.name}`}
+            />
+          ))}
+        </div>
+
+        <button
+          onClick={() => goTo(currentIndex + 1)}
+          className="w-9 h-9 rounded-full glass-strong flex items-center justify-center shadow-soft active:scale-90 transition-transform"
+          aria-label="Next style"
+        >
+          <ChevronRight size={18} className="text-muted-foreground" />
+        </button>
+      </div>
+
+      {/* Tap hint */}
+      <p className="text-xs text-muted-foreground mt-3">
+        Swipe to browse, tap to select
+      </p>
     </div>
   );
 }

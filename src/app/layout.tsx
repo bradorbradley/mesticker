@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "MeSticker — Turn yourself into a cartoon sticker",
   description:
-    "Upload a photo, pick a style, and get a custom cartoon sticker shipped to your door.",
+    "Upload a photo, pick a cartoon style, and get custom kiss-cut stickers shipped to your door. Pixar, SpongeBob, Simpsons, and more!",
 };
 
 export const viewport: Viewport = {
@@ -13,7 +13,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#6C63FF",
+  themeColor: "#7C5CFC",
 };
 
 export default function RootLayout({
@@ -23,7 +23,19 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="min-h-dvh bg-background antialiased">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className="min-h-dvh bg-background antialiased font-body">
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

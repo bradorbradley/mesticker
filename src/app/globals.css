@@ -3,17 +3,25 @@
 @tailwind utilities;
 
 :root {
-  --background: #fafafa;
+  --background: #fefcff;
   --foreground: #1a1a2e;
+  --font-display: "Fredoka", system-ui, sans-serif;
+  --font-body: "Nunito", system-ui, sans-serif;
+  --gradient-primary: linear-gradient(135deg, #7C5CFC 0%, #FF6B9D 100%);
+  --gradient-warm: linear-gradient(135deg, #FF6B9D 0%, #FF9F43 100%);
+  --gradient-cool: linear-gradient(135deg, #45E3FF 0%, #7C5CFC 100%);
+  --gradient-sunset: linear-gradient(135deg, #FF9F43 0%, #FF6B9D 50%, #7C5CFC 100%);
+  --gradient-bg: radial-gradient(ellipse at top, #F5F3FF 0%, #FEFCFF 50%, #FFF5F9 100%);
 }
 
 body {
   color: var(--foreground);
-  background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  background: var(--gradient-bg);
+  font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  min-height: 100dvh;
 }
 
 /* Prevent overscroll bounce on mobile */
@@ -29,4 +37,100 @@ body {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* === Gradient utilities === */
+.gradient-primary {
+  background: var(--gradient-primary);
+}
+.gradient-warm {
+  background: var(--gradient-warm);
+}
+.gradient-cool {
+  background: var(--gradient-cool);
+}
+.gradient-sunset {
+  background: var(--gradient-sunset);
+}
+
+.gradient-text {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* === Glossy / glass effects === */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+.glass-strong {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+/* Sticker-like glossy sheen overlay */
+.sticker-sheen {
+  position: relative;
+  overflow: hidden;
+}
+.sticker-sheen::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.15) 45%,
+    rgba(255, 255, 255, 0.25) 50%,
+    rgba(255, 255, 255, 0.15) 55%,
+    transparent 60%
+  );
+  pointer-events: none;
+}
+
+/* === Shimmer gradient for loading states === */
+.shimmer-bg {
+  background: linear-gradient(90deg, #F5F3FF 25%, #EDE9FE 37%, #F5F3FF 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* === Button gradient style === */
+.btn-gradient {
+  background: var(--gradient-primary);
+  color: white;
+  font-weight: 600;
+  border: none;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.btn-gradient:hover {
+  box-shadow: 0 4px 20px rgba(124, 92, 252, 0.4);
+}
+.btn-gradient:active {
+  transform: scale(0.97);
+}
+
+/* Subtle dot pattern for backgrounds */
+.dot-pattern {
+  background-image: radial-gradient(circle, #EDE9FE 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Safe area padding for notched phones */
+.safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+.safe-top {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
 }

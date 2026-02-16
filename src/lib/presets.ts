@@ -5,7 +5,7 @@ export const stylePresets: StylePreset[] = [
     id: "pixar",
     name: "Pixar",
     description: "3D animated movie character",
-    previewImage: "/presets/pixar.png",
+    previewImage: "/presets/3d-animated.jpg",
     prompt:
       "Transform this photo into a Pixar-style 3D animated character. Smooth stylized skin, large expressive eyes, slightly exaggerated proportions, warm cinematic lighting. Think Toy Story / Inside Out / Coco character design. Keep the person fully recognizable but as a polished CG animated character. Sticker-ready with a clean outline edge and transparent background.",
   },
@@ -13,7 +13,7 @@ export const stylePresets: StylePreset[] = [
     id: "spongebob",
     name: "SpongeBob",
     description: "Bikini Bottom cartoon style",
-    previewImage: "/presets/spongebob.png",
+    previewImage: "/presets/spongebob.webp",
     prompt:
       "Transform this photo into a character that belongs in the SpongeBob SquarePants universe. Bold outlines, bright saturated colors, exaggerated goofy expressions, simple shapes, flat shading. Capture the wacky Bikini Bottom energy and Nickelodeon cartoon style. Keep the person recognizable but fully in SpongeBob art style. Sticker-ready with a clean outline edge and transparent background.",
   },
@@ -21,7 +21,7 @@ export const stylePresets: StylePreset[] = [
     id: "simpsons",
     name: "Simpsons",
     description: "Yellow skin, Springfield style",
-    previewImage: "/presets/simpsons.png",
+    previewImage: "/presets/simpsons.jpg",
     prompt:
       "Transform this photo into a character from The Simpsons. Yellow skin, overbite, bulging eyes, classic Springfield cartoon style. Bold black outlines, flat colors, simplified features. Keep the person recognizable in Simpsons form — capture their hairstyle, clothing, and distinguishing features. Sticker-ready with a clean outline edge and transparent background.",
   },
@@ -29,7 +29,7 @@ export const stylePresets: StylePreset[] = [
     id: "rick-and-morty",
     name: "Rick & Morty",
     description: "Interdimensional cartoon style",
-    previewImage: "/presets/rick-and-morty.png",
+    previewImage: "/presets/rick-morty.webp",
     prompt:
       "Transform this photo into a character from Rick and Morty. Wobbly outlines, slightly asymmetric features, flat cel-shaded colors, sci-fi cartoon energy. Exaggerated head proportions, simple dot eyes or oval eyes with visible pupils. Keep the person recognizable but fully in the Rick and Morty art style. Sticker-ready with a clean outline edge and transparent background.",
   },
@@ -37,7 +37,7 @@ export const stylePresets: StylePreset[] = [
     id: "family-guy",
     name: "Family Guy",
     description: "Quahog cartoon style",
-    previewImage: "/presets/family-guy.png",
+    previewImage: "/presets/family-guy.webp",
     prompt:
       "Transform this photo into a character from Family Guy. Round/oval head shape, small simple eyes, prominent chin, flat colors, clean cartoon outlines. Capture the Seth MacFarlane animation style. Keep recognizable features like hairstyle and clothing but fully in Family Guy art style. Sticker-ready with a clean outline edge and transparent background.",
   },
@@ -45,7 +45,7 @@ export const stylePresets: StylePreset[] = [
     id: "scooby-doo",
     name: "Scooby-Doo",
     description: "Classic Hanna-Barbera style",
-    previewImage: "/presets/scooby-doo.png",
+    previewImage: "/presets/random.svg",
     prompt:
       "Transform this photo into a character from Scooby-Doo in classic Hanna-Barbera animation style. Thick clean outlines, flat cel-shaded colors, slightly retro 70s cartoon aesthetic. Think Mystery Inc. character design — simple shapes, expressive eyes, clean color blocks. Keep the person recognizable but fully in the Scooby-Doo art style. Sticker-ready with a clean outline edge and transparent background.",
   },
@@ -53,7 +53,7 @@ export const stylePresets: StylePreset[] = [
     id: "chibi",
     name: "Chibi",
     description: "Adorable anime chibi style",
-    previewImage: "/presets/chibi.png",
+    previewImage: "/presets/chibi.jpg",
     prompt:
       "Transform this photo into an adorable chibi anime character. Enormous head (2-3x body size), tiny stubby body, huge sparkly eyes, simplified cute features, vibrant anime coloring. Make it irresistibly cute and kawaii while keeping the person recognizable — match their hairstyle, hair color, and clothing. Sticker-ready with a clean outline edge and transparent background.",
   },
