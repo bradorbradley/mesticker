@@ -3,17 +3,18 @@
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { hapticMedium } from "@/lib/haptics";
+import ImageRevealSlider from "@/components/image-reveal";
 
 interface LandingHeroProps {
   onStart: () => void;
 }
 
-/** Stacked sticker showcase — the hero visual */
-const heroStickers = [
-  { src: "/presets/simpsons.jpg", rotate: -8, x: -54, y: 12, z: 1, label: "Simpsons" },
-  { src: "/presets/spongebob.webp", rotate: 7, x: 54, y: 8, z: 2, label: "SpongeBob" },
-  { src: "/presets/3d-animated.jpg", rotate: -1, x: 0, y: -8, z: 3, label: "Pixar" },
-];
+// ── Example before/after for the hero slider ──
+// To update: drop your own images in public/examples/ and change the paths.
+// The "after" URL is a real sticker from a production generation (public Vercel Blob).
+const HERO_BEFORE = "/presets/renaissance.jpg";
+const HERO_AFTER =
+  "https://0iztdnrnvx25ufoo.public.blob.vercel-storage.com/sticker-1771283199268.png";
 
 const styleExamples = [
   { src: "/presets/3d-animated.jpg", label: "Pixar" },
@@ -51,56 +52,38 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
           Get <span className="font-bold text-foreground">real stickers</span> shipped to you.
         </motion.p>
 
-        {/* Stacked sticker showcase */}
+        {/* Before / after slider — real sticker example */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.6, delay: 0.2, type: "spring", stiffness: 120 }}
-          className="relative mt-8 mb-2"
-          style={{ width: 260, height: 200 }}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="mt-6 w-full max-w-xs"
         >
-          {heroStickers.map((sticker, i) => (
-            <motion.div
-              key={sticker.label}
-              className="absolute left-1/2 top-1/2 w-[140px] h-[140px]"
-              initial={{ opacity: 0, scale: 0.5, rotate: 0 }}
-              animate={{ opacity: 1, scale: 1, rotate: sticker.rotate }}
-              transition={{
-                duration: 0.5,
-                delay: 0.3 + i * 0.12,
-                type: "spring",
-                stiffness: 150,
-              }}
-              style={{
-                marginLeft: -70 + sticker.x,
-                marginTop: -70 + sticker.y,
-                zIndex: sticker.z,
-              }}
-            >
-              <div className="w-full h-full rounded-2xl overflow-hidden shadow-card border-[3px] border-white relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={sticker.src}
-                  alt={`${sticker.label} sticker example`}
-                  className="w-full h-full object-cover"
-                />
-                <div className="sticker-sheen absolute inset-0 pointer-events-none opacity-30" />
-              </div>
-            </motion.div>
-          ))}
+          <ImageRevealSlider
+            beforeSrc={HERO_BEFORE}
+            afterSrc={HERO_AFTER}
+            altBefore="Original"
+            altAfter="Sticker"
+            height={340}
+            initial={35}
+            showGlow
+          />
+          <p className="text-center text-xs text-muted-foreground mt-2">
+            Drag to compare
+          </p>
         </motion.div>
 
         {/* CTA */}
         <motion.button
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.55, type: "spring", stiffness: 200 }}
+          transition={{ duration: 0.4, delay: 0.5, type: "spring", stiffness: 200 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => {
             hapticMedium();
             onStart();
           }}
-          className="mt-4 btn-gradient px-12 py-4 rounded-2xl text-lg font-bold shadow-glow flex items-center gap-2"
+          className="mt-5 btn-gradient px-12 py-4 rounded-2xl text-lg font-bold shadow-glow flex items-center gap-2"
         >
           Make yours
           <ArrowRight size={20} />
@@ -109,18 +92,18 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.65 }}
+          transition={{ delay: 0.6 }}
           className="mt-2.5 text-xs text-muted-foreground"
         >
           Free to try &middot; no sign-up
         </motion.p>
       </div>
 
-      {/* Style examples — the variety sell */}
+      {/* Style examples */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.7, duration: 0.5 }}
+        transition={{ delay: 0.65, duration: 0.5 }}
         className="px-5 pb-5"
       >
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground text-center mb-3">
@@ -145,11 +128,11 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
         </div>
       </motion.div>
 
-      {/* How it works — single line */}
+      {/* How it works */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.85 }}
+        transition={{ delay: 0.8 }}
         className="px-5 pb-10"
       >
         <div className="glass-strong rounded-2xl p-4 shadow-soft">
