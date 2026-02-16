@@ -4,11 +4,12 @@ import { useState, useCallback, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Lock, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import LandingHero from "@/components/landing-hero";
 import ProgressSteps from "@/components/progress-steps";
 import CameraCapture from "@/components/camera-capture";
 import StyleCarousel from "@/components/style-carousel";
 import LoadingState from "@/components/loading-state";
+import StickerReveal from "@/components/sticker-reveal";
 import OrderForm from "@/components/order-form";
 import PaymentForm from "@/components/payment-form";
 import OrderConfirmation from "@/components/order-confirmation";
@@ -16,11 +17,13 @@ import ImageRevealSlider from "@/components/image-reveal";
 import Gallery from "@/components/gallery";
 import UserMenu from "@/components/user-menu";
 import { useCreations } from "@/hooks/use-creations";
+import { hapticMedium } from "@/lib/haptics";
 import type { AppStep, StylePreset, ShippingAddress, Creation } from "@/types";
 
 const FREE_GENERATION_LIMIT = 3;
 const GEN_COUNT_KEY = "mesticker-gen-count";
 const HAS_PURCHASED_KEY = "mesticker-has-purchased";
+const SEEN_LANDING_KEY = "mesticker-seen-landing";
 
 function getLocalGenCount(): number {
   try {
@@ -48,13 +51,14 @@ function setLocalHasPurchased() {
 }
 
 const pageVariants = {
-  enter: { opacity: 0, x: 30 },
-  center: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: -30 },
+  enter: { opacity: 0, y: 20, scale: 0.98 },
+  center: { opacity: 1, y: 0, scale: 1 },
+  exit: { opacity: 0, y: -10, scale: 0.98 },
 };
 
 export default function Home() {
   const { data: session } = useSession();
+  const [showLanding, setShowLanding] = useState(true);
   const [step, setStep] = useState<AppStep>("capture");
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<StylePreset | null>(null);
@@ -73,13 +77,22 @@ export default function Home() {
   // Generation limit
   const [limitReached, setLimitReached] = useState(false);
 
-  // Creations — localStorage for anonymous, DB for signed-in users
+  // Creations
   const { creations: localCreations, addCreation: addLocalCreation } =
     useCreations();
   const [dbCreations, setDbCreations] = useState<Creation[]>([]);
 
   const isSignedIn = !!session?.user;
   const displayCreations = isSignedIn ? dbCreations : localCreations;
+
+  // Check if user has seen landing before
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(SEEN_LANDING_KEY) === "true") {
+        setShowLanding(false);
+      }
+    } catch {}
+  }, []);
 
   // Load creations from DB when signed in
   useEffect(() => {
@@ -90,7 +103,7 @@ export default function Home() {
       .catch(() => {});
   }, [isSignedIn]);
 
-  // Handle redirect return from Stripe (3DS, Klarna, etc.)
+  // Handle redirect return from Stripe
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (
@@ -99,20 +112,16 @@ export default function Home() {
     ) {
       setPaymentComplete(true);
       setStep("order");
-      // Clean URL
+      setShowLanding(false);
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
 
-  // Handle return from Stripe redirect (3D Secure, etc.)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("payment") === "success" || params.get("redirect_status") === "succeeded") {
-      setPaymentComplete(true);
-      setStep("order");
-      // Clean up URL
-      window.history.replaceState({}, "", window.location.pathname);
-    }
+  const handleLandingStart = useCallback(() => {
+    setShowLanding(false);
+    try {
+      localStorage.setItem(SEEN_LANDING_KEY, "true");
+    } catch {}
   }, []);
 
   const handleCapture = useCallback((imageBase64: string) => {
@@ -123,7 +132,6 @@ export default function Home() {
   const handleGenerate = useCallback(async () => {
     if (!capturedImage || !selectedStyle) return;
 
-    // Client-side generation limit check (for anonymous users)
     if (!isSignedIn) {
       const count = getLocalGenCount();
       const purchased = getLocalHasPurchased();
@@ -136,6 +144,7 @@ export default function Home() {
     setIsGenerating(true);
     setGenerateError(null);
     setLimitReached(false);
+    hapticMedium();
 
     try {
       const res = await fetch("/api/generate", {
@@ -149,7 +158,6 @@ export default function Home() {
 
       if (!res.ok) {
         const data = await res.json();
-        // Server-side limit reached (for signed-in users)
         if (data.error === "FREE_LIMIT_REACHED") {
           setLimitReached(true);
           return;
@@ -159,11 +167,8 @@ export default function Home() {
 
       const data = await res.json();
       setGeneratedImage(data.generatedImage);
-
-      // Track generation count locally
       incrementLocalGenCount();
 
-      // Save to localStorage (anonymous fallback)
       addLocalCreation({
         originalImage: capturedImage,
         generatedImage: data.generatedImage,
@@ -171,7 +176,6 @@ export default function Home() {
         ordered: false,
       });
 
-      // Save to DB if signed in
       if (isSignedIn) {
         try {
           const saveRes = await fetch("/api/creations", {
@@ -188,7 +192,7 @@ export default function Home() {
             setDbCreations((prev) => [saved, ...prev]);
           }
         } catch {
-          // DB save failure is non-blocking — localStorage has the backup
+          // DB save failure is non-blocking
         }
       }
     } catch (error) {
@@ -276,28 +280,36 @@ export default function Home() {
     }
   }, [step]);
 
+  // Landing page
+  if (showLanding) {
+    return <LandingHero onStart={handleLandingStart} />;
+  }
+
   return (
-    <main className="min-h-dvh bg-background">
-      <div className="mx-auto max-w-md px-4 py-6">
+    <main className="min-h-dvh">
+      <div className="mx-auto max-w-md px-4 py-5 safe-top">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-5">
           {step !== "capture" && !paymentComplete ? (
-            <button
+            <motion.button
+              whileTap={{ scale: 0.9 }}
               onClick={goBack}
-              className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+              className="w-9 h-9 rounded-full glass-strong shadow-soft flex items-center justify-center"
             >
               <ArrowLeft size={16} />
-            </button>
+            </motion.button>
           ) : (
-            <div className="w-8" />
+            <div className="w-9" />
           )}
-          <h1 className="text-xl font-bold text-primary">MeSticker</h1>
+          <h1 className="font-display text-xl font-bold gradient-text">
+            MeSticker
+          </h1>
           <UserMenu />
         </div>
 
         {/* Progress */}
         {!paymentComplete && (
-          <ProgressSteps current={step} className="mb-6" />
+          <ProgressSteps current={step} className="mb-5" />
         )}
 
         {/* Content */}
@@ -310,10 +322,14 @@ export default function Home() {
               initial="enter"
               animate="center"
               exit="exit"
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
             >
               <CameraCapture onCapture={handleCapture} />
-              <Gallery creations={displayCreations} onSelect={handleGallerySelect} className="mt-6" />
+              <Gallery
+                creations={displayCreations}
+                onSelect={handleGallerySelect}
+                className="mt-6"
+              />
             </motion.div>
           )}
 
@@ -325,40 +341,42 @@ export default function Home() {
               initial="enter"
               animate="center"
               exit="exit"
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
             >
               {isGenerating ? (
-                <LoadingState />
+                <LoadingState photo={capturedImage} />
               ) : generatedImage && capturedImage ? (
                 <div className="flex flex-col gap-4">
+                  <StickerReveal imageUrl={generatedImage} />
                   <ImageRevealSlider
                     beforeSrc={capturedImage}
                     afterSrc={generatedImage}
-                    height={350}
+                    height={280}
                   />
                   <div className="flex gap-3">
-                    <Button
-                      variant="outline"
-                      className="flex-1"
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      className="flex-1 py-3 rounded-xl font-semibold text-sm glass-strong border border-border shadow-soft"
                       onClick={() => {
                         setGeneratedImage(null);
                         setSelectedStyle(null);
                       }}
                     >
                       Try Another Style
-                    </Button>
-                    <Button
-                      className="flex-1"
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      className="flex-1 py-3 rounded-xl font-bold text-sm btn-gradient shadow-glow"
                       onClick={() => setStep("order")}
                     >
                       Order Stickers
-                    </Button>
+                    </motion.button>
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
                   {capturedImage && (
-                    <div className="w-full aspect-square rounded-2xl overflow-hidden">
+                    <div className="w-24 h-24 mx-auto rounded-2xl overflow-hidden shadow-card border-2 border-border">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={capturedImage}
@@ -368,7 +386,9 @@ export default function Home() {
                     </div>
                   )}
                   <div>
-                    <h2 className="font-semibold mb-2">Choose a style</h2>
+                    <h2 className="font-display text-lg font-bold text-center mb-3">
+                      Choose your style
+                    </h2>
                     <StyleCarousel
                       selected={selectedStyle?.id ?? null}
                       onSelect={setSelectedStyle}
@@ -380,25 +400,29 @@ export default function Home() {
                     </p>
                   )}
                   {limitReached ? (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
-                      <Lock size={24} className="mx-auto mb-2 text-amber-600" />
-                      <p className="font-semibold text-sm text-amber-900">
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-2xl border border-accent-orange/30 bg-accent-orange/5 p-5 text-center"
+                    >
+                      <Lock size={24} className="mx-auto mb-2 text-accent-orange" />
+                      <p className="font-bold text-sm">
                         Free generations used up
                       </p>
-                      <p className="text-xs text-amber-700 mt-1">
-                        Order any sticker to unlock unlimited generations!
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Order any sticker to unlock unlimited creations!
                       </p>
-                    </div>
+                    </motion.div>
                   ) : (
-                    <Button
-                      size="lg"
-                      className="w-full"
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
                       disabled={!selectedStyle}
                       onClick={handleGenerate}
+                      className="w-full py-4 rounded-2xl font-bold text-base btn-gradient shadow-glow disabled:opacity-40 disabled:shadow-none flex items-center justify-center gap-2"
                     >
-                      <Sparkles size={18} className="mr-2" />
+                      <Sparkles size={18} />
                       Generate Sticker
-                    </Button>
+                    </motion.button>
                   )}
                 </div>
               )}
@@ -413,7 +437,7 @@ export default function Home() {
               initial="enter"
               animate="center"
               exit="exit"
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
             >
               {paymentComplete ? (
                 <OrderConfirmation
@@ -438,7 +462,7 @@ export default function Home() {
               ) : (
                 <div>
                   {generatedImage && (
-                    <div className="w-full rounded-2xl overflow-hidden mb-4 h-48 flex items-center justify-center bg-muted">
+                    <div className="w-full rounded-2xl overflow-hidden mb-4 h-48 flex items-center justify-center glass-strong shadow-soft">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={generatedImage}
