@@ -390,14 +390,24 @@ export default function Home() {
                       Choose your style
                     </h2>
                     <StyleCarousel
-                      selected={selectedStyle?.id ?? null}
-                      onSelect={setSelectedStyle}
+                      onActiveChange={setSelectedStyle}
                     />
                   </div>
                   {generateError && (
-                    <p className="text-sm text-red-500 text-center">
-                      {generateError}
-                    </p>
+                    <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-center">
+                      <p className="text-sm text-red-600">
+                        {generateError}
+                      </p>
+                      <button
+                        onClick={() => {
+                          setGenerateError(null);
+                          handleGenerate();
+                        }}
+                        className="mt-2 text-xs font-semibold text-primary underline underline-offset-2"
+                      >
+                        Tap to retry
+                      </button>
+                    </div>
                   )}
                   {limitReached ? (
                     <motion.div
@@ -416,9 +426,8 @@ export default function Home() {
                   ) : (
                     <motion.button
                       whileTap={{ scale: 0.95 }}
-                      disabled={!selectedStyle}
                       onClick={handleGenerate}
-                      className="w-full py-4 rounded-2xl font-bold text-base btn-gradient shadow-glow disabled:opacity-40 disabled:shadow-none flex items-center justify-center gap-2"
+                      className="w-full py-4 rounded-2xl font-bold text-base btn-gradient shadow-glow flex items-center justify-center gap-2"
                     >
                       <Sparkles size={18} />
                       Generate Sticker

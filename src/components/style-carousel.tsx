@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   motion,
   useMotionValue,
@@ -14,8 +14,7 @@ import { hapticLight } from "@/lib/haptics";
 import { ChevronLeft, ChevronRight, Shuffle } from "lucide-react";
 
 interface StyleCarouselProps {
-  selected: string | null;
-  onSelect: (preset: StylePreset) => void;
+  onActiveChange: (preset: StylePreset) => void;
   className?: string;
 }
 
@@ -26,20 +25,23 @@ const styleColors: Record<string, string> = {
   simpsons: "from-yellow-400 to-yellow-500",
   "rick-and-morty": "from-green-400 to-emerald-500",
   "family-guy": "from-sky-400 to-blue-500",
-  "scooby-doo": "from-orange-400 to-amber-500",
   chibi: "from-pink-300 to-rose-400",
   random: "from-primary to-accent-pink",
 };
 
 export default function StyleCarousel({
-  selected,
-  onSelect,
+  onActiveChange,
   className,
 }: StyleCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-200, 0, 200], [-12, 0, 12]);
   const opacity = useTransform(x, [-200, -100, 0, 100, 200], [0.5, 0.8, 1, 0.8, 0.5]);
+
+  // Auto-select whichever card is currently visible — no tap required
+  useEffect(() => {
+    onActiveChange(stylePresets[currentIndex]);
+  }, [currentIndex, onActiveChange]);
 
   const goTo = useCallback(
     (newIndex: number) => {
@@ -64,13 +66,7 @@ export default function StyleCarousel({
     [currentIndex, goTo]
   );
 
-  const handleSelect = useCallback(() => {
-    hapticLight();
-    onSelect(stylePresets[currentIndex]);
-  }, [currentIndex, onSelect]);
-
   const preset = stylePresets[currentIndex];
-  const isSelected = selected === preset.id;
   const gradientClass = styleColors[preset.id] || "from-primary to-accent-pink";
   const isRandom = preset.id === "random";
 
@@ -112,10 +108,7 @@ export default function StyleCarousel({
         {/* Active card — draggable */}
         <motion.div
           key={currentIndex}
-          className={cn(
-            "absolute w-[280px] h-[320px] rounded-3xl overflow-hidden cursor-grab active:cursor-grabbing z-10",
-            isSelected ? "ring-4 ring-primary shadow-glow" : "shadow-card"
-          )}
+          className="absolute w-[280px] h-[320px] rounded-3xl overflow-hidden cursor-grab active:cursor-grabbing z-10 ring-4 ring-primary shadow-glow"
           style={{ x, rotate, opacity }}
           drag="x"
           dragConstraints={{ left: 0, right: 0 }}
@@ -124,7 +117,6 @@ export default function StyleCarousel({
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 300, damping: 25 }}
-          onClick={handleSelect}
           whileTap={{ scale: 0.97 }}
         >
           {/* Card background gradient */}
@@ -152,17 +144,6 @@ export default function StyleCarousel({
             </h3>
             <p className="text-white/80 text-sm mt-0.5">{preset.description}</p>
           </div>
-
-          {/* Selected indicator */}
-          {isSelected && (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white shadow-lg flex items-center justify-center"
-            >
-              <div className="w-5 h-5 rounded-full gradient-primary" />
-            </motion.div>
-          )}
 
           {/* Glossy sheen */}
           <div className="sticker-sheen absolute inset-0 pointer-events-none" />
@@ -204,9 +185,9 @@ export default function StyleCarousel({
         </button>
       </div>
 
-      {/* Tap hint */}
+      {/* Swipe hint */}
       <p className="text-xs text-muted-foreground mt-3">
-        Swipe to browse, tap to select
+        Swipe to browse styles
       </p>
     </div>
   );

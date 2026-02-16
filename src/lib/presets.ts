@@ -42,14 +42,6 @@ export const stylePresets: StylePreset[] = [
       "Transform this photo into a character from Family Guy. Round/oval head shape, small simple eyes, prominent chin, flat colors, clean cartoon outlines. Capture the Seth MacFarlane animation style. Keep recognizable features like hairstyle and clothing but fully in Family Guy art style. Sticker-ready with a clean outline edge and transparent background.",
   },
   {
-    id: "scooby-doo",
-    name: "Scooby-Doo",
-    description: "Classic Hanna-Barbera style",
-    previewImage: "/presets/random.svg",
-    prompt:
-      "Transform this photo into a character from Scooby-Doo in classic Hanna-Barbera animation style. Thick clean outlines, flat cel-shaded colors, slightly retro 70s cartoon aesthetic. Think Mystery Inc. character design — simple shapes, expressive eyes, clean color blocks. Keep the person recognizable but fully in the Scooby-Doo art style. Sticker-ready with a clean outline edge and transparent background.",
-  },
-  {
     id: "chibi",
     name: "Chibi",
     description: "Adorable anime chibi style",

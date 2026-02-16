@@ -63,6 +63,23 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Generate error:", error);
+
+    // Detect OpenAI safety system rejections and return a friendly message
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      message.includes("safety system") ||
+      message.includes("content_policy") ||
+      message.includes("rejected")
+    ) {
+      return NextResponse.json(
+        {
+          error: "This photo couldn't be processed. Try a different photo or style — sometimes simply retrying works too!",
+          code: "SAFETY_REJECTION",
+        },
+        { status: 422 }
+      );
+    }
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Generation failed" },
       { status: 500 }

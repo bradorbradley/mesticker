@@ -6,24 +6,23 @@ export function getStripe() {
   return new Stripe(key);
 }
 
-// Pack pricing (in cents)
-// Printful kiss-cut sticker cost: ~$2.50/sticker + ~$4.50 shipping
-// We mark up ~50-80% on cost to cover fees + profit
+// Pack pricing (in cents) — shipping is included in price ("free shipping")
+//
+// Cost breakdown per pack (conservative: $3/sticker + $5 Printful shipping):
+//   3-pack: Printful ~$14.00 + Stripe ~$0.88 = ~$14.88 → sell $19.99 → profit ~$5.11
+//   5-pack: Printful ~$20.00 + Stripe ~$1.17 = ~$21.17 → sell $29.99 → profit ~$8.82
+//  10-pack: Printful ~$35.00 + Stripe ~$1.75 = ~$36.75 → sell $49.99 → profit ~$13.24
 export const PACK_OPTIONS = [
-  { quantity: 3, pricePerSticker: 499, label: "3 Pack" },   // $4.99/ea = $14.97 total
-  { quantity: 5, pricePerSticker: 349, label: "5 Pack" },   // $3.49/ea = $17.45 total (most popular)
-  { quantity: 10, pricePerSticker: 249, label: "10 Pack" },  // $2.49/ea = $24.90 total (best value)
+  { quantity: 3,  totalCents: 1999, label: "3 Pack"  },  // $19.99 ($6.66/ea)
+  { quantity: 5,  totalCents: 2999, label: "5 Pack"  },  // $29.99 ($6.00/ea) — most popular
+  { quantity: 10, totalCents: 4999, label: "10 Pack" },  // $49.99 ($5.00/ea) — best value
 ] as const;
-
-const SHIPPING_CENTS = 499; // $4.99 flat shipping
 
 export function calculateTotal(quantity: number) {
   const pack = PACK_OPTIONS.find((p) => p.quantity === quantity);
   if (!pack) throw new Error(`Invalid pack quantity: ${quantity}`);
-  const subtotal = pack.pricePerSticker * pack.quantity;
-  const shipping = SHIPPING_CENTS;
-  const total = subtotal + shipping;
-  return { subtotal, shipping, total, pricePerSticker: pack.pricePerSticker };
+  const pricePerSticker = Math.round(pack.totalCents / pack.quantity);
+  return { subtotal: pack.totalCents, shipping: 0, total: pack.totalCents, pricePerSticker };
 }
 
 export async function createPaymentIntent(amountCents: number, metadata: Record<string, string>) {
