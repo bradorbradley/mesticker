@@ -343,13 +343,26 @@ export default function Home() {
               ) : (
                 <div className="flex flex-col gap-4">
                   {capturedImage && (
-                    <div className="w-24 h-24 mx-auto rounded-2xl overflow-hidden shadow-card border-2 border-border">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={capturedImage}
-                        alt="Captured photo"
-                        className="w-full h-full object-cover"
-                      />
+                    <div className="flex items-center justify-center gap-3">
+                      <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-card border-2 border-border">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={capturedImage}
+                          alt="Captured photo"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <button
+                        onClick={() => {
+                          setCapturedImage(null);
+                          setSelectedStyle(null);
+                          setGeneratedImage(null);
+                          setStep("capture");
+                        }}
+                        className="text-xs font-semibold text-primary underline underline-offset-2"
+                      >
+                        Retake
+                      </button>
                     </div>
                   )}
                   <div>
