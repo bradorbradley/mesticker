@@ -80,20 +80,18 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
           transition={{ duration: 0.5 }}
           className="font-display text-5xl font-bold tracking-tight text-center leading-[1.1]"
         >
-          <span className="gradient-text">Your face,</span>
-          <br />
-          <span className="gradient-text">as a sticker.</span>
+          <span className="gradient-text">MeSticker</span>
         </motion.h1>
 
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.12 }}
-          className="mt-3 text-center text-base text-muted-foreground leading-relaxed"
+          className="mt-3 text-center text-lg text-foreground font-medium leading-relaxed"
         >
-          Snap a selfie. Pick a cartoon style.
+          Turn any selfie into a <span className="gradient-text font-bold">custom cartoon sticker</span>
           <br />
-          Get <span className="font-bold text-foreground">real stickers</span> shipped to you.
+          <span className="text-base text-muted-foreground">and we&apos;ll ship it to your door</span>
         </motion.p>
 
         {/* Selfie → Sticker visual */}
