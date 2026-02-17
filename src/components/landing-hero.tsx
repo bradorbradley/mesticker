@@ -1,19 +1,17 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { ArrowRight } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { motion, useAnimationControls } from "framer-motion";
+import { ArrowRight, ChevronRight } from "lucide-react";
 import { hapticMedium } from "@/lib/haptics";
-import ImageRevealSlider from "@/components/image-reveal";
 
 interface LandingHeroProps {
   onStart: () => void;
 }
 
-// ── Example before/after for the hero slider ──
-// To update: drop your own images in public/examples/ and change the paths.
-// The "after" URL is a real sticker from a production generation (public Vercel Blob).
-const HERO_BEFORE = "/presets/renaissance.jpg";
-const HERO_AFTER =
+// Hero images — selfie and the resulting die-cut sticker
+const HERO_SELFIE = "/presets/renaissance.jpg";
+const HERO_STICKER =
   "https://0iztdnrnvx25ufoo.public.blob.vercel-storage.com/sticker-1771283199268.png";
 
 const styleExamples = [
@@ -24,6 +22,52 @@ const styleExamples = [
   { src: "/presets/chibi.jpg", label: "Chibi" },
   { src: "/presets/family-guy.webp", label: "Family Guy" },
 ];
+
+// Double the array for seamless looping
+const carouselItems = [...styleExamples, ...styleExamples];
+
+function StyleCarouselStrip() {
+  const controls = useAnimationControls();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Each card is 80px wide + 12px gap = 92px, 6 cards = one set width
+    const setWidth = styleExamples.length * 92;
+
+    controls.set({ x: 0 });
+    controls.start({
+      x: -setWidth,
+      transition: {
+        duration: 20,
+        ease: "linear",
+        repeat: Infinity,
+        repeatType: "loop",
+      },
+    });
+  }, [controls]);
+
+  return (
+    <div ref={containerRef} className="overflow-hidden w-full">
+      <motion.div animate={controls} className="flex gap-3 w-max">
+        {carouselItems.map((ex, i) => (
+          <div key={`${ex.label}-${i}`} className="text-center flex-shrink-0 w-20">
+            <div className="aspect-square rounded-xl overflow-hidden shadow-soft border-2 border-white/70">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={ex.src}
+                alt={`${ex.label} style`}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <p className="text-[10px] font-bold text-muted-foreground mt-1 truncate">
+              {ex.label}
+            </p>
+          </div>
+        ))}
+      </motion.div>
+    </div>
+  );
+}
 
 export default function LandingHero({ onStart }: LandingHeroProps) {
   return (
@@ -52,25 +96,45 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
           Get <span className="font-bold text-foreground">real stickers</span> shipped to you.
         </motion.p>
 
-        {/* Before / after slider — real sticker example */}
+        {/* Selfie → Sticker visual */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          className="mt-6 w-full max-w-xs"
+          className="mt-6 flex items-center gap-4"
         >
-          <ImageRevealSlider
-            beforeSrc={HERO_BEFORE}
-            afterSrc={HERO_AFTER}
-            altBefore="Original"
-            altAfter="Sticker"
-            height={340}
-            initial={35}
-            showGlow
-          />
-          <p className="text-center text-xs text-muted-foreground mt-2">
-            Drag to compare
-          </p>
+          {/* Before: selfie */}
+          <div className="relative">
+            <div className="w-36 h-36 rounded-2xl overflow-hidden shadow-soft border-2 border-white/70">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={HERO_SELFIE}
+                alt="Original selfie"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider bg-white/90 text-muted-foreground px-2 py-0.5 rounded-full shadow-sm">
+              Photo
+            </span>
+          </div>
+
+          {/* Arrow */}
+          <ChevronRight className="text-muted-foreground/40 flex-shrink-0" size={28} />
+
+          {/* After: die-cut sticker */}
+          <div className="relative">
+            <div className="w-36 h-36 flex items-center justify-center drop-shadow-[0_4px_12px_rgba(168,85,247,0.35)]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={HERO_STICKER}
+                alt="AI-generated sticker"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider bg-white/90 text-muted-foreground px-2 py-0.5 rounded-full shadow-sm">
+              Sticker
+            </span>
+          </div>
         </motion.div>
 
         {/* CTA */}
@@ -83,7 +147,7 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
             hapticMedium();
             onStart();
           }}
-          className="mt-5 btn-gradient px-12 py-4 rounded-2xl text-lg font-bold shadow-glow flex items-center gap-2"
+          className="mt-8 btn-gradient px-12 py-4 rounded-2xl text-lg font-bold shadow-glow flex items-center gap-2"
         >
           Make yours
           <ArrowRight size={20} />
@@ -99,33 +163,17 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
         </motion.p>
       </div>
 
-      {/* Style examples */}
+      {/* Style carousel */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.65, duration: 0.5 }}
-        className="px-5 pb-5"
+        className="pb-5"
       >
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground text-center mb-3">
           6 styles to choose from
         </p>
-        <div className="grid grid-cols-6 gap-2">
-          {styleExamples.map((ex) => (
-            <div key={ex.label} className="text-center">
-              <div className="aspect-square rounded-xl overflow-hidden shadow-soft border-2 border-white/70">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={ex.src}
-                  alt={`${ex.label} style`}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <p className="text-[9px] font-bold text-muted-foreground mt-1 truncate">
-                {ex.label}
-              </p>
-            </div>
-          ))}
-        </div>
+        <StyleCarouselStrip />
       </motion.div>
 
       {/* How it works */}
