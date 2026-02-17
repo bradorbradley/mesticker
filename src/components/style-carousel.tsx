@@ -73,7 +73,7 @@ export default function StyleCarousel({
   return (
     <div className={cn("flex flex-col items-center", className)}>
       {/* Card stack area */}
-      <div className="relative w-full h-[320px] flex items-center justify-center">
+      <div className="relative w-full h-[250px] flex items-center justify-center">
         {/* Background cards (peeking behind) */}
         {[-1, 1].map((offset) => {
           const idx =
@@ -84,7 +84,7 @@ export default function StyleCarousel({
           return (
             <div
               key={`bg-${offset}`}
-              className="absolute w-[260px] h-[300px] rounded-3xl overflow-hidden shadow-soft"
+              className="absolute w-[200px] h-[230px] rounded-3xl overflow-hidden shadow-soft"
               style={{
                 transform: `translateX(${offset * 20}px) scale(0.9) rotate(${offset * 3}deg)`,
                 zIndex: 0,
@@ -108,7 +108,7 @@ export default function StyleCarousel({
         {/* Active card — draggable */}
         <motion.div
           key={currentIndex}
-          className="absolute w-[280px] h-[320px] rounded-3xl overflow-hidden cursor-grab active:cursor-grabbing z-10 ring-4 ring-primary shadow-glow"
+          className="absolute w-[220px] h-[250px] rounded-3xl overflow-hidden cursor-grab active:cursor-grabbing z-10 ring-4 ring-primary shadow-glow"
           style={{ x, rotate, opacity }}
           drag="x"
           dragConstraints={{ left: 0, right: 0 }}
@@ -138,8 +138,8 @@ export default function StyleCarousel({
           )}
 
           {/* Bottom info overlay */}
-          <div className="absolute bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-black/70 via-black/30 to-transparent">
-            <h3 className="font-display text-2xl font-bold text-white drop-shadow-md">
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 via-black/30 to-transparent">
+            <h3 className="font-display text-xl font-bold text-white drop-shadow-md">
               {preset.name}
             </h3>
             <p className="text-white/80 text-sm mt-0.5">{preset.description}</p>
@@ -151,7 +151,7 @@ export default function StyleCarousel({
       </div>
 
       {/* Navigation dots + arrows */}
-      <div className="flex items-center gap-4 mt-4">
+      <div className="flex items-center gap-4 mt-2">
         <button
           onClick={() => goTo(currentIndex - 1)}
           className="w-9 h-9 rounded-full glass-strong flex items-center justify-center shadow-soft active:scale-90 transition-transform"
@@ -186,7 +186,7 @@ export default function StyleCarousel({
       </div>
 
       {/* Swipe hint */}
-      <p className="text-xs text-muted-foreground mt-3">
+      <p className="text-xs text-muted-foreground mt-1">
         Swipe to browse styles
       </p>
     </div>
