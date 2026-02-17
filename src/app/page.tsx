@@ -20,7 +20,8 @@ import { stylePresets } from "@/lib/presets";
 import { hapticMedium } from "@/lib/haptics";
 import type { AppStep, StylePreset, ShippingAddress, CartItem, Creation } from "@/types";
 
-const FREE_GENERATION_LIMIT = 3;
+// TODO: Re-enable generation limit once order tracking is reliable
+const FREE_GENERATION_LIMIT = Infinity;
 const GEN_COUNT_KEY = "mesticker-gen-count";
 const HAS_PURCHASED_KEY = "mesticker-has-purchased";
 

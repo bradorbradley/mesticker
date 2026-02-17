@@ -5,7 +5,8 @@ import { uploadImage } from "@/lib/storage";
 import { auth } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 
-const FREE_GENERATION_LIMIT = 3;
+// TODO: Re-enable generation limit once order tracking is reliable
+const FREE_GENERATION_LIMIT = Infinity;
 
 export const maxDuration = 60;
 
