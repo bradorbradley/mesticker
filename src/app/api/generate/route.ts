@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateStickerImage } from "@/lib/openai";
 import { stylePresets, resolvePresetPrompt } from "@/lib/presets";
 import { uploadImage } from "@/lib/storage";
-import { auth } from "@/lib/auth";
-import { getDb } from "@/lib/db";
 
-// TODO: Re-enable generation limit once order tracking is reliable
-const FREE_GENERATION_LIMIT = Infinity;
 
 export const maxDuration = 60;
 
@@ -27,29 +23,6 @@ export async function POST(request: NextRequest) {
         { error: "Invalid style preset" },
         { status: 400 }
       );
-    }
-
-    // Enforce generation limit for signed-in users (server-side)
-    if (process.env.DATABASE_URL) {
-      const session = await auth();
-      if (session?.user?.id) {
-        const sql = getDb();
-        const [countRow] = await sql`
-          SELECT COUNT(*)::int AS count FROM creations WHERE user_id = ${session.user.id}
-        `;
-        const [orderRow] = await sql`
-          SELECT COUNT(*)::int AS count FROM orders WHERE user_id = ${session.user.id}
-        `;
-        const creationCount = countRow?.count ?? 0;
-        const hasOrdered = (orderRow?.count ?? 0) > 0;
-
-        if (creationCount >= FREE_GENERATION_LIMIT && !hasOrdered) {
-          return NextResponse.json(
-            { error: "FREE_LIMIT_REACHED" },
-            { status: 403 }
-          );
-        }
-      }
     }
 
     // Resolve the prompt (handles "random" by picking a random real style)

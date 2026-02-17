@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Lock, Sparkles } from "lucide-react";
+import { ArrowLeft, Sparkles } from "lucide-react";
 import LandingHero from "@/components/landing-hero";
 import ProgressSteps from "@/components/progress-steps";
 import CameraCapture from "@/components/camera-capture";
@@ -19,36 +19,6 @@ import { useCreations } from "@/hooks/use-creations";
 import { stylePresets } from "@/lib/presets";
 import { hapticMedium } from "@/lib/haptics";
 import type { AppStep, StylePreset, ShippingAddress, CartItem, Creation } from "@/types";
-
-// TODO: Re-enable generation limit once order tracking is reliable
-const FREE_GENERATION_LIMIT = Infinity;
-const GEN_COUNT_KEY = "mesticker-gen-count";
-const HAS_PURCHASED_KEY = "mesticker-has-purchased";
-
-function getLocalGenCount(): number {
-  try {
-    return parseInt(localStorage.getItem(GEN_COUNT_KEY) || "0", 10);
-  } catch {
-    return 0;
-  }
-}
-function incrementLocalGenCount() {
-  try {
-    localStorage.setItem(GEN_COUNT_KEY, String(getLocalGenCount() + 1));
-  } catch {}
-}
-function getLocalHasPurchased(): boolean {
-  try {
-    return localStorage.getItem(HAS_PURCHASED_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-function setLocalHasPurchased() {
-  try {
-    localStorage.setItem(HAS_PURCHASED_KEY, "true");
-  } catch {}
-}
 
 const pageVariants = {
   enter: { opacity: 0, y: 20, scale: 0.98 },
@@ -74,8 +44,7 @@ export default function Home() {
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
-  // Generation limit
-  const [limitReached, setLimitReached] = useState(false);
+
 
   // Creations
   const { creations: localCreations, addCreation: addLocalCreation } =
@@ -137,18 +106,8 @@ export default function Home() {
   const handleGenerate = useCallback(async () => {
     if (!capturedImage || !selectedStyle) return;
 
-    if (!isSignedIn) {
-      const count = getLocalGenCount();
-      const purchased = getLocalHasPurchased();
-      if (count >= FREE_GENERATION_LIMIT && !purchased) {
-        setLimitReached(true);
-        return;
-      }
-    }
-
     setIsGenerating(true);
     setGenerateError(null);
-    setLimitReached(false);
     hapticMedium();
 
     try {
@@ -163,17 +122,11 @@ export default function Home() {
 
       if (!res.ok) {
         const data = await res.json();
-        if (data.error === "FREE_LIMIT_REACHED") {
-          setLimitReached(true);
-          return;
-        }
         throw new Error(data.error || "Generation failed");
       }
 
       const data = await res.json();
       setGeneratedImage(data.generatedImage);
-      incrementLocalGenCount();
-
       addLocalCreation({
         originalImage: capturedImage,
         generatedImage: data.generatedImage,
@@ -255,8 +208,6 @@ export default function Home() {
 
   const handlePaymentSuccess = useCallback(() => {
     setPaymentComplete(true);
-    setLimitReached(false);
-    setLocalHasPurchased();
   }, []);
 
   const handleNewSticker = useCallback(() => {
@@ -425,30 +376,14 @@ export default function Home() {
                       </button>
                     </div>
                   )}
-                  {limitReached ? (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="rounded-2xl border border-accent-orange/30 bg-accent-orange/5 p-5 text-center"
-                    >
-                      <Lock size={24} className="mx-auto mb-2 text-accent-orange" />
-                      <p className="font-bold text-sm">
-                        Free generations used up
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Order any sticker to unlock unlimited creations!
-                      </p>
-                    </motion.div>
-                  ) : (
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      onClick={handleGenerate}
-                      className="w-full py-4 rounded-2xl font-bold text-base btn-gradient shadow-glow flex items-center justify-center gap-2"
-                    >
-                      <Sparkles size={18} />
-                      Generate Sticker
-                    </motion.button>
-                  )}
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleGenerate}
+                    className="w-full py-4 rounded-2xl font-bold text-base btn-gradient shadow-glow flex items-center justify-center gap-2"
+                  >
+                    <Sparkles size={18} />
+                    Generate Sticker
+                  </motion.button>
                 </div>
               )}
             </motion.div>
