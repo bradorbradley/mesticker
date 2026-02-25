@@ -93,6 +93,11 @@ function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "cl
               onLoadError={(e) =>
                 setElementError(e.error?.message || "Failed to load payment form")
               }
+              options={{
+                layout: { type: "accordion", defaultCollapsed: false, radios: false },
+                wallets: { applePay: "auto", googlePay: "auto" },
+                paymentMethodOrder: ["apple_pay", "google_pay", "card"],
+              }}
             />
           </div>
           <Button

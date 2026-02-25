@@ -291,9 +291,9 @@ export default function ImageRevealSlider({
             aria-valuenow={Math.round(position)}
             aria-label="Image comparison slider"
             className={cn(
-              "absolute w-10 h-10 rounded-full bg-white border-2 border-primary shadow-lg flex items-center justify-center cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all",
+              "absolute w-12 h-12 rounded-full bg-white border-3 border-primary shadow-[0_2px_12px_rgba(108,99,255,0.4)] flex items-center justify-center cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all",
               isAnimating ? "duration-300 ease-in-out" : "duration-0",
-              isDragging && "scale-110 shadow-xl"
+              isDragging ? "scale-110 shadow-xl" : "animate-pulse"
             )}
             style={{
               left: `${position}%`,
@@ -301,7 +301,10 @@ export default function ImageRevealSlider({
               transform: "translate(-50%, -50%)",
             }}
           >
-            <div className="w-1 h-4 bg-primary rounded-full" />
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-primary">
+              <path d="M7 4L3 10L7 16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M13 4L17 10L13 16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </div>
         </>
       )}

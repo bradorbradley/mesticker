@@ -342,29 +342,6 @@ export default function Home() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {capturedImage && (
-                    <div className="flex items-center justify-center gap-3">
-                      <div className="w-16 h-16 rounded-xl overflow-hidden shadow-card border-2 border-border">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={capturedImage}
-                          alt="Captured photo"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <button
-                        onClick={() => {
-                          setCapturedImage(null);
-                          setSelectedStyle(null);
-                          setGeneratedImage(null);
-                          setStep("capture");
-                        }}
-                        className="text-xs font-semibold text-primary underline underline-offset-2"
-                      >
-                        Retake
-                      </button>
-                    </div>
-                  )}
                   <div>
                     <h2 className="font-display text-base font-bold text-center mb-1">
                       Choose your style
@@ -397,6 +374,17 @@ export default function Home() {
                     <Sparkles size={18} />
                     Generate Sticker
                   </motion.button>
+                  <button
+                    onClick={() => {
+                      setCapturedImage(null);
+                      setSelectedStyle(null);
+                      setGeneratedImage(null);
+                      setStep("capture");
+                    }}
+                    className="text-xs font-semibold text-muted-foreground mx-auto"
+                  >
+                    Take another photo
+                  </button>
                 </div>
               )}
             </motion.div>
