@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Lock, Sparkles } from "lucide-react";
+import { ArrowLeft, Lock, Sparkles, Download, Share2 } from "lucide-react";
 import LandingHero from "@/components/landing-hero";
 import ProgressSteps from "@/components/progress-steps";
 import CameraCapture from "@/components/camera-capture";
@@ -353,6 +353,49 @@ export default function Home() {
                     afterSrc={generatedImage}
                     height={280}
                   />
+                  {/* Save & Share */}
+                  <div className="flex gap-2 justify-center">
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold glass-strong border border-border shadow-soft"
+                      onClick={() => {
+                        // Download as PNG
+                        const link = document.createElement("a");
+                        link.href = generatedImage;
+                        link.download = `mesticker-${Date.now()}.png`;
+                        link.click();
+                      }}
+                    >
+                      <Download size={16} />
+                      Save
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold glass-strong border border-border shadow-soft"
+                      onClick={async () => {
+                        if (navigator.share) {
+                          try {
+                            const res = await fetch(generatedImage);
+                            const blob = await res.blob();
+                            const file = new File([blob], "mesticker.png", { type: "image/png" });
+                            await navigator.share({
+                              title: "My MeSticker",
+                              text: "Check out my cartoon sticker from mesticker.fun!",
+                              files: [file],
+                            });
+                          } catch {}
+                        } else {
+                          window.open(
+                            `https://twitter.com/intent/tweet?text=${encodeURIComponent("Check out my cartoon sticker from mesticker.fun! 🎨")}`,
+                            "_blank"
+                          );
+                        }
+                      }}
+                    >
+                      <Share2 size={16} />
+                      Share
+                    </motion.button>
+                  </div>
                   <div className="flex gap-3">
                     <motion.button
                       whileTap={{ scale: 0.95 }}
