@@ -374,9 +374,9 @@ export default function Home() {
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3">
                   {capturedImage && (
-                    <div className="w-24 h-24 mx-auto rounded-2xl overflow-hidden shadow-card border-2 border-border">
+                    <div className="w-16 h-16 mx-auto rounded-xl overflow-hidden shadow-card border-2 border-border">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={capturedImage}
@@ -386,7 +386,7 @@ export default function Home() {
                     </div>
                   )}
                   <div>
-                    <h2 className="font-display text-lg font-bold text-center mb-3">
+                    <h2 className="font-display text-lg font-bold text-center mb-2">
                       Choose your style
                     </h2>
                     <StyleCarousel

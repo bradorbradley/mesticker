@@ -8,13 +8,10 @@ interface LandingHeroProps {
   onStart: () => void;
 }
 
+// Floating decorations kept minimal — hero image does the talking
 const floatingStickers = [
-  { emoji: "🎨", x: "8%", y: "18%", delay: 0, size: "text-4xl", rotate: -12 },
-  { emoji: "⭐", x: "82%", y: "12%", delay: 0.5, size: "text-3xl", rotate: 15 },
-  { emoji: "🖼️", x: "88%", y: "55%", delay: 1.2, size: "text-3xl", rotate: -8 },
-  { emoji: "✨", x: "5%", y: "60%", delay: 0.8, size: "text-2xl", rotate: 20 },
-  { emoji: "🎭", x: "75%", y: "82%", delay: 1.5, size: "text-3xl", rotate: -15 },
-  { emoji: "🌟", x: "15%", y: "85%", delay: 0.3, size: "text-2xl", rotate: 10 },
+  { emoji: "✨", x: "5%", y: "25%", delay: 0, size: "text-2xl", rotate: -12 },
+  { emoji: "✨", x: "88%", y: "30%", delay: 0.5, size: "text-2xl", rotate: 15 },
 ];
 
 const steps = [
@@ -88,15 +85,42 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
           <span className="gradient-text">MeSticker</span>
         </motion.h1>
 
+        {/* Before → After hero visual */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="mt-5 flex items-center justify-center gap-3"
+        >
+          <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-card border-2 border-border bg-muted flex items-center justify-center">
+            <div className="text-4xl">🧑</div>
+          </div>
+          <motion.div
+            animate={{ x: [0, 4, 0] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+            className="text-2xl text-primary font-bold"
+          >
+            →
+          </motion.div>
+          <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-card border-2 border-primary/30">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/presets/simpsons.jpg"
+              alt="Simpsons style sticker example"
+              className="w-full h-full object-cover"
+            />
+          </div>
+        </motion.div>
+
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.25 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
           className="mt-4 text-center text-lg text-muted-foreground max-w-xs leading-relaxed"
         >
-          Turn your face into a cartoon sticker.
+          Turn your selfie into a cartoon sticker.
           <br />
-          <span className="font-semibold text-foreground">For real.</span> We ship it to you.
+          <span className="font-semibold text-foreground">For real.</span> We print &amp; ship it to you.
         </motion.p>
 
         {/* CTA Button */}

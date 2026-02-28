@@ -78,15 +78,25 @@ export default function CameraCapture({ onCapture, className }: CameraCapturePro
     onCapture(dataUrl);
   }, [facingMode, stopCamera, onCapture]);
 
-  const switchCamera = useCallback(() => {
-    stopCamera();
-    setFacingMode((m) => (m === "user" ? "environment" : "user"));
-  }, [stopCamera]);
-
-  useEffect(() => {
-    if (cameraActive) startCamera();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facingMode]);
+  const switchCamera = useCallback(async () => {
+    // Stop existing stream without resetting cameraActive
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
+      setStream(null);
+    }
+    const newMode = facingMode === "user" ? "environment" : "user";
+    setFacingMode(newMode);
+    // Start new stream immediately with new facing mode
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: newMode, width: { ideal: 1080 }, height: { ideal: 1080 } },
+        audio: false,
+      });
+      setStream(mediaStream);
+    } catch {
+      setError("Could not switch camera.");
+    }
+  }, [stream, facingMode]);
 
   const handleFileUpload = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
