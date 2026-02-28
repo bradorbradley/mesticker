@@ -90,26 +90,35 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          className="mt-5 flex items-center justify-center gap-3"
+          className="mt-5 flex items-center justify-center gap-4"
         >
-          <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-card border-2 border-border bg-muted flex items-center justify-center">
-            <div className="text-4xl">🧑</div>
-          </div>
-          <motion.div
-            animate={{ x: [0, 4, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-            className="text-2xl text-primary font-bold"
-          >
-            →
-          </motion.div>
-          <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-card border-2 border-primary/30">
+          <div className="w-28 h-28 rounded-2xl overflow-hidden shadow-card border-2 border-border">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/presets/simpsons.jpg"
-              alt="Simpsons style sticker example"
+              src="/presets/hero-before.jpg"
+              alt="Your selfie"
               className="w-full h-full object-cover"
             />
           </div>
+          <motion.div
+            animate={{ x: [0, 6, 0] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+            className="text-3xl text-primary font-bold"
+          >
+            →
+          </motion.div>
+          <motion.div
+            className="w-28 h-28 rounded-2xl overflow-hidden shadow-card border-2 border-primary/30"
+            animate={{ rotate: [-2, 2, -2] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/presets/hero-after.jpg"
+              alt="Cartoon sticker result"
+              className="w-full h-full object-cover"
+            />
+          </motion.div>
         </motion.div>
 
         <motion.p
