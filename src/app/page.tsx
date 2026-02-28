@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Lock, Sparkles, Download, Share2 } from "lucide-react";
+import { ArrowLeft, Lock, Sparkles, Download, Share2, Camera } from "lucide-react";
 import LandingHero from "@/components/landing-hero";
 import ProgressSteps from "@/components/progress-steps";
 import CameraCapture from "@/components/camera-capture";
@@ -21,9 +21,11 @@ import { hapticMedium } from "@/lib/haptics";
 import type { AppStep, StylePreset, ShippingAddress, Creation } from "@/types";
 
 const FREE_GENERATION_LIMIT = 3;
+const EMAIL_BONUS_LIMIT = 1;
 const GEN_COUNT_KEY = "mesticker-gen-count";
 const HAS_PURCHASED_KEY = "mesticker-has-purchased";
 const SEEN_LANDING_KEY = "mesticker-seen-landing";
+const EMAIL_CAPTURED_KEY = "mesticker-email-captured";
 
 function getLocalGenCount(): number {
   try {
@@ -48,6 +50,21 @@ function setLocalHasPurchased() {
   try {
     localStorage.setItem(HAS_PURCHASED_KEY, "true");
   } catch {}
+}
+function getEmailCaptured(): boolean {
+  try {
+    return localStorage.getItem(EMAIL_CAPTURED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+function setEmailCaptured() {
+  try {
+    localStorage.setItem(EMAIL_CAPTURED_KEY, "true");
+  } catch {}
+}
+function getEffectiveLimit(): number {
+  return FREE_GENERATION_LIMIT + (getEmailCaptured() ? EMAIL_BONUS_LIMIT : 0);
 }
 
 const pageVariants = {
@@ -76,6 +93,8 @@ export default function Home() {
 
   // Generation limit
   const [limitReached, setLimitReached] = useState(false);
+  const [showEmailCapture, setShowEmailCapture] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
 
   // Creations
   const { creations: localCreations, addCreation: addLocalCreation } =
@@ -132,13 +151,18 @@ export default function Home() {
   const handleGenerate = useCallback(async () => {
     if (!capturedImage || !selectedStyle) return;
 
-    if (!isSignedIn) {
-      const count = getLocalGenCount();
-      const purchased = getLocalHasPurchased();
-      if (count >= FREE_GENERATION_LIMIT && !purchased) {
-        setLimitReached(true);
+    // Enforce generation limit for ALL users (logged in check is server-side)
+    const count = getLocalGenCount();
+    const purchased = getLocalHasPurchased();
+    const limit = getEffectiveLimit();
+    if (count >= limit && !purchased) {
+      if (!getEmailCaptured() && count >= FREE_GENERATION_LIMIT) {
+        // Show email capture for +1 bonus
+        setShowEmailCapture(true);
         return;
       }
+      setLimitReached(true);
+      return;
     }
 
     setIsGenerating(true);
@@ -419,13 +443,28 @@ export default function Home() {
               ) : (
                 <div className="flex flex-col gap-3">
                   {capturedImage && (
-                    <div className="w-16 h-16 mx-auto rounded-xl overflow-hidden shadow-card border-2 border-border">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={capturedImage}
-                        alt="Captured photo"
-                        className="w-full h-full object-cover"
-                      />
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-12 h-12 rounded-xl overflow-hidden shadow-card border-2 border-border">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={capturedImage}
+                          alt="Captured photo"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <button
+                        onClick={() => {
+                          setCapturedImage(null);
+                          setSelectedStyle(null);
+                          setGeneratedImage(null);
+                          setGenerateError(null);
+                          setStep("capture");
+                        }}
+                        className="flex items-center gap-1 text-xs text-primary font-semibold hover:underline"
+                      >
+                        <Camera size={12} />
+                        New photo
+                      </button>
                     </div>
                   )}
                   <div>
@@ -442,7 +481,50 @@ export default function Home() {
                       {generateError}
                     </p>
                   )}
-                  {limitReached ? (
+                  {showEmailCapture ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-2xl border border-primary/30 bg-primary/5 p-5 text-center"
+                    >
+                      <Sparkles size={24} className="mx-auto mb-2 text-primary" />
+                      <p className="font-bold text-sm">
+                        Want 1 more free generation?
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1 mb-3">
+                        Drop your email and we&apos;ll unlock one more!
+                      </p>
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (emailInput.includes("@")) {
+                            setEmailCaptured();
+                            setShowEmailCapture(false);
+                            setLimitReached(false);
+                            // TODO: send email to backend/newsletter service
+                          }
+                        }}
+                        className="flex gap-2"
+                      >
+                        <input
+                          type="email"
+                          required
+                          placeholder="you@email.com"
+                          value={emailInput}
+                          onChange={(e) => setEmailInput(e.target.value)}
+                          className="flex-1 px-3 py-2 rounded-xl border border-border text-sm bg-background"
+                          autoComplete="email"
+                        />
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
+                          type="submit"
+                          className="px-4 py-2 rounded-xl font-bold text-sm btn-gradient shadow-glow"
+                        >
+                          Unlock
+                        </motion.button>
+                      </form>
+                    </motion.div>
+                  ) : limitReached ? (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   motion,
   useMotionValue,
@@ -52,6 +52,11 @@ export default function StyleCarousel({
     []
   );
 
+  // Auto-select the visible card — no tap required
+  useEffect(() => {
+    onSelect(stylePresets[currentIndex]);
+  }, [currentIndex, onSelect]);
+
   const handleDragEnd = useCallback(
     (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
       const threshold = 50;
@@ -64,13 +69,8 @@ export default function StyleCarousel({
     [currentIndex, goTo]
   );
 
-  const handleSelect = useCallback(() => {
-    hapticLight();
-    onSelect(stylePresets[currentIndex]);
-  }, [currentIndex, onSelect]);
-
   const preset = stylePresets[currentIndex];
-  const isSelected = selected === preset.id;
+  const isSelected = true; // always selected since auto-select is on
   const gradientClass = styleColors[preset.id] || "from-primary to-accent-pink";
   const isRandom = preset.id === "random";
 
@@ -124,7 +124,6 @@ export default function StyleCarousel({
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 300, damping: 25 }}
-          onClick={handleSelect}
           whileTap={{ scale: 0.97 }}
         >
           {/* Card background gradient */}

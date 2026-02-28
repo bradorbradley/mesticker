@@ -31,3 +31,4 @@ tsconfig.tsbuildinfo
 
 # Claude
 .claude/
+.vercel
