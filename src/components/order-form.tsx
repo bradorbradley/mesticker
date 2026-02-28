@@ -96,6 +96,8 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
             <Label htmlFor="name">Full Name</Label>
             <Input
               id="name"
+              name="name"
+              autoComplete="name"
               required
               value={address.name}
               onChange={(e) => updateField("name", e.target.value)}
@@ -106,6 +108,8 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
             <Label htmlFor="address1">Address</Label>
             <Input
               id="address1"
+              name="address1"
+              autoComplete="address-line1"
               required
               value={address.address1}
               onChange={(e) => updateField("address1", e.target.value)}
@@ -116,6 +120,8 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
             <Label htmlFor="address2">Apt / Suite (optional)</Label>
             <Input
               id="address2"
+              name="address2"
+              autoComplete="address-line2"
               value={address.address2}
               onChange={(e) => updateField("address2", e.target.value)}
               placeholder="Apt 4B"
@@ -126,6 +132,8 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
               <Label htmlFor="city">City</Label>
               <Input
                 id="city"
+                name="city"
+                autoComplete="address-level2"
                 required
                 value={address.city}
                 onChange={(e) => updateField("city", e.target.value)}
@@ -136,6 +144,8 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
               <Label htmlFor="state">State</Label>
               <Input
                 id="state"
+                name="state"
+                autoComplete="address-level1"
                 required
                 value={address.stateCode}
                 onChange={(e) => updateField("stateCode", e.target.value)}
@@ -149,6 +159,9 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
               <Label htmlFor="zip">ZIP Code</Label>
               <Input
                 id="zip"
+                name="zip"
+                autoComplete="postal-code"
+                inputMode="numeric"
                 required
                 value={address.zip}
                 onChange={(e) => updateField("zip", e.target.value)}
@@ -159,6 +172,8 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
               <Label htmlFor="country">Country</Label>
               <Input
                 id="country"
+                name="country"
+                autoComplete="country"
                 value={address.countryCode}
                 onChange={(e) => updateField("countryCode", e.target.value)}
                 placeholder="US"

@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 import {
   Elements,
   PaymentElement,
+  PaymentRequestButtonElement,
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
-import { loadStripe, Stripe } from "@stripe/stripe-js";
+import { loadStripe, Stripe, PaymentRequest } from "@stripe/stripe-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lock, Loader2, AlertCircle } from "lucide-react";
@@ -30,6 +31,54 @@ function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "cl
   const [isProcessing, setIsProcessing] = useState(false);
   const [elementReady, setElementReady] = useState(false);
   const [elementError, setElementError] = useState<string | null>(null);
+  const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
+  const [canMakePayment, setCanMakePayment] = useState(false);
+
+  // Set up Apple Pay / Google Pay
+  useEffect(() => {
+    if (!stripe || !amount) return;
+
+    const pr = stripe.paymentRequest({
+      country: "US",
+      currency: "usd",
+      total: {
+        label: "MeSticker Order",
+        amount: amount, // already in cents
+      },
+      requestPayerName: true,
+      requestPayerEmail: true,
+    });
+
+    pr.canMakePayment().then((result) => {
+      if (result) {
+        setPaymentRequest(pr);
+        setCanMakePayment(true);
+      }
+    });
+
+    pr.on("paymentmethod", async (ev) => {
+      if (!elements) {
+        ev.complete("fail");
+        return;
+      }
+      const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        confirmParams: { return_url: `${window.location.origin}?payment=success` },
+        redirect: "if_required",
+      });
+
+      if (confirmError) {
+        ev.complete("fail");
+        onError(confirmError.message || "Payment failed");
+      } else if (paymentIntent?.status === "succeeded") {
+        ev.complete("success");
+        onSuccess();
+      } else {
+        ev.complete("fail");
+        onError("Payment was not completed.");
+      }
+    });
+  }, [stripe, amount, elements, onSuccess, onError]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +119,22 @@ function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "cl
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {/* Apple Pay / Google Pay */}
+          {canMakePayment && paymentRequest && (
+            <div className="mb-4">
+              <PaymentRequestButtonElement
+                options={{ paymentRequest }}
+              />
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-card px-2 text-muted-foreground">or pay with card</span>
+                </div>
+              </div>
+            </div>
+          )}
           {!elementReady && !elementError && (
             <div className="flex items-center justify-center py-8 text-muted-foreground text-sm gap-2">
               <Loader2 size={16} className="animate-spin" />

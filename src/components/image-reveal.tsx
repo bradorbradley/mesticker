@@ -3,6 +3,48 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
 
+/** Auto-slide hint: slides handle from 50% → 30% → 70% → 50% on first view */
+function useSliderHint(
+  allImagesLoaded: boolean,
+  isDragging: boolean,
+  setPosition: (p: number) => void
+) {
+  const hasInteracted = useRef(false);
+  const [showHint, setShowHint] = useState(true);
+
+  useEffect(() => {
+    if (isDragging) {
+      hasInteracted.current = true;
+      setShowHint(false);
+    }
+  }, [isDragging]);
+
+  useEffect(() => {
+    if (!allImagesLoaded || hasInteracted.current) return;
+
+    const steps = [
+      { pos: 30, delay: 600 },
+      { pos: 70, delay: 1200 },
+      { pos: 50, delay: 1800 },
+    ];
+
+    const timeouts = steps.map(({ pos, delay }) =>
+      setTimeout(() => {
+        if (!hasInteracted.current) setPosition(pos);
+      }, delay)
+    );
+
+    const hideHint = setTimeout(() => setShowHint(false), 3000);
+
+    return () => {
+      timeouts.forEach(clearTimeout);
+      clearTimeout(hideHint);
+    };
+  }, [allImagesLoaded, setPosition]);
+
+  return showHint;
+}
+
 interface ImageRevealSliderProps {
   beforeSrc: string;
   afterSrc: string;
@@ -162,6 +204,12 @@ export default function ImageRevealSlider({
     };
   }, []);
 
+  const showHint = useSliderHint(allImagesLoaded, isDragging, (p) => {
+    setIsAnimating(true);
+    setPosition(p);
+    setTimeout(() => setIsAnimating(false), 300);
+  });
+
   if (!afterSrc) {
     return (
       <div
@@ -259,9 +307,10 @@ export default function ImageRevealSlider({
             aria-valuenow={Math.round(position)}
             aria-label="Image comparison slider"
             className={cn(
-              "absolute w-10 h-10 rounded-full bg-white border-2 border-primary shadow-lg flex items-center justify-center cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all",
+              "absolute w-12 h-12 rounded-full bg-white border-3 border-primary shadow-xl flex items-center justify-center cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all",
               isAnimating ? "duration-300 ease-in-out" : "duration-0",
-              isDragging && "scale-110 shadow-xl"
+              isDragging && "scale-110 shadow-2xl",
+              showHint && "animate-pulse"
             )}
             style={{
               left: `${position}%`,
@@ -269,8 +318,20 @@ export default function ImageRevealSlider({
               transform: "translate(-50%, -50%)",
             }}
           >
-            <div className="w-1 h-4 bg-primary rounded-full" />
+            {/* Left/right arrows */}
+            <div className="flex items-center gap-0.5 text-primary">
+              <svg width="8" height="12" viewBox="0 0 8 12" fill="currentColor"><path d="M7 1L2 6l5 5" stroke="currentColor" strokeWidth="2" fill="none"/></svg>
+              <div className="w-0.5 h-5 bg-primary rounded-full" />
+              <svg width="8" height="12" viewBox="0 0 8 12" fill="currentColor"><path d="M1 1l5 5-5 5" stroke="currentColor" strokeWidth="2" fill="none"/></svg>
+            </div>
           </div>
+
+          {/* Hint text */}
+          {showHint && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 text-white px-3 py-1.5 rounded-full text-xs font-semibold animate-pulse">
+              ← Slide to compare →
+            </div>
+          )}
         </>
       )}
     </div>
