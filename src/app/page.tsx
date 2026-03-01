@@ -10,7 +10,6 @@ import ProgressSteps from "@/components/progress-steps";
 import CameraCapture from "@/components/camera-capture";
 import StyleCarousel from "@/components/style-carousel";
 import LoadingState from "@/components/loading-state";
-import StickerReveal from "@/components/sticker-reveal";
 import OrderForm from "@/components/order-form";
 import PaymentForm from "@/components/payment-form";
 import OrderConfirmation from "@/components/order-confirmation";
@@ -292,6 +291,10 @@ export default function Home() {
     setStep("capture");
   }, []);
 
+  const handleStyleSelect = useCallback((preset: StylePreset) => {
+    setSelectedStyle(preset);
+  }, []);
+
   const handleGallerySelect = useCallback((creation: Creation) => {
     setCapturedImage(creation.originalImage);
     setGeneratedImage(creation.generatedImage);
@@ -471,8 +474,8 @@ export default function Home() {
                         stylePreset: selectedStyle.id,
                       });
                       hapticMedium();
-                      // Use setTimeout to ensure cart state updates before navigation
-                      setTimeout(() => setStep("order"), 50);
+                      // Immediately set step to order - React will batch this with cart update
+                      setStep("order");
                     }}
                   >
                     <ShoppingCart size={16} />
@@ -532,8 +535,7 @@ export default function Home() {
                       Choose your style
                     </h2>
                     <StyleCarousel
-                      selected={selectedStyle?.id ?? null}
-                      onSelect={setSelectedStyle}
+                      onSelect={handleStyleSelect}
                     />
                   </div>
                   {generateError && (

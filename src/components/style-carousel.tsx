@@ -14,7 +14,6 @@ import { hapticLight } from "@/lib/haptics";
 import { ChevronLeft, ChevronRight, Shuffle } from "lucide-react";
 
 interface StyleCarouselProps {
-  selected: string | null;
   onSelect: (preset: StylePreset) => void;
   className?: string;
 }
@@ -32,7 +31,6 @@ const styleColors: Record<string, string> = {
 };
 
 export default function StyleCarousel({
-  selected,
   onSelect,
   className,
 }: StyleCarouselProps) {
@@ -53,9 +51,11 @@ export default function StyleCarousel({
   );
 
   // Auto-select the visible card — no tap required
+  // Only call onSelect when currentIndex changes (not when onSelect ref changes)
   useEffect(() => {
     onSelect(stylePresets[currentIndex]);
-  }, [currentIndex, onSelect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex]);
 
   const handleDragEnd = useCallback(
     (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
