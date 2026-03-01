@@ -19,6 +19,20 @@ import UserMenu from "@/components/user-menu";
 import { useCreations } from "@/hooks/use-creations";
 import { hapticMedium } from "@/lib/haptics";
 import type { AppStep, StylePreset, ShippingAddress, Creation } from "@/types";
+import {
+  trackCapture,
+  trackStyleSelect,
+  trackGenerateStart,
+  trackGenerateComplete,
+  trackGenerateError,
+  trackAddToCart,
+  trackCheckoutStart,
+  trackPaymentComplete,
+  trackLimitReached,
+  trackEmailCapture,
+  trackImageDownload,
+  trackImageShare,
+} from "@/lib/analytics";
 
 const FREE_GENERATION_LIMIT = 3;
 const EMAIL_BONUS_LIMIT = 1;
@@ -167,6 +181,7 @@ export default function Home() {
   const handleCapture = useCallback((imageBase64: string) => {
     setCapturedImage(imageBase64);
     setStep("style");
+    trackCapture();
   }, []);
 
   const handleGenerate = useCallback(async () => {
@@ -183,6 +198,7 @@ export default function Home() {
         return;
       }
       setLimitReached(true);
+      trackLimitReached();
       return;
     }
 
@@ -190,6 +206,7 @@ export default function Home() {
     setGenerateError(null);
     setLimitReached(false);
     hapticMedium();
+    trackGenerateStart(selectedStyle.id);
 
     try {
       const res = await fetch("/api/generate", {
@@ -213,6 +230,7 @@ export default function Home() {
       const data = await res.json();
       setGeneratedImage(data.generatedImage);
       incrementLocalGenCount();
+      trackGenerateComplete(selectedStyle.id);
 
       addLocalCreation({
         originalImage: capturedImage,
@@ -241,9 +259,9 @@ export default function Home() {
         }
       }
     } catch (error) {
-      setGenerateError(
-        error instanceof Error ? error.message : "Something went wrong"
-      );
+      const errMsg = error instanceof Error ? error.message : "Something went wrong";
+      setGenerateError(errMsg);
+      trackGenerateError(errMsg);
     } finally {
       setIsGenerating(false);
     }
@@ -295,8 +313,9 @@ export default function Home() {
     setPaymentComplete(true);
     setLimitReached(false);
     setLocalHasPurchased();
+    trackPaymentComplete(orderAmount, orderQuantity);
     cart.clearCart();
-  }, [cart]);
+  }, [cart, orderAmount, orderQuantity]);
 
   const handleNewSticker = useCallback(() => {
     setCapturedImage(null);
@@ -313,6 +332,7 @@ export default function Home() {
 
   const handleStyleSelect = useCallback((preset: StylePreset) => {
     setSelectedStyle(preset);
+    trackStyleSelect(preset.id);
   }, []);
 
   const handleGallerySelect = useCallback((creation: Creation) => {
@@ -450,6 +470,7 @@ export default function Home() {
                         link.href = generatedImage;
                         link.download = `mesticker-${Date.now()}.png`;
                         link.click();
+                        trackImageDownload();
                       }}
                     >
                       <Download size={16} />
@@ -459,6 +480,7 @@ export default function Home() {
                       whileTap={{ scale: 0.95 }}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold glass-strong border border-border shadow-soft"
                       onClick={async () => {
+                        trackImageShare();
                         if (navigator.share) {
                           try {
                             const res = await fetch(generatedImage);
@@ -494,6 +516,8 @@ export default function Home() {
                         stylePreset: selectedStyle.id,
                       });
                       hapticMedium();
+                      trackAddToCart(selectedStyle.id);
+                      trackCheckoutStart();
                       // Immediately set step to order - React will batch this with cart update
                       setStep("order");
                     }}
@@ -591,6 +615,7 @@ export default function Home() {
                             setEmailCaptured();
                             setShowEmailCapture(false);
                             setLimitReached(false);
+                            trackEmailCapture();
                           }
                         }}
                         className="flex gap-2"
