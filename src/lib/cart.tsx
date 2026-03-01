@@ -32,8 +32,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
 
   const addItem = useCallback((item: Omit<CartItem, "id" | "sheets">) => {
-    const id = `cart-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    setItems((prev) => [...prev, { ...item, id, sheets: 1 }]);
+    // Check if this exact image is already in cart — increment sheets instead of duplicating
+    setItems((prev) => {
+      const existing = prev.find((i) => i.generatedImage === item.generatedImage);
+      if (existing) {
+        return prev.map((i) =>
+          i.id === existing.id ? { ...i, sheets: i.sheets + 1 } : i
+        );
+      }
+      const id = `cart-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      return [...prev, { ...item, id, sheets: 1 }];
+    });
   }, []);
 
   const removeItem = useCallback((id: string) => {

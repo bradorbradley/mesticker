@@ -114,6 +114,20 @@ export default function Home() {
     } catch {}
   }, []);
 
+  // Check purchase status from server when signed in
+  useEffect(() => {
+    if (!isSignedIn) return;
+    fetch("/api/user/orders")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((orders) => {
+        if (orders && orders.length > 0) {
+          setLocalHasPurchased();
+          setLimitReached(false);
+        }
+      })
+      .catch(() => {});
+  }, [isSignedIn]);
+
   // Load creations from DB when signed in
   useEffect(() => {
     if (!isSignedIn) return;
