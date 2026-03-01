@@ -459,7 +459,7 @@ export default function Home() {
                       Share
                     </motion.button>
                   </div>
-                  {/* Add Stickers + Make Another */}
+                  {/* Add Stickers → goes to checkout */}
                   <motion.button
                     whileTap={{ scale: 0.95 }}
                     className="w-full py-3 rounded-xl font-bold text-sm btn-gradient shadow-glow flex items-center justify-center gap-2"
@@ -471,17 +471,26 @@ export default function Home() {
                           stylePreset: selectedStyle.id,
                         });
                         hapticMedium();
-                        // Go back to capture for another
-                        setCapturedImage(null);
-                        setSelectedStyle(null);
-                        setGeneratedImage(null);
-                        setGenerateError(null);
-                        setStep("capture");
+                        setStep("order");
                       }
                     }}
                   >
                     <ShoppingCart size={16} />
                     Add Stickers
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    className="w-full py-2.5 rounded-xl font-semibold text-sm glass-strong border border-border shadow-soft flex items-center justify-center gap-2"
+                    onClick={() => {
+                      setCapturedImage(null);
+                      setSelectedStyle(null);
+                      setGeneratedImage(null);
+                      setGenerateError(null);
+                      setStep("capture");
+                    }}
+                  >
+                    <Camera size={14} />
+                    Make Another Sticker First
                   </motion.button>
                 </div>
               ) : (
