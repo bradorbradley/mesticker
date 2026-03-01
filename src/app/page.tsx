@@ -371,7 +371,6 @@ export default function Home() {
                 <LoadingState photo={capturedImage} />
               ) : generatedImage && capturedImage ? (
                 <div className="flex flex-col gap-4">
-                  <StickerReveal imageUrl={generatedImage} />
                   <ImageRevealSlider
                     beforeSrc={capturedImage}
                     afterSrc={generatedImage}

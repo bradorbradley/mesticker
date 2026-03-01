@@ -12,9 +12,9 @@ function getHeaders() {
   };
 }
 
-// Kiss-cut sticker product/variant IDs from Printful catalog
-// Product 358 = Kiss-cut stickers, variant 10163 = 3"x3"
-const STICKER_VARIANT_ID = 10163;
+// Kiss-cut sticker SHEET product/variant IDs from Printful catalog
+// Product 505 = Kiss-cut sticker sheet, variant 12917 = 5.83"×8.27" (fits 6 stickers)
+const STICKER_VARIANT_ID = 12917;
 
 export async function createPrintfulOrder(
   imageUrl: string,
