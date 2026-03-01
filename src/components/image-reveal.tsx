@@ -60,7 +60,7 @@ export default function ImageRevealSlider({
   afterSrc,
   altBefore = "Original",
   altAfter = "Styled",
-  initial = 50,
+  initial = 80,
   height = 420,
   className,
 }: ImageRevealSliderProps) {

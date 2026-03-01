@@ -13,10 +13,11 @@ const steps: { key: AppStep; label: string; icon: React.ElementType }[] = [
 
 interface ProgressStepsProps {
   current: AppStep;
+  onStepClick?: (step: AppStep) => void;
   className?: string;
 }
 
-export default function ProgressSteps({ current, className }: ProgressStepsProps) {
+export default function ProgressSteps({ current, onStepClick, className }: ProgressStepsProps) {
   const currentIndex = steps.findIndex((s) => s.key === current);
 
   return (
@@ -40,7 +41,15 @@ export default function ProgressSteps({ current, className }: ProgressStepsProps
                 )}
               </div>
             )}
-            <div className="flex flex-col items-center gap-1">
+            <button
+              onClick={() => {
+                if ((completed || active) && onStepClick) onStepClick(step.key);
+              }}
+              className={cn(
+                "flex flex-col items-center gap-1",
+                (completed || active) && onStepClick ? "cursor-pointer" : "cursor-default"
+              )}
+            >
               <motion.div
                 className={cn(
                   "w-9 h-9 rounded-full flex items-center justify-center transition-colors",
@@ -61,7 +70,7 @@ export default function ProgressSteps({ current, className }: ProgressStepsProps
               >
                 {step.label}
               </span>
-            </div>
+            </button>
           </div>
         );
       })}

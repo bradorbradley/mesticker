@@ -344,7 +344,27 @@ export default function Home() {
 
         {/* Progress */}
         {!paymentComplete && (
-          <ProgressSteps current={step} className="mb-5" />
+          <ProgressSteps
+            current={step}
+            onStepClick={(s) => {
+              if (s === "capture") {
+                setGeneratedImage(null);
+                setSelectedStyle(null);
+                setGenerateError(null);
+                setStep("capture");
+              } else if (s === "style" && capturedImage) {
+                setGeneratedImage(null);
+                setClientSecret(null);
+                setPaymentError(null);
+                setStep("style");
+              } else if (s === "order" && cart.items.length > 0) {
+                setClientSecret(null);
+                setPaymentError(null);
+                setStep("order");
+              }
+            }}
+            className="mb-5"
+          />
         )}
 
         {/* Content */}
@@ -430,7 +450,7 @@ export default function Home() {
                       Share
                     </motion.button>
                   </div>
-                  {/* Add to Cart + Make Another */}
+                  {/* Add Stickers + Make Another */}
                   <motion.button
                     whileTap={{ scale: 0.95 }}
                     className="w-full py-3 rounded-xl font-bold text-sm btn-gradient shadow-glow flex items-center justify-center gap-2"
@@ -442,36 +462,18 @@ export default function Home() {
                           stylePreset: selectedStyle.id,
                         });
                         hapticMedium();
-                      }
-                    }}
-                  >
-                    <ShoppingCart size={16} />
-                    Add to Cart (1 sheet = 6 stickers)
-                  </motion.button>
-                  <div className="flex gap-3">
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      className="flex-1 py-3 rounded-xl font-semibold text-sm glass-strong border border-border shadow-soft"
-                      onClick={() => {
+                        // Go back to capture for another
                         setCapturedImage(null);
                         setSelectedStyle(null);
                         setGeneratedImage(null);
                         setGenerateError(null);
                         setStep("capture");
-                      }}
-                    >
-                      Make Another
-                    </motion.button>
-                    {cart.items.length > 0 && (
-                      <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        className="flex-1 py-3 rounded-xl font-bold text-sm btn-gradient shadow-glow"
-                        onClick={() => setStep("order")}
-                      >
-                        Checkout ({cart.items.length})
-                      </motion.button>
-                    )}
-                  </div>
+                      }
+                    }}
+                  >
+                    <ShoppingCart size={16} />
+                    Add Stickers
+                  </motion.button>
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
