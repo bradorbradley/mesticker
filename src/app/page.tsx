@@ -557,13 +557,20 @@ export default function Home() {
                         Drop your email and we&apos;ll unlock one more!
                       </p>
                       <form
-                        onSubmit={(e) => {
+                        onSubmit={async (e) => {
                           e.preventDefault();
                           if (emailInput.includes("@")) {
+                            // Send to backend
+                            try {
+                              await fetch("/api/email-capture", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ email: emailInput }),
+                              });
+                            } catch {} // Non-blocking
                             setEmailCaptured();
                             setShowEmailCapture(false);
                             setLimitReached(false);
-                            // TODO: send email to backend/newsletter service
                           }
                         }}
                         className="flex gap-2"
