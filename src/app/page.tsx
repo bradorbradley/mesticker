@@ -336,9 +336,18 @@ export default function Home() {
           ) : (
             <div className="w-9" />
           )}
-          <h1 className="font-display text-xl font-bold gradient-text">
+          <button
+            onClick={() => {
+              setShowLanding(true);
+              setCapturedImage(null);
+              setSelectedStyle(null);
+              setGeneratedImage(null);
+              setStep("capture");
+            }}
+            className="font-display text-xl font-bold gradient-text"
+          >
             MeSticker
-          </h1>
+          </button>
           <UserMenu />
         </div>
 
@@ -621,16 +630,6 @@ export default function Home() {
                 </div>
               ) : (
                 <div>
-                  {generatedImage && (
-                    <div className="w-full rounded-2xl overflow-hidden mb-4 h-48 flex items-center justify-center glass-strong shadow-soft">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={generatedImage}
-                        alt="Your sticker"
-                        className="h-full object-contain"
-                      />
-                    </div>
-                  )}
                   {paymentError && (
                     <p className="text-sm text-red-500 text-center mb-4">
                       {paymentError}

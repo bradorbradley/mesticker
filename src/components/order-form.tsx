@@ -40,7 +40,7 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
   };
 
   return (
-    <form onSubmit={handleSubmit} className={className}>
+    <form onSubmit={handleSubmit} className={className} autoComplete="on" name="shipping">
       {/* Cart Items */}
       <Card className="mb-4">
         <CardHeader className="pb-3">
