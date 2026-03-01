@@ -459,10 +459,28 @@ export default function Home() {
                       Share
                     </motion.button>
                   </div>
-                  {/* Add Stickers → goes to checkout */}
+                  {/* Order Stickers → adds to cart then checkout */}
                   <motion.button
                     whileTap={{ scale: 0.95 }}
                     className="w-full py-3 rounded-xl font-bold text-sm btn-gradient shadow-glow flex items-center justify-center gap-2"
+                    onClick={() => {
+                      if (!generatedImage || !capturedImage || !selectedStyle) return;
+                      cart.addItem({
+                        generatedImage,
+                        originalImage: capturedImage,
+                        stylePreset: selectedStyle.id,
+                      });
+                      hapticMedium();
+                      // Use setTimeout to ensure cart state updates before navigation
+                      setTimeout(() => setStep("order"), 50);
+                    }}
+                  >
+                    <ShoppingCart size={16} />
+                    Order Stickers
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    className="w-full py-2.5 rounded-xl font-semibold text-sm glass-strong border border-border shadow-soft flex items-center justify-center gap-2"
                     onClick={() => {
                       if (generatedImage && capturedImage && selectedStyle) {
                         cart.addItem({
@@ -470,18 +488,7 @@ export default function Home() {
                           originalImage: capturedImage,
                           stylePreset: selectedStyle.id,
                         });
-                        hapticMedium();
-                        setStep("order");
                       }
-                    }}
-                  >
-                    <ShoppingCart size={16} />
-                    Add Stickers
-                  </motion.button>
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    className="w-full py-2.5 rounded-xl font-semibold text-sm glass-strong border border-border shadow-soft flex items-center justify-center gap-2"
-                    onClick={() => {
                       setCapturedImage(null);
                       setSelectedStyle(null);
                       setGeneratedImage(null);
