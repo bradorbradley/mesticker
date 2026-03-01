@@ -15,10 +15,13 @@ interface OrderFormProps {
   className?: string;
 }
 
+// Each "sheet" = 6 kiss-cut stickers on a 5.83"×8.27" sheet
+// Printful cost: $5.05/sheet + ~$4.50 shipping
+// Pricing ensures minimum $5 profit per order
 const PACKS = [
-  { quantity: 3, pricePerSticker: 4.99, label: "3 Pack", tag: null },
-  { quantity: 5, pricePerSticker: 3.49, label: "5 Pack", tag: "Most Popular" },
-  { quantity: 10, pricePerSticker: 2.49, label: "10 Pack", tag: "Best Value" },
+  { quantity: 1, price: 14.99, label: "1 Sheet", sublabel: "6 stickers", tag: null },
+  { quantity: 2, price: 24.99, label: "2 Sheets", sublabel: "12 stickers", tag: "Most Popular" },
+  { quantity: 3, price: 34.99, label: "3 Sheets", sublabel: "18 stickers", tag: "Best Value" },
 ];
 
 const SHIPPING = 4.99;
@@ -36,7 +39,7 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
   });
 
   const pack = PACKS[selectedPack];
-  const subtotal = pack.pricePerSticker * pack.quantity;
+  const subtotal = pack.price;
   const total = subtotal + SHIPPING;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -74,11 +77,10 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
                 <Check size={10} className="text-white" />
               </div>
             )}
-            <p className="text-lg font-bold">{p.quantity}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">stickers</p>
+            <p className="text-base font-bold">{p.label}</p>
+            <p className="text-[10px] text-muted-foreground">{p.sublabel}</p>
             <p className="text-sm font-semibold text-primary mt-1">
-              ${p.pricePerSticker.toFixed(2)}
-              <span className="text-[10px] text-muted-foreground font-normal">/ea</span>
+              ${p.price.toFixed(2)}
             </p>
           </button>
         ))}
@@ -190,7 +192,7 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
           <div className="space-y-1 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">
-                {pack.quantity} stickers x ${pack.pricePerSticker.toFixed(2)}
+                {pack.label} ({pack.sublabel})
               </span>
               <span>${subtotal.toFixed(2)}</span>
             </div>
