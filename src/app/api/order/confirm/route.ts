@@ -51,16 +51,27 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (meta?.imageUrl && meta?.quantity) {
-        await createPrintfulOrder(meta.imageUrl, parseInt(meta.quantity), {
-          name: meta.addressName,
-          address1: meta.address1,
-          address2: meta.address2 || undefined,
-          city: meta.city,
-          stateCode: meta.stateCode,
-          countryCode: meta.countryCode,
-          zip: meta.zip,
-        });
+      // Submit to Printful — supports both new cart format and legacy single-item
+      const address = {
+        name: meta.addressName,
+        address1: meta.address1,
+        address2: meta.address2 || undefined,
+        city: meta.city,
+        stateCode: meta.stateCode,
+        countryCode: meta.countryCode,
+        zip: meta.zip,
+      };
+
+      if (meta?.cartItems) {
+        // New cart format: multiple stickers in one order
+        const cartItems = JSON.parse(meta.cartItems) as { imageUrl: string; quantity: number }[];
+        await createPrintfulOrder(cartItems, address);
+      } else if (meta?.imageUrl && meta?.quantity) {
+        // Legacy single-item format
+        await createPrintfulOrder(
+          [{ imageUrl: meta.imageUrl, quantity: parseInt(meta.quantity) }],
+          address
+        );
       }
     }
 

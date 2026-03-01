@@ -3,7 +3,8 @@
 import { useState, useCallback, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Lock, Sparkles, Download, Share2, Camera } from "lucide-react";
+import { ArrowLeft, Lock, Sparkles, Download, Share2, Camera, ShoppingCart } from "lucide-react";
+import { useCart } from "@/lib/cart";
 import LandingHero from "@/components/landing-hero";
 import ProgressSteps from "@/components/progress-steps";
 import CameraCapture from "@/components/camera-capture";
@@ -103,6 +104,7 @@ export default function Home() {
 
   const isSignedIn = !!session?.user;
   const displayCreations = isSignedIn ? dbCreations : localCreations;
+  const cart = useCart();
 
   // Check if user has seen landing before
   useEffect(() => {
@@ -229,8 +231,8 @@ export default function Home() {
   }, [capturedImage, selectedStyle, addLocalCreation, isSignedIn]);
 
   const handleOrderSubmit = useCallback(
-    async (quantity: number, address: ShippingAddress) => {
-      if (!generatedImage) return;
+    async (email: string, quantity: number, address: ShippingAddress) => {
+      if (cart.items.length === 0) return;
 
       setIsCreatingOrder(true);
       setPaymentError(null);
@@ -239,7 +241,15 @@ export default function Home() {
         const res = await fetch("/api/order", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: generatedImage, quantity, address }),
+          body: JSON.stringify({
+            email,
+            items: cart.items.map((i) => ({
+              generatedImage: i.generatedImage,
+              sheets: i.sheets,
+              stylePreset: i.stylePreset,
+            })),
+            address,
+          }),
         });
 
         if (!res.ok) {
@@ -250,7 +260,7 @@ export default function Home() {
         const data = await res.json();
         setClientSecret(data.clientSecret);
         setOrderAmount(data.amount);
-        setOrderQuantity(quantity);
+        setOrderQuantity(cart.totalSheets);
       } catch (error) {
         setPaymentError(
           error instanceof Error ? error.message : "Something went wrong"
@@ -259,14 +269,15 @@ export default function Home() {
         setIsCreatingOrder(false);
       }
     },
-    [generatedImage]
+    [cart]
   );
 
   const handlePaymentSuccess = useCallback(() => {
     setPaymentComplete(true);
     setLimitReached(false);
     setLocalHasPurchased();
-  }, []);
+    cart.clearCart();
+  }, [cart]);
 
   const handleNewSticker = useCallback(() => {
     setCapturedImage(null);
@@ -419,24 +430,47 @@ export default function Home() {
                       Share
                     </motion.button>
                   </div>
+                  {/* Add to Cart + Make Another */}
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    className="w-full py-3 rounded-xl font-bold text-sm btn-gradient shadow-glow flex items-center justify-center gap-2"
+                    onClick={() => {
+                      if (generatedImage && capturedImage && selectedStyle) {
+                        cart.addItem({
+                          generatedImage,
+                          originalImage: capturedImage,
+                          stylePreset: selectedStyle.id,
+                        });
+                        hapticMedium();
+                      }
+                    }}
+                  >
+                    <ShoppingCart size={16} />
+                    Add to Cart (1 sheet = 6 stickers)
+                  </motion.button>
                   <div className="flex gap-3">
                     <motion.button
                       whileTap={{ scale: 0.95 }}
                       className="flex-1 py-3 rounded-xl font-semibold text-sm glass-strong border border-border shadow-soft"
                       onClick={() => {
-                        setGeneratedImage(null);
+                        setCapturedImage(null);
                         setSelectedStyle(null);
+                        setGeneratedImage(null);
+                        setGenerateError(null);
+                        setStep("capture");
                       }}
                     >
-                      Try Another Style
+                      Make Another
                     </motion.button>
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      className="flex-1 py-3 rounded-xl font-bold text-sm btn-gradient shadow-glow"
-                      onClick={() => setStep("order")}
-                    >
-                      Order Stickers
-                    </motion.button>
+                    {cart.items.length > 0 && (
+                      <motion.button
+                        whileTap={{ scale: 0.95 }}
+                        className="flex-1 py-3 rounded-xl font-bold text-sm btn-gradient shadow-glow"
+                        onClick={() => setStep("order")}
+                      >
+                        Checkout ({cart.items.length})
+                      </motion.button>
+                    )}
                   </div>
                 </div>
               ) : (

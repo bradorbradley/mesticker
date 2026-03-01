@@ -16,9 +16,13 @@ function getHeaders() {
 // Product 505 = Kiss-cut sticker sheet, variant 12917 = 5.83"×8.27" (fits 6 stickers)
 const STICKER_VARIANT_ID = 12917;
 
+export interface PrintfulItem {
+  imageUrl: string;
+  quantity: number; // number of sheets
+}
+
 export async function createPrintfulOrder(
-  imageUrl: string,
-  quantity: number,
+  items: PrintfulItem[],
   address: ShippingAddress
 ) {
   const response = await fetch(`${PRINTFUL_API}/orders?confirm=true`, {
@@ -34,18 +38,16 @@ export async function createPrintfulOrder(
         country_code: address.countryCode,
         zip: address.zip,
       },
-      items: [
-        {
-          variant_id: STICKER_VARIANT_ID,
-          quantity,
-          files: [
-            {
-              type: "default",
-              url: imageUrl,
-            },
-          ],
-        },
-      ],
+      items: items.map((item) => ({
+        variant_id: STICKER_VARIANT_ID,
+        quantity: item.quantity,
+        files: [
+          {
+            type: "default",
+            url: item.imageUrl,
+          },
+        ],
+      })),
     }),
   });
 
