@@ -5,29 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Truck, Check } from "lucide-react";
+import { Truck, Minus, Plus, Trash2, Mail } from "lucide-react";
 import { ShippingAddress } from "@/types";
-import { cn } from "@/lib/utils";
+import { useCart } from "@/lib/cart";
 
 interface OrderFormProps {
-  onSubmit: (quantity: number, address: ShippingAddress) => void;
+  onSubmit: (email: string, quantity: number, address: ShippingAddress) => void;
   isLoading?: boolean;
   className?: string;
 }
 
-// Each "sheet" = 6 kiss-cut stickers on a 5.83"×8.27" sheet
-// Printful cost: $5.05/sheet + ~$4.50 shipping
-// Pricing ensures minimum $5 profit per order
-const PACKS = [
-  { quantity: 1, price: 14.99, label: "1 Sheet", sublabel: "6 stickers", tag: null },
-  { quantity: 2, price: 24.99, label: "2 Sheets", sublabel: "12 stickers", tag: "Most Popular" },
-  { quantity: 3, price: 34.99, label: "3 Sheets", sublabel: "18 stickers", tag: "Best Value" },
-];
-
 const SHIPPING = 4.99;
 
 export default function OrderForm({ onSubmit, isLoading, className }: OrderFormProps) {
-  const [selectedPack, setSelectedPack] = useState(1); // default to 5-pack
+  const { items, updateSheets, removeItem, totalSheets, totalPrice, grandTotal } = useCart();
+  const [email, setEmail] = useState("");
   const [address, setAddress] = useState<ShippingAddress>({
     name: "",
     address1: "",
@@ -38,13 +30,9 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
     zip: "",
   });
 
-  const pack = PACKS[selectedPack];
-  const subtotal = pack.price;
-  const total = subtotal + SHIPPING;
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(pack.quantity, address);
+    onSubmit(email, totalSheets, address);
   };
 
   const updateField = (field: keyof ShippingAddress, value: string) => {
@@ -53,38 +41,81 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
 
   return (
     <form onSubmit={handleSubmit} className={className}>
-      {/* Pack Selector */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        {PACKS.map((p, i) => (
-          <button
-            key={p.quantity}
-            type="button"
-            onClick={() => setSelectedPack(i)}
-            className={cn(
-              "relative rounded-xl border-2 p-3 text-center transition-all",
-              selectedPack === i
-                ? "border-primary bg-primary/5 shadow-md"
-                : "border-border hover:border-primary/40"
-            )}
-          >
-            {p.tag && (
-              <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
-                {p.tag}
-              </span>
-            )}
-            {selectedPack === i && (
-              <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
-                <Check size={10} className="text-white" />
+      {/* Cart Items */}
+      <Card className="mb-4">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Your Stickers</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {items.map((item) => (
+            <div key={item.id} className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={item.generatedImage}
+                alt="Sticker"
+                className="w-14 h-14 rounded-lg object-contain bg-muted"
+              />
+              <div className="flex-1">
+                <p className="text-xs text-muted-foreground capitalize">{item.stylePreset} style</p>
+                <p className="text-xs text-muted-foreground">{item.sheets} {item.sheets === 1 ? 'sheet' : 'sheets'} ({item.sheets * 6} stickers)</p>
               </div>
-            )}
-            <p className="text-base font-bold">{p.label}</p>
-            <p className="text-[10px] text-muted-foreground">{p.sublabel}</p>
-            <p className="text-sm font-semibold text-primary mt-1">
-              ${p.price.toFixed(2)}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => updateSheets(item.id, item.sheets - 1)}
+                  disabled={item.sheets <= 1}
+                  className="w-7 h-7 rounded-full border border-border flex items-center justify-center disabled:opacity-30"
+                >
+                  <Minus size={12} />
+                </button>
+                <span className="w-6 text-center text-sm font-semibold">{item.sheets}</span>
+                <button
+                  type="button"
+                  onClick={() => updateSheets(item.id, item.sheets + 1)}
+                  className="w-7 h-7 rounded-full border border-border flex items-center justify-center"
+                >
+                  <Plus size={12} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeItem(item.id)}
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-red-400 hover:text-red-600 ml-1"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            </div>
+          ))}
+          {items.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-2">No stickers in cart</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Email */}
+      <Card className="mb-4">
+        <CardContent className="pt-6">
+          <div>
+            <Label htmlFor="email" className="flex items-center gap-1.5">
+              <Mail size={14} /> Email
+            </Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@email.com"
+              className="mt-1"
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              We&apos;ll save your creations so you can reorder anytime
             </p>
-          </button>
-        ))}
-      </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Shipping Address */}
       <Card className="mb-4">
@@ -192,9 +223,9 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
           <div className="space-y-1 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">
-                {pack.label} ({pack.sublabel})
+                {totalSheets} {totalSheets === 1 ? 'sheet' : 'sheets'} ({totalSheets * 6} stickers)
               </span>
-              <span>${subtotal.toFixed(2)}</span>
+              <span>${totalPrice.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Shipping</span>
@@ -202,14 +233,14 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
             </div>
             <div className="flex justify-between pt-2 border-t border-border font-semibold text-base">
               <span>Total</span>
-              <span>${total.toFixed(2)}</span>
+              <span>${grandTotal.toFixed(2)}</span>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
-        {isLoading ? "Creating order..." : `Pay $${total.toFixed(2)}`}
+      <Button type="submit" size="lg" className="w-full" disabled={isLoading || items.length === 0}>
+        {isLoading ? "Creating order..." : `Pay $${grandTotal.toFixed(2)}`}
       </Button>
     </form>
   );

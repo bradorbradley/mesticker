@@ -102,7 +102,7 @@ export default function StyleCarousel({
                 <img
                   src={bgPreset.previewImage}
                   alt=""
-                  className="w-full h-full object-cover opacity-60"
+                  className="w-full h-full object-cover object-top opacity-60"
                 />
               </div>
             </div>
@@ -135,7 +135,7 @@ export default function StyleCarousel({
             <img
               src={preset.previewImage}
               alt={preset.name}
-              className="absolute inset-0 w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover object-top"
               draggable={false}
             />
           ) : (

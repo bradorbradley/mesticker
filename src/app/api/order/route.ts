@@ -1,38 +1,67 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPaymentIntent, calculateTotal } from "@/lib/stripe";
+import { createPaymentIntent } from "@/lib/stripe";
 import { uploadImage } from "@/lib/storage";
 import { auth } from "@/lib/auth";
 import { ShippingAddress } from "@/types";
+
+// Pricing constants — keep in sync with cart.tsx and order-form.tsx
+const PRICE_PER_SHEET_CENTS = 1499; // $14.99
+const SHIPPING_CENTS = 499; // $4.99
+
+interface CartItemInput {
+  generatedImage: string;
+  sheets: number;
+  stylePreset: string;
+}
 
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
 
     const {
-      image,
-      quantity,
+      email,
+      items,
       address,
     }: {
-      image: string;
-      quantity: number;
+      email: string;
+      items: CartItemInput[];
       address: ShippingAddress;
     } = await request.json();
 
-    if (!image || !quantity || !address) {
+    if (!email || !items?.length || !address) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    // Upload image to get a public URL (needed for Printful later)
-    const imageUrl = await uploadImage(image);
+    // Upload all images and build metadata
+    const uploadedItems = await Promise.all(
+      items.map(async (item) => {
+        const imageUrl = await uploadImage(item.generatedImage);
+        return {
+          imageUrl,
+          sheets: item.sheets,
+          stylePreset: item.stylePreset,
+        };
+      })
+    );
 
-    // Calculate total and create Stripe payment intent
-    const { total } = calculateTotal(quantity);
+    // Calculate total
+    const totalSheets = items.reduce((sum, i) => sum + i.sheets, 0);
+    const total = totalSheets * PRICE_PER_SHEET_CENTS + SHIPPING_CENTS;
+
     const paymentIntent = await createPaymentIntent(total, {
-      imageUrl,
-      quantity: String(quantity),
+      email,
+      totalSheets: String(totalSheets),
+      itemCount: String(items.length),
+      // Store image URLs as JSON for webhook to submit to Printful
+      cartItems: JSON.stringify(
+        uploadedItems.map((i) => ({
+          imageUrl: i.imageUrl,
+          quantity: i.sheets,
+        }))
+      ),
       addressName: address.name,
       address1: address.address1,
       address2: address.address2 || "",
@@ -40,14 +69,12 @@ export async function POST(request: NextRequest) {
       stateCode: address.stateCode,
       countryCode: address.countryCode,
       zip: address.zip,
-      // Include user ID in metadata so the webhook can link the order
       ...(session?.user?.id ? { userId: session.user.id } : {}),
     });
 
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
       amount: total,
-      imageUrl,
     });
   } catch (error) {
     console.error("Order error:", error);

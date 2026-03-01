@@ -7,7 +7,7 @@ export const stylePresets: StylePreset[] = [
     description: "3D animated movie character",
     previewImage: "/presets/3d-animated.jpg",
     prompt:
-      "Transform this photo into a Pixar-style 3D animated character. Smooth stylized skin, large expressive eyes, slightly exaggerated proportions, warm cinematic lighting. Think Toy Story / Inside Out / Coco character design. Keep the person fully recognizable but as a polished CG animated character. Sticker-ready with a clean outline edge and transparent background.",
+      "Transform this photo into a Pixar-style 3D animated character. Smooth stylized skin, large expressive eyes, warm cinematic lighting. Think Toy Story / Inside Out / Coco character design. Keep the person's exact body proportions and build — do NOT make them wider, heavier, or rounder. The character should match the person's real physique. Keep them fully recognizable as a polished CG animated character. Sticker-ready with a clean outline edge and transparent background.",
   },
   {
     id: "spongebob",
