@@ -95,6 +95,8 @@ export default function Home() {
   const [limitReached, setLimitReached] = useState(false);
   const [showEmailCapture, setShowEmailCapture] = useState(false);
   const [emailInput, setEmailInput] = useState("");
+  const [serverPurchaseChecked, setServerPurchaseChecked] = useState(false);
+  const [serverHasPurchased, setServerHasPurchased] = useState(false);
 
   // Creations
   const { creations: localCreations, addCreation: addLocalCreation } =
@@ -121,11 +123,15 @@ export default function Home() {
       .then((r) => (r.ok ? r.json() : []))
       .then((orders) => {
         if (orders && orders.length > 0) {
+          setServerHasPurchased(true);
           setLocalHasPurchased();
           setLimitReached(false);
         }
+        setServerPurchaseChecked(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        setServerPurchaseChecked(true);
+      });
   }, [isSignedIn]);
 
   // Load creations from DB when signed in
@@ -166,9 +172,9 @@ export default function Home() {
   const handleGenerate = useCallback(async () => {
     if (!capturedImage || !selectedStyle) return;
 
-    // Enforce generation limit for ALL users (logged in check is server-side)
+    // Enforce generation limit — skip if server confirmed purchase
     const count = getLocalGenCount();
-    const purchased = getLocalHasPurchased();
+    const purchased = getLocalHasPurchased() || serverHasPurchased;
     const limit = getEffectiveLimit();
     if (count >= limit && !purchased) {
       if (!getEmailCaptured() && count >= FREE_GENERATION_LIMIT) {
@@ -241,7 +247,7 @@ export default function Home() {
     } finally {
       setIsGenerating(false);
     }
-  }, [capturedImage, selectedStyle, addLocalCreation, isSignedIn]);
+  }, [capturedImage, selectedStyle, addLocalCreation, isSignedIn, serverHasPurchased]);
 
   const handleOrderSubmit = useCallback(
     async (email: string, quantity: number, address: ShippingAddress) => {

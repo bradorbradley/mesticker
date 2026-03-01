@@ -31,6 +31,16 @@ export async function POST(request: NextRequest) {
       if (meta?.userId && process.env.DATABASE_URL) {
         try {
           const sql = getDb();
+          // Support both old "quantity" and new "totalSheets" metadata keys
+          const qty = meta.totalSheets || meta.quantity || "1";
+          // For cart orders, grab first image URL from cartItems; fall back to legacy imageUrl
+          let imageUrl = meta.imageUrl || "";
+          if (!imageUrl && meta.cartItems) {
+            try {
+              const items = JSON.parse(meta.cartItems);
+              imageUrl = items[0]?.imageUrl || "";
+            } catch {}
+          }
           await sql`
             INSERT INTO orders (
               user_id, stripe_payment_intent_id, quantity, amount_cents, image_url,
@@ -38,8 +48,8 @@ export async function POST(request: NextRequest) {
               shipping_city, shipping_state, shipping_country, shipping_zip,
               status
             ) VALUES (
-              ${meta.userId}, ${paymentIntent.id}, ${parseInt(meta.quantity)},
-              ${paymentIntent.amount}, ${meta.imageUrl},
+              ${meta.userId}, ${paymentIntent.id}, ${parseInt(qty)},
+              ${paymentIntent.amount}, ${imageUrl},
               ${meta.addressName}, ${meta.address1}, ${meta.address2 || null},
               ${meta.city}, ${meta.stateCode}, ${meta.countryCode}, ${meta.zip},
               'paid'
