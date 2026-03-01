@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
 
-/** Auto-slide hint: slides handle from 50% → 30% → 70% → 50% on first view */
+/** Auto-slide hint: starts at 0% (sticker fully visible), then nudges to show comparison */
 function useSliderHint(
   allImagesLoaded: boolean,
   isDragging: boolean,
@@ -22,10 +22,11 @@ function useSliderHint(
   useEffect(() => {
     if (!allImagesLoaded || hasInteracted.current) return;
 
+    // Start fully showing sticker, then nudge to show comparison
     const steps = [
-      { pos: 30, delay: 600 },
-      { pos: 70, delay: 1200 },
-      { pos: 50, delay: 1800 },
+      { pos: 40, delay: 800 },
+      { pos: 15, delay: 1400 },
+      { pos: 50, delay: 2000 },
     ];
 
     const timeouts = steps.map(({ pos, delay }) =>
@@ -34,7 +35,7 @@ function useSliderHint(
       }, delay)
     );
 
-    const hideHint = setTimeout(() => setShowHint(false), 3000);
+    const hideHint = setTimeout(() => setShowHint(false), 3500);
 
     return () => {
       timeouts.forEach(clearTimeout);
@@ -60,7 +61,7 @@ export default function ImageRevealSlider({
   afterSrc,
   altBefore = "Original",
   altAfter = "Styled",
-  initial = 80,
+  initial = 0,
   height = 420,
   className,
 }: ImageRevealSliderProps) {

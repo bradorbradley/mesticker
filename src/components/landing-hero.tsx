@@ -37,7 +37,7 @@ const steps = [
 
 export default function LandingHero({ onStart }: LandingHeroProps) {
   return (
-    <div className="min-h-dvh flex flex-col relative overflow-hidden">
+    <div className="min-h-dvh flex flex-col relative overflow-hidden max-w-lg mx-auto">
       {/* Floating decorative elements */}
       {floatingStickers.map((s, i) => (
         <motion.div

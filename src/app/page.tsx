@@ -509,14 +509,14 @@ export default function Home() {
                     whileTap={{ scale: 0.95 }}
                     className="w-full py-3 rounded-xl font-bold text-sm btn-gradient shadow-glow flex items-center justify-center gap-2"
                     onClick={() => {
-                      if (!generatedImage || !capturedImage || !selectedStyle) return;
+                      if (!generatedImage || !capturedImage) return;
                       cart.addItem({
                         generatedImage,
                         originalImage: capturedImage,
-                        stylePreset: selectedStyle.id,
+                        stylePreset: selectedStyle?.id || "unknown",
                       });
                       hapticMedium();
-                      trackAddToCart(selectedStyle.id);
+                      trackAddToCart(selectedStyle?.id || "gallery");
                       trackCheckoutStart();
                       // Immediately set step to order - React will batch this with cart update
                       setStep("order");
@@ -529,11 +529,11 @@ export default function Home() {
                     whileTap={{ scale: 0.95 }}
                     className="w-full py-2.5 rounded-xl font-semibold text-sm glass-strong border border-border shadow-soft flex items-center justify-center gap-2"
                     onClick={() => {
-                      if (generatedImage && capturedImage && selectedStyle) {
+                      if (generatedImage && capturedImage) {
                         cart.addItem({
                           generatedImage,
                           originalImage: capturedImage,
-                          stylePreset: selectedStyle.id,
+                          stylePreset: selectedStyle?.id || "unknown",
                         });
                       }
                       setCapturedImage(null);
