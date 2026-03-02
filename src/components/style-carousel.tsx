@@ -25,7 +25,7 @@ const styleColors: Record<string, string> = {
   simpsons: "from-yellow-400 to-yellow-500",
   "rick-and-morty": "from-green-400 to-emerald-500",
   "family-guy": "from-sky-400 to-blue-500",
-  "scooby-doo": "from-orange-400 to-amber-500",
+
   chibi: "from-pink-300 to-rose-400",
   random: "from-primary to-accent-pink",
 };

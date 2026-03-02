@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Truck, Minus, Plus, Trash2, Mail } from "lucide-react";
+import { Truck, Minus, Plus, Trash2, Mail, ShoppingBag } from "lucide-react";
 import { ShippingAddress } from "@/types";
 import { useCart } from "@/lib/cart";
+import { useCreations } from "@/hooks/use-creations";
 
 interface OrderFormProps {
   onSubmit: (email: string, quantity: number, address: ShippingAddress) => void;
@@ -18,8 +19,10 @@ interface OrderFormProps {
 const SHIPPING = 4.99;
 
 export default function OrderForm({ onSubmit, isLoading, className }: OrderFormProps) {
-  const { items, updateSheets, removeItem, totalSheets, totalPrice, grandTotal } = useCart();
+  const { items, addItem, updateSheets, removeItem, totalSheets, totalPrice, grandTotal } = useCart();
+  const { creations } = useCreations();
   const [email, setEmail] = useState("");
+  const [showPastCreations, setShowPastCreations] = useState(false);
   const [address, setAddress] = useState<ShippingAddress>({
     name: "",
     address1: "",
@@ -39,12 +42,28 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
     setAddress((prev) => ({ ...prev, [field]: value }));
   };
 
+  // Filter out creations already in cart
+  const cartImages = new Set(items.map(i => i.generatedImage));
+  const availableCreations = creations.filter(c => !cartImages.has(c.generatedImage));
+
   return (
     <form onSubmit={handleSubmit} className={className} autoComplete="on" name="shipping">
       {/* Cart Items */}
       <Card className="mb-4">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Your Stickers</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Your Stickers</CardTitle>
+            {availableCreations.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowPastCreations(!showPastCreations)}
+                className="text-xs text-primary font-semibold flex items-center gap-1"
+              >
+                <ShoppingBag size={12} />
+                {showPastCreations ? "Hide" : "Add past stickers"}
+              </button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           {items.map((item) => (
@@ -89,6 +108,39 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
           {items.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-2">No stickers in cart</p>
           )}
+
+          {/* Add past creations to cart */}
+          {showPastCreations && availableCreations.length > 0 && (
+            <div className="border-t border-border pt-3 mt-3">
+              <p className="text-xs text-muted-foreground mb-2">Add from your past creations:</p>
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {availableCreations.map((creation, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      addItem({
+                        generatedImage: creation.generatedImage,
+                        originalImage: creation.originalImage,
+                        stylePreset: creation.stylePreset,
+                      });
+                    }}
+                    className="flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 border-dashed border-primary/30 hover:border-primary transition-colors relative"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={creation.generatedImage}
+                      alt="Past creation"
+                      className="w-full h-full object-contain bg-muted"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                      <Plus size={16} className="text-white" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -126,10 +178,10 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
-            <Label htmlFor="name">Full Name</Label>
+            <Label htmlFor="shipping-name">Full Name</Label>
             <Input
-              id="name"
-              name="name"
+              id="shipping-name"
+              name="shipping-name"
               autoComplete="name"
               required
               value={address.name}
@@ -138,10 +190,10 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
             />
           </div>
           <div>
-            <Label htmlFor="address1">Address</Label>
+            <Label htmlFor="shipping-address1">Address</Label>
             <Input
-              id="address1"
-              name="address1"
+              id="shipping-address1"
+              name="shipping-address-line1"
               autoComplete="address-line1"
               required
               value={address.address1}
@@ -150,10 +202,10 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
             />
           </div>
           <div>
-            <Label htmlFor="address2">Apt / Suite (optional)</Label>
+            <Label htmlFor="shipping-address2">Apt / Suite (optional)</Label>
             <Input
-              id="address2"
-              name="address2"
+              id="shipping-address2"
+              name="shipping-address-line2"
               autoComplete="address-line2"
               value={address.address2}
               onChange={(e) => updateField("address2", e.target.value)}
@@ -162,10 +214,10 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="city">City</Label>
+              <Label htmlFor="shipping-city">City</Label>
               <Input
-                id="city"
-                name="city"
+                id="shipping-city"
+                name="shipping-city"
                 autoComplete="address-level2"
                 required
                 value={address.city}
@@ -174,10 +226,10 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
               />
             </div>
             <div>
-              <Label htmlFor="state">State</Label>
+              <Label htmlFor="shipping-state">State</Label>
               <Input
-                id="state"
-                name="state"
+                id="shipping-state"
+                name="shipping-state"
                 autoComplete="address-level1"
                 required
                 value={address.stateCode}
@@ -189,10 +241,10 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="zip">ZIP Code</Label>
+              <Label htmlFor="shipping-zip">ZIP Code</Label>
               <Input
-                id="zip"
-                name="zip"
+                id="shipping-zip"
+                name="shipping-postal-code"
                 autoComplete="postal-code"
                 inputMode="numeric"
                 required
@@ -202,10 +254,10 @@ export default function OrderForm({ onSubmit, isLoading, className }: OrderFormP
               />
             </div>
             <div>
-              <Label htmlFor="country">Country</Label>
+              <Label htmlFor="shipping-country">Country</Label>
               <Input
-                id="country"
-                name="country"
+                id="shipping-country"
+                name="shipping-country"
                 autoComplete="country"
                 value={address.countryCode}
                 onChange={(e) => updateField("countryCode", e.target.value)}
