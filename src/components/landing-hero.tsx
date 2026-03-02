@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Camera, Sparkles, Package, ChevronDown } from "lucide-react";
 import { hapticMedium } from "@/lib/haptics";
+import { stylePresets } from "@/lib/presets";
 
 interface LandingHeroProps {
   onStart: () => void;
@@ -156,6 +157,53 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
           3 free creations, no sign-up needed
         </motion.p>
       </div>
+
+      {/* Style preview marquee */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.6 }}
+        className="overflow-hidden py-4"
+      >
+        <p className="text-xs text-center text-muted-foreground font-semibold uppercase tracking-wider mb-3">
+          Styles you can try
+        </p>
+        <div className="relative">
+          {/* Fade edges */}
+          <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-background to-transparent z-10" />
+          <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-background to-transparent z-10" />
+          
+          <motion.div
+            className="flex gap-3 w-max"
+            animate={{ x: ["0%", "-50%"] }}
+            transition={{
+              x: {
+                duration: 20,
+                repeat: Infinity,
+                ease: "linear",
+              },
+            }}
+          >
+            {/* Double the items for seamless loop */}
+            {[...stylePresets.filter(p => p.id !== "random"), ...stylePresets.filter(p => p.id !== "random")].map((preset, i) => (
+              <div
+                key={`${preset.id}-${i}`}
+                className="relative flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden shadow-card border-2 border-border"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={preset.previewImage}
+                  alt={preset.name}
+                  className="w-full h-full object-cover object-top"
+                />
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1.5">
+                  <p className="text-[10px] text-white font-semibold text-center">{preset.name}</p>
+                </div>
+              </div>
+            ))}
+          </motion.div>
+        </div>
+      </motion.div>
 
       {/* How it works */}
       <div className="px-6 pb-10">
