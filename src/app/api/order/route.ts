@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPaymentIntent, calculateSheetTotal } from "@/lib/stripe";
+import { createPaymentIntent, calculatePackTotal } from "@/lib/stripe";
 import { uploadImage } from "@/lib/storage";
 import { auth } from "@/lib/auth";
 import { ShippingAddress } from "@/types";
+import { STICKERS_PER_PACK } from "@/lib/printful";
 
 interface OrderItem {
   imageUrl?: string;
   generatedImage?: string;
-  sheets: number;
+  packs: number;
 }
 
 export async function POST(request: NextRequest) {
@@ -30,11 +31,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Ensure every item has a public image URL — upload on-the-fly if missing
-    const uploadedItems: { imageUrl: string; sheets: number }[] = [];
+    const uploadedItems: { imageUrl: string; packs: number }[] = [];
     for (const item of items) {
       let url = item.imageUrl;
       if (!url && item.generatedImage) {
-        // Blob upload failed during generation — retry now
         url = await uploadImage(item.generatedImage);
       }
       if (!url) {
@@ -43,12 +43,12 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      uploadedItems.push({ imageUrl: url, sheets: item.sheets });
+      uploadedItems.push({ imageUrl: url, packs: item.packs });
     }
 
     // Calculate total
-    const totalSheets = items.reduce((sum, i) => sum + i.sheets, 0);
-    const { total } = calculateSheetTotal(totalSheets);
+    const totalPacks = items.reduce((sum, i) => sum + i.packs, 0);
+    const { total } = calculatePackTotal(totalPacks);
 
     // Encode items into Stripe metadata (keyed by index)
     const metadata: Record<string, string> = {
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     for (let i = 0; i < uploadedItems.length; i++) {
       metadata[`item_${i}_imageUrl`] = uploadedItems[i].imageUrl;
-      metadata[`item_${i}_sheets`] = String(uploadedItems[i].sheets);
+      metadata[`item_${i}_packs`] = String(uploadedItems[i].packs);
     }
 
     const paymentIntent = await createPaymentIntent(total, metadata);

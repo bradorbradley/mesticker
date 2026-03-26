@@ -4,24 +4,24 @@ import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { PartyPopper, Package, Sparkles } from "lucide-react";
 import { hapticSuccess } from "@/lib/haptics";
-import { STICKERS_PER_SHEET } from "@/lib/stripe";
+import { STICKERS_PER_PACK } from "@/lib/printful";
 
 interface OrderConfirmationProps {
   imageUrl: string;
-  totalSheets: number;
+  totalPacks: number;
   onNewSticker: () => void;
 }
 
 export default function OrderConfirmation({
   imageUrl,
-  totalSheets,
+  totalPacks,
   onNewSticker,
 }: OrderConfirmationProps) {
   useEffect(() => {
     hapticSuccess();
   }, []);
 
-  const totalStickers = totalSheets * STICKERS_PER_SHEET;
+  const totalStickers = totalPacks * STICKERS_PER_PACK;
 
   return (
     <div className="flex flex-col items-center gap-6 py-6">
@@ -85,7 +85,7 @@ export default function OrderConfirmation({
         <div>
           <p className="font-bold flex items-center gap-2">
             <Package size={16} className="text-primary" />
-            {totalSheets} {totalSheets === 1 ? "sheet" : "sheets"} ({totalStickers} stickers)
+            {totalPacks} {totalPacks === 1 ? "pack" : "packs"} ({totalStickers} stickers)
           </p>
           <p className="text-sm text-muted-foreground mt-1">
             You&apos;ll get a tracking email when they ship.

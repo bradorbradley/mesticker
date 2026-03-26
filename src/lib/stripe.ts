@@ -6,23 +6,22 @@ export function getStripe() {
   return new Stripe(key);
 }
 
-// Sticker sheet pricing — each A4 sheet has 6 kiss-cut 3"x3" stickers
+// Sticker pack pricing — each pack = 6 individual 3"×3" kiss-cut stickers
 //
-// Cost breakdown per sheet (Printful sticker sheet product 505, A4):
-//   Printful sheet:  ~$10.00
-//   Shipping (1st):  ~$3.99  (additional sheets ~$1.45 ea)
-//   Stripe fees:     ~2.9% + $0.30
+// Cost breakdown per pack (Printful product 358, kiss-cut 3"×3"):
+//   Printful (~$2.50 ea × 6):  ~$15.00
+//   Shipping (flat):           ~$3.99
+//   Stripe fees:               ~2.9% + $0.30
 //
-//   1 sheet:  $15.99 → COGS ~$14.50 → profit ~$1.50 (acquisition price)
-//   2 sheets: $31.98 → COGS ~$26.00 → profit ~$6.00
-//   3 sheets: $47.97 → COGS ~$37.50 → profit ~$10.50
-export const STICKERS_PER_SHEET = 6;
-export const SHEET_PRICE_CENTS = 1599; // $15.99 per sheet
+//   1 pack:  $15.99 → thin margin but customer-acquisition price
+//   2 packs: $28.99 → better margin at scale
+export const STICKERS_PER_PACK = 6;
+export const PACK_PRICE_CENTS = 1599; // $15.99 per pack of 6
 
-export function calculateSheetTotal(totalSheets: number) {
-  if (totalSheets < 1) throw new Error("Must order at least 1 sheet");
-  const total = totalSheets * SHEET_PRICE_CENTS;
-  return { total, pricePerSheet: SHEET_PRICE_CENTS, totalSheets };
+export function calculatePackTotal(totalPacks: number) {
+  if (totalPacks < 1) throw new Error("Must order at least 1 pack");
+  const total = totalPacks * PACK_PRICE_CENTS;
+  return { total, pricePerPack: PACK_PRICE_CENTS, totalPacks };
 }
 
 export async function createPaymentIntent(amountCents: number, metadata: Record<string, string>) {

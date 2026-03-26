@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getStripe, STICKERS_PER_SHEET } from "@/lib/stripe";
-import { createPrintfulOrder, PrintfulOrderItem } from "@/lib/printful";
+import { getStripe } from "@/lib/stripe";
+import { createPrintfulOrder, PrintfulOrderItem, STICKERS_PER_PACK } from "@/lib/printful";
 import { getDb } from "@/lib/db";
 
 /**
@@ -22,14 +22,16 @@ async function fulfillOrder(paymentIntent: {
   // Parse multi-item order from metadata
   const itemCount = parseInt(meta?.itemCount || "0");
   const items: PrintfulOrderItem[] = [];
-  let totalSheets = 0;
+  let totalStickers = 0;
 
   for (let i = 0; i < itemCount; i++) {
     const imageUrl = meta[`item_${i}_imageUrl`];
-    const sheets = parseInt(meta[`item_${i}_sheets`] || "0");
-    if (imageUrl && sheets > 0) {
-      items.push({ imageUrl, sheets });
-      totalSheets += sheets;
+    // Support both new "packs" key and legacy "sheets" key
+    const packs = parseInt(meta[`item_${i}_packs`] || meta[`item_${i}_sheets`] || "0");
+    if (imageUrl && packs > 0) {
+      const quantity = packs * STICKERS_PER_PACK;
+      items.push({ imageUrl, quantity });
+      totalStickers += quantity;
     }
   }
 
@@ -57,7 +59,7 @@ async function fulfillOrder(paymentIntent: {
           status
         ) VALUES (
           ${meta.userId}, ${paymentIntent.id},
-          ${totalSheets * STICKERS_PER_SHEET},
+          ${totalStickers},
           ${paymentIntent.amount}, ${firstImageUrl},
           ${address.name}, ${address.address1}, ${address.address2 || null},
           ${address.city}, ${address.stateCode}, ${address.countryCode}, ${meta.zip},

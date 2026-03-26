@@ -12,90 +12,88 @@ function getHeaders() {
   };
 }
 
-const STICKER_SHEET_PRODUCT_ID = 505;
-const INDIVIDUAL_STICKER_VARIANT_ID = 10163; // Product 358, 3"x3" kiss-cut
-const STICKERS_PER_SHEET = 6;
+// Product 358 = Kiss-Cut Stickers (individual, kiss-cut around design shape).
+// Each sticker has a transparent-background image and Printful cuts around the
+// non-transparent area — this is the correct product for our use case.
+//
+// Product 505 (Sticker Sheet) requires a full sheet layout and does NOT
+// individually kiss-cut each sticker from a single image file.
+const KISS_CUT_PRODUCT_ID = 358;
 
-// Auto-discover the sticker sheet variant ID from the Printful catalog.
+// Default stickers per order ("pack of 6")
+export const STICKERS_PER_PACK = 6;
+
+// Auto-discover the 3"×3" variant ID from the Printful catalog.
 // Cached after first call so we only hit the API once per server lifetime.
-let cachedSheetVariantId: number | null = null;
+let cachedVariantId: number | null = null;
 
-async function getSheetVariantId(): Promise<number | null> {
+async function getKissCutVariantId(): Promise<number> {
   // Env override — skip auto-discovery if explicitly set
-  if (process.env.PRINTFUL_SHEET_VARIANT_ID) {
-    return parseInt(process.env.PRINTFUL_SHEET_VARIANT_ID);
+  if (process.env.PRINTFUL_VARIANT_ID) {
+    return parseInt(process.env.PRINTFUL_VARIANT_ID);
   }
 
-  if (cachedSheetVariantId !== null) return cachedSheetVariantId;
+  if (cachedVariantId !== null) return cachedVariantId;
 
   try {
-    const res = await fetch(`${PRINTFUL_API}/products/${STICKER_SHEET_PRODUCT_ID}`, {
+    const res = await fetch(`${PRINTFUL_API}/products/${KISS_CUT_PRODUCT_ID}`, {
       headers: getHeaders(),
     });
 
     if (!res.ok) {
-      console.warn(`Failed to fetch sticker sheet variants: ${res.status}`);
-      return null;
+      console.warn(`Failed to fetch kiss-cut sticker variants: ${res.status}`);
+      // Fallback: commonly-referenced 3"×3" variant for Product 358
+      return 10164;
     }
 
     const data = await res.json();
     const variants: { id: number; name: string; size: string }[] =
       data?.result?.variants || [];
 
-    // Prefer 4"×6" (smallest/cheapest sheet) — good for a 2×2 grid of 3" stickers.
-    // If not found, take the first available variant.
+    // Prefer 3"×3" — good balance of size, visibility, and cost
     const preferred = variants.find(
       (v) =>
-        v.size?.includes("4×6") ||
-        v.size?.includes("4x6") ||
-        v.name?.toLowerCase().includes("4×6") ||
-        v.name?.toLowerCase().includes("4x6") ||
-        v.name?.toLowerCase().includes('4"')
+        v.size?.includes("3×3") ||
+        v.size?.includes("3x3") ||
+        v.size?.includes('3"') ||
+        v.name?.toLowerCase().includes("3×3") ||
+        v.name?.toLowerCase().includes("3x3") ||
+        v.name?.toLowerCase().includes('3"')
     );
 
     const chosen = preferred || variants[0];
     if (chosen) {
-      cachedSheetVariantId = chosen.id;
+      cachedVariantId = chosen.id;
       console.log(
-        `Printful sticker sheet: using variant ${chosen.id} (${chosen.name || chosen.size})`
+        `Printful kiss-cut sticker: using variant ${chosen.id} (${chosen.name || chosen.size})`
       );
-      return cachedSheetVariantId;
+      return cachedVariantId;
     }
 
-    console.warn("No sticker sheet variants found in Printful catalog");
-    return null;
+    console.warn("No kiss-cut sticker variants found — using fallback 10164");
+    return 10164;
   } catch (err) {
-    console.warn("Failed to auto-discover sticker sheet variant:", err);
-    return null;
+    console.warn("Failed to auto-discover kiss-cut variant:", err);
+    return 10164;
   }
 }
 
 export interface PrintfulOrderItem {
   imageUrl: string;
-  sheets: number;
+  quantity: number;
 }
 
 export async function createPrintfulOrder(
   items: PrintfulOrderItem[],
   address: ShippingAddress
 ) {
-  const sheetVariantId = await getSheetVariantId();
+  const variantId = await getKissCutVariantId();
 
-  const printfulItems = items.map((item) => {
-    if (sheetVariantId) {
-      return {
-        variant_id: sheetVariantId,
-        quantity: item.sheets,
-        files: [{ type: "default" as const, url: item.imageUrl }],
-      };
-    }
-    // Fallback: individual stickers if sheet product unavailable
-    return {
-      variant_id: INDIVIDUAL_STICKER_VARIANT_ID,
-      quantity: item.sheets * STICKERS_PER_SHEET,
-      files: [{ type: "default" as const, url: item.imageUrl }],
-    };
-  });
+  const printfulItems = items.map((item) => ({
+    variant_id: variantId,
+    quantity: item.quantity,
+    files: [{ type: "default" as const, url: item.imageUrl }],
+  }));
 
   const response = await fetch(`${PRINTFUL_API}/orders?confirm=true`, {
     method: "POST",

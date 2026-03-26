@@ -39,7 +39,7 @@ export default function Home() {
   // Order state
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [orderAmount, setOrderAmount] = useState(0);
-  const [orderTotalSheets, setOrderTotalSheets] = useState(0);
+  const [orderTotalPacks, setOrderTotalPacks] = useState(0);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -194,7 +194,7 @@ export default function Home() {
         const data = await res.json();
         setClientSecret(data.clientSecret);
         setOrderAmount(data.amount);
-        setOrderTotalSheets(items.reduce((sum, i) => sum + i.sheets, 0));
+        setOrderTotalPacks(items.reduce((sum, i) => sum + i.packs, 0));
       } catch (error) {
         setPaymentError(
           error instanceof Error ? error.message : "Something went wrong"
@@ -216,7 +216,7 @@ export default function Home() {
     setGeneratedImage(null);
     setClientSecret(null);
     setOrderAmount(0);
-    setOrderTotalSheets(0);
+    setOrderTotalPacks(0);
     setPaymentComplete(false);
     setPaymentError(null);
     setGenerateError(null);
@@ -403,7 +403,7 @@ export default function Home() {
               {paymentComplete ? (
                 <OrderConfirmation
                   imageUrl={generatedImage || ""}
-                  totalSheets={orderTotalSheets}
+                  totalPacks={orderTotalPacks}
                   onNewSticker={handleNewSticker}
                 />
               ) : clientSecret ? (

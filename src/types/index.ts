@@ -31,7 +31,7 @@ export interface CartItem {
   imageUrl?: string;
   generatedImage?: string;
   stylePreset: string;
-  sheets: number;
+  packs: number;
 }
 
 export interface Order {

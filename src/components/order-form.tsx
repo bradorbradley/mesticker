@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Truck, Package, Plus, Minus } from "lucide-react";
 import { ShippingAddress, Creation, CartItem } from "@/types";
-import { SHEET_PRICE_CENTS, STICKERS_PER_SHEET } from "@/lib/stripe";
+import { PACK_PRICE_CENTS } from "@/lib/stripe";
+import { STICKERS_PER_PACK } from "@/lib/printful";
 import { cn } from "@/lib/utils";
 import { hapticLight } from "@/lib/haptics";
 
@@ -19,7 +20,7 @@ interface OrderFormProps {
   className?: string;
 }
 
-const sheetPrice = SHEET_PRICE_CENTS / 100;
+const packPrice = PACK_PRICE_CENTS / 100;
 
 export default function OrderForm({
   currentCreation,
@@ -28,7 +29,7 @@ export default function OrderForm({
   isLoading,
   className,
 }: OrderFormProps) {
-  // Build initial cart: current creation = 1 sheet, everything else = 0
+  // Build initial cart: current creation = 1 pack, everything else = 0
   const [quantities, setQuantities] = useState<Record<string, number>>(() => {
     const q: Record<string, number> = {};
     if (currentCreation) q[currentCreation.id] = 1;
@@ -71,9 +72,9 @@ export default function OrderForm({
     });
   };
 
-  const totalSheets = Object.values(quantities).reduce((sum, q) => sum + q, 0);
-  const totalPrice = totalSheets * sheetPrice;
-  const totalStickers = totalSheets * STICKERS_PER_SHEET;
+  const totalPacks = Object.values(quantities).reduce((sum, q) => sum + q, 0);
+  const totalPrice = totalPacks * packPrice;
+  const totalStickers = totalPacks * STICKERS_PER_PACK;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +85,7 @@ export default function OrderForm({
         imageUrl: c.imageUrl,
         generatedImage: c.generatedImage,
         stylePreset: c.stylePreset,
-        sheets: quantities[c.id],
+        packs: quantities[c.id],
       }));
     onSubmit(items, address);
   };
@@ -94,7 +95,7 @@ export default function OrderForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className={className}>
+    <form onSubmit={handleSubmit} className={className} autoComplete="on">
       {/* Sticker selection with quantity steppers */}
       <div className="space-y-2 mb-4">
         {allCreations.map((creation, i) => {
@@ -122,7 +123,7 @@ export default function OrderForm({
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">
-                  {STICKERS_PER_SHEET} stickers per sheet
+                  {STICKERS_PER_PACK} kiss-cut stickers
                 </p>
               </div>
 
@@ -158,11 +159,11 @@ export default function OrderForm({
         })}
       </div>
 
-      {/* Sheet info banner */}
+      {/* Pack info banner */}
       <div className="flex items-center justify-center gap-2 py-2 mb-4 rounded-xl bg-green-50 border border-green-200 text-green-700">
         <Package size={14} />
         <span className="text-xs font-semibold">
-          ${sheetPrice.toFixed(2)}/sheet &middot; {STICKERS_PER_SHEET} stickers each &middot; Free shipping
+          ${packPrice.toFixed(2)}/pack &middot; {STICKERS_PER_PACK} kiss-cut stickers &middot; Free shipping
         </span>
       </div>
 
@@ -178,6 +179,8 @@ export default function OrderForm({
             <Label htmlFor="name">Full Name</Label>
             <Input
               id="name"
+              name="name"
+              autoComplete="name"
               required
               value={address.name}
               onChange={(e) => updateField("name", e.target.value)}
@@ -188,6 +191,8 @@ export default function OrderForm({
             <Label htmlFor="address1">Address</Label>
             <Input
               id="address1"
+              name="address-line1"
+              autoComplete="address-line1"
               required
               value={address.address1}
               onChange={(e) => updateField("address1", e.target.value)}
@@ -198,6 +203,8 @@ export default function OrderForm({
             <Label htmlFor="address2">Apt / Suite (optional)</Label>
             <Input
               id="address2"
+              name="address-line2"
+              autoComplete="address-line2"
               value={address.address2}
               onChange={(e) => updateField("address2", e.target.value)}
               placeholder="Apt 4B"
@@ -208,6 +215,8 @@ export default function OrderForm({
               <Label htmlFor="city">City</Label>
               <Input
                 id="city"
+                name="city"
+                autoComplete="address-level2"
                 required
                 value={address.city}
                 onChange={(e) => updateField("city", e.target.value)}
@@ -218,6 +227,8 @@ export default function OrderForm({
               <Label htmlFor="state">State</Label>
               <Input
                 id="state"
+                name="state"
+                autoComplete="address-level1"
                 required
                 value={address.stateCode}
                 onChange={(e) => updateField("stateCode", e.target.value)}
@@ -231,6 +242,8 @@ export default function OrderForm({
               <Label htmlFor="zip">ZIP Code</Label>
               <Input
                 id="zip"
+                name="postal-code"
+                autoComplete="postal-code"
                 required
                 value={address.zip}
                 onChange={(e) => updateField("zip", e.target.value)}
@@ -241,6 +254,8 @@ export default function OrderForm({
               <Label htmlFor="country">Country</Label>
               <Input
                 id="country"
+                name="country"
+                autoComplete="country"
                 value={address.countryCode}
                 onChange={(e) => updateField("countryCode", e.target.value)}
                 placeholder="US"
@@ -257,7 +272,7 @@ export default function OrderForm({
           <div className="space-y-1 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">
-                {totalSheets} {totalSheets === 1 ? "sheet" : "sheets"} ({totalStickers} stickers)
+                {totalPacks} {totalPacks === 1 ? "pack" : "packs"} ({totalStickers} stickers)
               </span>
               <span>${totalPrice.toFixed(2)}</span>
             </div>
@@ -277,12 +292,12 @@ export default function OrderForm({
         type="submit"
         size="lg"
         className="w-full"
-        disabled={isLoading || totalSheets === 0}
+        disabled={isLoading || totalPacks === 0}
       >
         {isLoading
           ? "Creating order..."
-          : totalSheets === 0
-            ? "Select at least 1 sheet"
+          : totalPacks === 0
+            ? "Select at least 1 pack"
             : `Pay $${totalPrice.toFixed(2)}`}
       </Button>
     </form>
