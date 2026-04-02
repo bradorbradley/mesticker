@@ -18,7 +18,7 @@ import UserMenu from "@/components/user-menu";
 import { useCreations } from "@/hooks/use-creations";
 import { stylePresets } from "@/lib/presets";
 import { hapticMedium } from "@/lib/haptics";
-import type { AppStep, StylePreset, ShippingAddress, CartItem, Creation } from "@/types";
+import type { AppStep, StylePreset, CartItem, Creation } from "@/types";
 
 const pageVariants = {
   enter: { opacity: 0, y: 20, scale: 0.98 },
@@ -165,7 +165,7 @@ export default function Home() {
   }, [capturedImage, selectedStyle, addLocalCreation, isSignedIn]);
 
   const handleOrderSubmit = useCallback(
-    async (items: CartItem[], address: ShippingAddress) => {
+    async (items: CartItem[]) => {
       if (items.length === 0) return;
 
       setIsCreatingOrder(true);
@@ -175,7 +175,7 @@ export default function Home() {
         const res = await fetch("/api/order", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items, address }),
+          body: JSON.stringify({ items }),
         });
 
         if (!res.ok) {

@@ -3,7 +3,6 @@ import { createPaymentIntent, calculatePackTotal } from "@/lib/stripe";
 import { uploadImage } from "@/lib/storage";
 import { auth } from "@/lib/auth";
 import { ShippingAddress } from "@/types";
-import { STICKERS_PER_PACK } from "@/lib/printful";
 
 interface OrderItem {
   imageUrl?: string;
@@ -20,10 +19,10 @@ export async function POST(request: NextRequest) {
       address,
     }: {
       items: OrderItem[];
-      address: ShippingAddress;
+      address?: ShippingAddress;
     } = await request.json();
 
-    if (!items?.length || !address) {
+    if (!items?.length) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -53,15 +52,19 @@ export async function POST(request: NextRequest) {
     // Encode items into Stripe metadata (keyed by index)
     const metadata: Record<string, string> = {
       itemCount: String(uploadedItems.length),
-      addressName: address.name,
-      address1: address.address1,
-      address2: address.address2 || "",
-      city: address.city,
-      stateCode: address.stateCode,
-      countryCode: address.countryCode,
-      zip: address.zip,
       ...(session?.user?.id ? { userId: session.user.id } : {}),
     };
+
+    // Include address in metadata if provided (manual card flow)
+    if (address) {
+      metadata.addressName = address.name;
+      metadata.address1 = address.address1;
+      metadata.address2 = address.address2 || "";
+      metadata.city = address.city;
+      metadata.stateCode = address.stateCode;
+      metadata.countryCode = address.countryCode;
+      metadata.zip = address.zip;
+    }
 
     for (let i = 0; i < uploadedItems.length; i++) {
       metadata[`item_${i}_imageUrl`] = uploadedItems[i].imageUrl;

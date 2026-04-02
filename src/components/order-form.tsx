@@ -2,11 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Truck, Package, Plus, Minus } from "lucide-react";
-import { ShippingAddress, Creation, CartItem } from "@/types";
+import { Package, Plus, Minus } from "lucide-react";
+import { Creation, CartItem } from "@/types";
 import { PACK_PRICE_CENTS } from "@/lib/stripe";
 import { STICKERS_PER_PACK } from "@/lib/printful";
 import { cn } from "@/lib/utils";
@@ -15,7 +12,7 @@ import { hapticLight } from "@/lib/haptics";
 interface OrderFormProps {
   currentCreation: Creation | null;
   pastCreations: Creation[];
-  onSubmit: (items: CartItem[], address: ShippingAddress) => void;
+  onSubmit: (items: CartItem[]) => void;
   isLoading?: boolean;
   className?: string;
 }
@@ -29,24 +26,12 @@ export default function OrderForm({
   isLoading,
   className,
 }: OrderFormProps) {
-  // Build initial cart: current creation = 1 pack, everything else = 0
   const [quantities, setQuantities] = useState<Record<string, number>>(() => {
     const q: Record<string, number> = {};
     if (currentCreation) q[currentCreation.id] = 1;
     return q;
   });
 
-  const [address, setAddress] = useState<ShippingAddress>({
-    name: "",
-    address1: "",
-    address2: "",
-    city: "",
-    stateCode: "",
-    countryCode: "US",
-    zip: "",
-  });
-
-  // All unique creations (current first, then past — deduplicated)
   const allCreations = useMemo(() => {
     const seen = new Set<string>();
     const result: Creation[] = [];
@@ -87,15 +72,11 @@ export default function OrderForm({
         stylePreset: c.stylePreset,
         packs: quantities[c.id],
       }));
-    onSubmit(items, address);
-  };
-
-  const updateField = (field: keyof ShippingAddress, value: string) => {
-    setAddress((prev) => ({ ...prev, [field]: value }));
+    onSubmit(items);
   };
 
   return (
-    <form onSubmit={handleSubmit} className={className} autoComplete="on">
+    <form onSubmit={handleSubmit} className={className}>
       {/* Sticker selection with quantity steppers */}
       <div className="space-y-2 mb-4">
         {allCreations.map((creation, i) => {
@@ -110,7 +91,6 @@ export default function OrderForm({
                   : "border-border"
               )}
             >
-              {/* Sticker thumbnail */}
               <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 border border-border shadow-soft">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -120,14 +100,12 @@ export default function OrderForm({
                 />
               </div>
 
-              {/* Info */}
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">
                   {STICKERS_PER_PACK} kiss-cut stickers
                 </p>
               </div>
 
-              {/* +/- stepper */}
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
@@ -167,126 +145,12 @@ export default function OrderForm({
         </span>
       </div>
 
-      {/* Shipping Address */}
-      <Card className="mb-4">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Truck size={16} /> Shipping Address
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <Label htmlFor="name">Full Name</Label>
-            <Input
-              id="name"
-              name="name"
-              autoComplete="name"
-              required
-              value={address.name}
-              onChange={(e) => updateField("name", e.target.value)}
-              placeholder="John Doe"
-            />
-          </div>
-          <div>
-            <Label htmlFor="address1">Address</Label>
-            <Input
-              id="address1"
-              name="address-line1"
-              autoComplete="address-line1"
-              required
-              value={address.address1}
-              onChange={(e) => updateField("address1", e.target.value)}
-              placeholder="123 Main St"
-            />
-          </div>
-          <div>
-            <Label htmlFor="address2">Apt / Suite (optional)</Label>
-            <Input
-              id="address2"
-              name="address-line2"
-              autoComplete="address-line2"
-              value={address.address2}
-              onChange={(e) => updateField("address2", e.target.value)}
-              placeholder="Apt 4B"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="city">City</Label>
-              <Input
-                id="city"
-                name="city"
-                autoComplete="address-level2"
-                required
-                value={address.city}
-                onChange={(e) => updateField("city", e.target.value)}
-                placeholder="New York"
-              />
-            </div>
-            <div>
-              <Label htmlFor="state">State</Label>
-              <Input
-                id="state"
-                name="state"
-                autoComplete="address-level1"
-                required
-                value={address.stateCode}
-                onChange={(e) => updateField("stateCode", e.target.value)}
-                placeholder="NY"
-                maxLength={2}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="zip">ZIP Code</Label>
-              <Input
-                id="zip"
-                name="postal-code"
-                autoComplete="postal-code"
-                required
-                value={address.zip}
-                onChange={(e) => updateField("zip", e.target.value)}
-                placeholder="10001"
-              />
-            </div>
-            <div>
-              <Label htmlFor="country">Country</Label>
-              <Input
-                id="country"
-                name="country"
-                autoComplete="country"
-                value={address.countryCode}
-                onChange={(e) => updateField("countryCode", e.target.value)}
-                placeholder="US"
-                maxLength={2}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Order Summary */}
-      <Card className="mb-4">
-        <CardContent className="pt-6">
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">
-                {totalPacks} {totalPacks === 1 ? "pack" : "packs"} ({totalStickers} stickers)
-              </span>
-              <span>${totalPrice.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Shipping</span>
-              <span className="text-green-600 font-semibold">FREE</span>
-            </div>
-            <div className="flex justify-between pt-2 border-t border-border font-semibold text-base">
-              <span>Total</span>
-              <span>${totalPrice.toFixed(2)}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Summary + checkout button */}
+      {totalPacks > 0 && (
+        <div className="text-center text-sm text-muted-foreground mb-3">
+          {totalPacks} {totalPacks === 1 ? "pack" : "packs"} ({totalStickers} stickers) &middot; <span className="font-semibold text-foreground">${totalPrice.toFixed(2)}</span>
+        </div>
+      )}
 
       <Button
         type="submit"
@@ -295,10 +159,10 @@ export default function OrderForm({
         disabled={isLoading || totalPacks === 0}
       >
         {isLoading
-          ? "Creating order..."
+          ? "Loading checkout..."
           : totalPacks === 0
             ? "Select at least 1 pack"
-            : `Pay $${totalPrice.toFixed(2)}`}
+            : `Checkout · $${totalPrice.toFixed(2)}`}
       </Button>
     </form>
   );

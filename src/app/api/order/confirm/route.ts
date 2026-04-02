@@ -2,17 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createPrintfulOrder, PrintfulOrderItem, STICKERS_PER_PACK } from "@/lib/printful";
 import { getDb } from "@/lib/db";
+import { ShippingAddress } from "@/types";
 
 /**
  * Fulfills an order: parses payment intent metadata, saves to DB, creates Printful order.
- * Called by both the Stripe webhook path and the direct client confirmation path.
+ * Address can come from PI metadata (card flow) or from the request body (express checkout).
  */
-async function fulfillOrder(paymentIntent: {
-  id: string;
-  amount: number;
-  status: string;
-  metadata: Record<string, string>;
-}) {
+async function fulfillOrder(
+  paymentIntent: {
+    id: string;
+    amount: number;
+    status: string;
+    metadata: Record<string, string>;
+  },
+  addressOverride?: ShippingAddress
+) {
   if (paymentIntent.status !== "succeeded") {
     throw new Error(`Payment not succeeded (status: ${paymentIntent.status})`);
   }
@@ -26,7 +30,6 @@ async function fulfillOrder(paymentIntent: {
 
   for (let i = 0; i < itemCount; i++) {
     const imageUrl = meta[`item_${i}_imageUrl`];
-    // Support both new "packs" key and legacy "sheets" key
     const packs = parseInt(meta[`item_${i}_packs`] || meta[`item_${i}_sheets`] || "0");
     if (imageUrl && packs > 0) {
       const quantity = packs * STICKERS_PER_PACK;
@@ -35,7 +38,8 @@ async function fulfillOrder(paymentIntent: {
     }
   }
 
-  const address = {
+  // Address: prefer override (from express checkout), fall back to PI metadata
+  const address = addressOverride || {
     name: meta.addressName,
     address1: meta.address1,
     address2: meta.address2 || undefined,
@@ -50,7 +54,6 @@ async function fulfillOrder(paymentIntent: {
     try {
       const sql = getDb();
       const firstImageUrl = items[0]?.imageUrl || "";
-      // ON CONFLICT avoids duplicates if both webhook + client call arrive
       await sql`
         INSERT INTO orders (
           user_id, stripe_payment_intent_id, quantity, amount_cents, image_url,
@@ -62,7 +65,7 @@ async function fulfillOrder(paymentIntent: {
           ${totalStickers},
           ${paymentIntent.amount}, ${firstImageUrl},
           ${address.name}, ${address.address1}, ${address.address2 || null},
-          ${address.city}, ${address.stateCode}, ${address.countryCode}, ${meta.zip},
+          ${address.city}, ${address.stateCode}, ${address.countryCode}, ${address.zip},
           'paid'
         )
         ON CONFLICT (stripe_payment_intent_id) DO NOTHING
@@ -97,14 +100,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    // Path 2: Direct client call with paymentIntentId — fetch PI from Stripe to verify
+    // Path 2: Direct client call with paymentIntentId
     const data = JSON.parse(body);
 
     if (data.paymentIntentId) {
       const paymentIntent = await stripe.paymentIntents.retrieve(data.paymentIntentId);
-      await fulfillOrder(paymentIntent as unknown as {
-        id: string; amount: number; status: string; metadata: Record<string, string>;
-      });
+
+      // Express checkout sends address in the request body
+      const addressOverride: ShippingAddress | undefined = data.shippingAddress
+        ? {
+            name: data.shippingAddress.name || "",
+            address1: data.shippingAddress.address1 || "",
+            address2: data.shippingAddress.address2 || "",
+            city: data.shippingAddress.city || "",
+            stateCode: data.shippingAddress.stateCode || "",
+            countryCode: data.shippingAddress.countryCode || "",
+            zip: data.shippingAddress.zip || "",
+          }
+        : undefined;
+
+      await fulfillOrder(
+        paymentIntent as unknown as {
+          id: string; amount: number; status: string; metadata: Record<string, string>;
+        },
+        addressOverride
+      );
       return NextResponse.json({ received: true });
     }
 
