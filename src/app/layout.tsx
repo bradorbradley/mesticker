@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/components/auth-provider";
+import { PostHogProvider } from "@/components/posthog-provider";
 import { CartProvider } from "@/lib/cart";
 import "./globals.css";
 
@@ -69,7 +70,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-dvh bg-background antialiased font-body">
-        <AuthProvider><CartProvider>{children}</CartProvider></AuthProvider>
+        <PostHogProvider><AuthProvider><CartProvider>{children}</CartProvider></AuthProvider></PostHogProvider>
       </body>
     </html>
   );
