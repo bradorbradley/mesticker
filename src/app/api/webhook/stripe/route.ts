@@ -38,24 +38,37 @@ export async function POST(request: NextRequest) {
       console.log("Checkout session completed:", session.id)
 
       // Get full session with shipping details
-      const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
-        expand: ["shipping_details"],
-      })
+      const fullSession = await stripe.checkout.sessions.retrieve(session.id)
 
+      // Shipping details are directly on the session after checkout completes
       const shippingDetails = fullSession.shipping_details
-      const imageUrl = session.metadata?.imageUrl
+      const customerDetails = fullSession.customer_details
+      const imageUrl = fullSession.metadata?.imageUrl
 
-      if (shippingDetails?.address && imageUrl) {
-        try {
-          // Create Printful order
-          const printfulOrder = await createPrintfulOrder(imageUrl, {
-            name: shippingDetails.name || "",
-            address: shippingDetails.address.line1 || "",
-            city: shippingDetails.address.city || "",
-            state: shippingDetails.address.state || "",
-            zip: shippingDetails.address.postal_code || "",
-            country: shippingDetails.address.country || "US",
-          })
+      console.log("Shipping details:", JSON.stringify(shippingDetails, null, 2))
+      console.log("Customer details:", JSON.stringify(customerDetails, null, 2))
+      console.log("Image URL from metadata:", imageUrl)
+
+      if (!imageUrl) {
+        console.error("No image URL in session metadata!")
+        break
+      }
+
+      if (!shippingDetails?.address) {
+        console.error("No shipping address collected!")
+        break
+      }
+
+      try {
+        // Create Printful order
+        const printfulOrder = await createPrintfulOrder(imageUrl, {
+          name: shippingDetails.name || customerDetails?.name || "Customer",
+          address: shippingDetails.address.line1 || "",
+          city: shippingDetails.address.city || "",
+          state: shippingDetails.address.state || "",
+          zip: shippingDetails.address.postal_code || "",
+          country: shippingDetails.address.country || "US",
+        })
 
           console.log("Printful order created:", printfulOrder.result.id)
 
@@ -78,9 +91,8 @@ export async function POST(request: NextRequest) {
           } catch (e) {
             console.log("Database update skipped:", e)
           }
-        } catch (error) {
-          console.error("Failed to create Printful order:", error)
-        }
+      } catch (error) {
+        console.error("Failed to create Printful order:", error)
       }
       break
     }
