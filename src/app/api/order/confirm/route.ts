@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
-import { createPrintfulOrder, PrintfulOrderItem, STICKERS_PER_PACK } from "@/lib/printful";
+import { createPrintfulOrder, PrintfulOrderItem } from "@/lib/printful";
 import { getDb } from "@/lib/db";
 import { ShippingAddress } from "@/types";
 
-/**
- * Fulfills an order: parses payment intent metadata, saves to DB, creates Printful order.
- * Address can come from PI metadata (card flow) or from the request body (express checkout).
- */
 async function fulfillOrder(
   paymentIntent: {
     id: string;
@@ -23,18 +19,17 @@ async function fulfillOrder(
 
   const meta = paymentIntent.metadata;
 
-  // Parse multi-item order from metadata
   const itemCount = parseInt(meta?.itemCount || "0");
   const items: PrintfulOrderItem[] = [];
-  let totalStickers = 0;
+  let totalPacks = 0;
 
   for (let i = 0; i < itemCount; i++) {
     const imageUrl = meta[`item_${i}_imageUrl`];
     const packs = parseInt(meta[`item_${i}_packs`] || meta[`item_${i}_sheets`] || "0");
     if (imageUrl && packs > 0) {
-      const quantity = packs * STICKERS_PER_PACK;
-      items.push({ imageUrl, quantity });
-      totalStickers += quantity;
+      // Each pack = 1 sticker sheet (Product 505). Quantity = number of sheets.
+      items.push({ imageUrl, quantity: packs });
+      totalPacks += packs;
     }
   }
 
@@ -62,7 +57,7 @@ async function fulfillOrder(
           status
         ) VALUES (
           ${meta.userId}, ${paymentIntent.id},
-          ${totalStickers},
+          ${totalPacks},
           ${paymentIntent.amount}, ${firstImageUrl},
           ${address.name}, ${address.address1}, ${address.address2 || null},
           ${address.city}, ${address.stateCode}, ${address.countryCode}, ${address.zip},

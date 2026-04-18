@@ -8,7 +8,7 @@ import {
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
-import { loadStripe, Stripe } from "@stripe/stripe-js";
+import { loadStripe, Stripe, StripeExpressCheckoutElementConfirmEvent } from "@stripe/stripe-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,7 +63,7 @@ function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "cl
 
   // Handle Express Checkout (Apple Pay / Google Pay / Link)
   const handleExpressConfirm = useCallback(
-    async (event: { expressPaymentType: string; shippingAddress?: { name?: string; address?: { line1?: string; line2?: string; city?: string; state?: string; postal_code?: string; country?: string } } }) => {
+    async (event: StripeExpressCheckoutElementConfirmEvent) => {
       if (!stripe || !elements) return;
 
       const { error, paymentIntent } = await stripe.confirmPayment({
@@ -145,6 +145,8 @@ function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "cl
               googlePay: "always",
               link: "auto",
             },
+            shippingAddressRequired: true,
+            phoneNumberRequired: true,
             layout: { maxColumns: 1, maxRows: 3 },
             buttonType: {
               applePay: "buy",

@@ -12,70 +12,101 @@ function getHeaders() {
   };
 }
 
-// Product 358 = Kiss-Cut Stickers (individual, kiss-cut around design shape).
-// Each sticker has a transparent-background image and Printful cuts around the
-// non-transparent area — this is the correct product for our use case.
+// ── Product config ──────────────────────────────────────────────────────
 //
-// Product 505 (Sticker Sheet) requires a full sheet layout and does NOT
-// individually kiss-cut each sticker from a single image file.
-const KISS_CUT_PRODUCT_ID = 358;
+// Product 505 = Kiss-Cut Sticker Sheet.
+// A sheet with multiple individually kiss-cut stickers — the buyer peels
+// each one off.  This is our default: one sheet = one "pack".
+//
+// Product 358 = Kiss-Cut Stickers (individual).
+// A single sticker in various sizes (2"×2" → 5.5"×5.5").
+// NOT what we want for packs — each order line produces one loose sticker.
+//
+// PRINTFUL_PRODUCT_ID env override lets you switch without a deploy.
+// PRINTFUL_VARIANT_ID env override pins a specific variant.
 
-// Default stickers per order ("pack of 6")
+const DEFAULT_PRODUCT_ID = 505; // sticker sheet
 export const STICKERS_PER_PACK = 6;
 
-// Auto-discover the 3"×3" variant ID from the Printful catalog.
-// Cached after first call so we only hit the API once per server lifetime.
+function getProductId(): number {
+  if (process.env.PRINTFUL_PRODUCT_ID) {
+    return parseInt(process.env.PRINTFUL_PRODUCT_ID);
+  }
+  return DEFAULT_PRODUCT_ID;
+}
+
 let cachedVariantId: number | null = null;
 
-async function getKissCutVariantId(): Promise<number> {
-  // Env override — skip auto-discovery if explicitly set
+async function getVariantId(): Promise<number> {
   if (process.env.PRINTFUL_VARIANT_ID) {
     return parseInt(process.env.PRINTFUL_VARIANT_ID);
   }
 
   if (cachedVariantId !== null) return cachedVariantId;
 
+  const productId = getProductId();
+
   try {
-    const res = await fetch(`${PRINTFUL_API}/products/${KISS_CUT_PRODUCT_ID}`, {
+    const res = await fetch(`${PRINTFUL_API}/products/${productId}`, {
       headers: getHeaders(),
     });
 
     if (!res.ok) {
-      console.warn(`Failed to fetch kiss-cut sticker variants: ${res.status}`);
-      // Fallback: commonly-referenced 3"×3" variant for Product 358
-      return 10164;
+      console.warn(`Failed to fetch product ${productId} variants: ${res.status}`);
+      return getFallbackVariant(productId);
     }
 
     const data = await res.json();
     const variants: { id: number; name: string; size: string }[] =
       data?.result?.variants || [];
 
-    // Prefer 3"×3" — good balance of size, visibility, and cost
-    const preferred = variants.find(
-      (v) =>
-        v.size?.includes("3×3") ||
-        v.size?.includes("3x3") ||
-        v.size?.includes('3"') ||
-        v.name?.toLowerCase().includes("3×3") ||
-        v.name?.toLowerCase().includes("3x3") ||
-        v.name?.toLowerCase().includes('3"')
-    );
-
-    const chosen = preferred || variants[0];
-    if (chosen) {
-      cachedVariantId = chosen.id;
-      console.log(
-        `Printful kiss-cut sticker: using variant ${chosen.id} (${chosen.name || chosen.size})`
-      );
-      return cachedVariantId;
+    if (variants.length === 0) {
+      console.warn(`No variants found for product ${productId}`);
+      return getFallbackVariant(productId);
     }
 
-    console.warn("No kiss-cut sticker variants found — using fallback 10164");
-    return 10164;
+    // For sticker sheets (505): prefer 4"×6" — good size for 6 small stickers
+    // For individual stickers (358): prefer 3"×3"
+    const preferred = productId === 505
+      ? variants.find(
+          (v) =>
+            v.size?.includes("4×6") ||
+            v.size?.includes("4x6") ||
+            v.size?.includes('4"') ||
+            v.name?.toLowerCase().includes("4×6") ||
+            v.name?.toLowerCase().includes("4x6")
+        )
+      : variants.find(
+          (v) =>
+            v.size?.includes("3×3") ||
+            v.size?.includes("3x3") ||
+            v.size?.includes('3"') ||
+            v.name?.toLowerCase().includes("3×3") ||
+            v.name?.toLowerCase().includes("3x3") ||
+            v.name?.toLowerCase().includes('3"')
+        );
+
+    const chosen = preferred || variants[0];
+    cachedVariantId = chosen.id;
+    console.log(
+      `Printful product ${productId}: using variant ${chosen.id} (${chosen.name || chosen.size})`
+    );
+    return cachedVariantId;
   } catch (err) {
-    console.warn("Failed to auto-discover kiss-cut variant:", err);
-    return 10164;
+    console.warn("Failed to auto-discover variant:", err);
+    return getFallbackVariant(productId);
   }
+}
+
+function getFallbackVariant(productId: number): number {
+  // These are best-guess fallback IDs — run scripts/printful-catalog.ts to
+  // discover the real ones for your store.
+  if (productId === 505) {
+    console.warn("Using fallback variant for sticker sheet (product 505)");
+    return 14048; // commonly-referenced 4"×6" sticker sheet variant
+  }
+  console.warn("Using fallback variant for kiss-cut sticker (product 358)");
+  return 10164; // commonly-referenced 3"×3" individual sticker variant
 }
 
 export interface PrintfulOrderItem {
@@ -87,7 +118,7 @@ export async function createPrintfulOrder(
   items: PrintfulOrderItem[],
   address: ShippingAddress
 ) {
-  const variantId = await getKissCutVariantId();
+  const variantId = await getVariantId();
 
   const printfulItems = items.map((item) => ({
     variant_id: variantId,
