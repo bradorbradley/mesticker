@@ -1,7 +1,9 @@
 const PRINTFUL_BASE_URL = "https://api.printful.com"
 
-// Die-cut sticker variant ID - verify in Printful catalog
-const STICKER_VARIANT_ID = 10163 // 3"x3" die-cut sticker
+// Kiss-Cut Sticker Sheet = Product 505
+// Default is A5 sticker sheet (standard). Override via env: PRINTFUL_STICKER_VARIANT_ID
+// Look up the exact variant by running: npm run printful:variants
+const STICKER_VARIANT_ID = Number(process.env.PRINTFUL_STICKER_VARIANT_ID) || 18565
 
 interface ShippingAddress {
   name: string
@@ -78,6 +80,9 @@ export async function createPrintfulOrder(
         quantity: 1,
         files: [
           {
+            // For kiss-cut stickers, Printful's cutter traces the PNG alpha channel.
+            // "default" is correct — there is no "kiss_cut" file type.
+            // The CRITICAL requirement is that the image is a transparent PNG.
             type: "default",
             url: imageUrl,
           },
@@ -85,6 +90,8 @@ export async function createPrintfulOrder(
       },
     ],
   }
+
+  console.log("Creating Printful order:", JSON.stringify(orderData, null, 2))
 
   const response = await fetch(`${PRINTFUL_BASE_URL}/orders`, {
     method: "POST",
@@ -119,9 +126,26 @@ export async function getPrintfulOrder(
   return response.json()
 }
 
+export async function listStickerSheetVariants(): Promise<any> {
+  const response = await fetch(`${PRINTFUL_BASE_URL}/products/505`, {
+    headers: {
+      Authorization: `Bearer ${process.env.PRINTFUL_API_KEY}`,
+    },
+  })
+  return response.json()
+}
+
+export async function listSingleStickerVariants(): Promise<any> {
+  const response = await fetch(`${PRINTFUL_BASE_URL}/products/358`, {
+    headers: {
+      Authorization: `Bearer ${process.env.PRINTFUL_API_KEY}`,
+    },
+  })
+  return response.json()
+}
+
 export async function getShippingRates(
-  shipping: ShippingAddress,
-  imageUrl: string
+  shipping: ShippingAddress
 ): Promise<any> {
   const response = await fetch(`${PRINTFUL_BASE_URL}/shipping/rates`, {
     method: "POST",
@@ -152,3 +176,5 @@ export async function getShippingRates(
 
   return response.json()
 }
+
+export { STICKER_VARIANT_ID }

@@ -21,45 +21,35 @@ function ConfirmationContent() {
       return
     }
 
-    // Get stored image for display
     const generatedImage = sessionStorage.getItem("generatedImage")
     const selectedStyle = sessionStorage.getItem("selectedStyle")
 
-    // Create order via Printful
-    const createOrder = async () => {
+    // DO NOT create a Printful order here — the Stripe webhook is the source
+    // of truth. Just fetch/poll the order status that was created by the webhook.
+    const fetchOrder = async () => {
       try {
-        const response = await fetch("/api/create-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId,
-            imageUrl: generatedImage,
-          }),
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.error || "Failed to create order")
-        }
-
+        const response = await fetch(`/api/order-status?session_id=${sessionId}`)
         const data = await response.json()
+
         setOrderDetails({
-          ...data,
+          orderId: data?.printful_order_id || "Processing...",
+          estimatedDelivery: "5-7 business days",
           imageUrl: generatedImage,
           style: selectedStyle,
+          status: data?.status || "pending",
         })
-      } catch (err: any) {
-        console.error("Order creation error:", err)
-        // Even if order creation fails, show success (payment went through)
+      } catch (err) {
+        console.error("Order fetch error:", err)
+        // Even if lookup fails, don't block the confirmation UX — payment succeeded
         setOrderDetails({
-          imageUrl: generatedImage,
-          style: selectedStyle,
           orderId: "Processing...",
           estimatedDelivery: "5-7 business days",
+          imageUrl: generatedImage,
+          style: selectedStyle,
+          status: "pending",
         })
       } finally {
         setIsLoading(false)
-        // Clear session storage
         sessionStorage.removeItem("uploadedImage")
         sessionStorage.removeItem("uploadedImageBase64")
         sessionStorage.removeItem("generatedImage")
@@ -68,7 +58,7 @@ function ConfirmationContent() {
       }
     }
 
-    createOrder()
+    fetchOrder()
   }, [searchParams])
 
   const handleNewOrder = () => {
@@ -82,7 +72,7 @@ function ConfirmationContent() {
           <div className="w-16 h-16 bg-gradient-to-r from-[#00C2FF] to-[#0EA5E9] rounded-2xl mx-auto flex items-center justify-center">
             <div className="loading-spinner" />
           </div>
-          <p className="text-gray-600">Processing your order...</p>
+          <p className="text-gray-600">Confirming your order...</p>
         </div>
       </div>
     )
@@ -108,7 +98,6 @@ function ConfirmationContent() {
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-md mx-auto px-4 py-8">
-        {/* Success Animation */}
         <div className="text-center mb-8">
           <div className="relative inline-block">
             <div className="w-20 h-20 bg-gradient-to-r from-green-400 to-emerald-400 rounded-full flex items-center justify-center animate-bounce">
@@ -120,24 +109,20 @@ function ConfirmationContent() {
           </div>
         </div>
 
-        {/* Success Message */}
         <div className="text-center mb-8">
-          <h1 className="title mb-2">
-            Your Sticker is on the Way!
-          </h1>
+          <h1 className="title mb-2">Your Sticker Sheet is on the Way!</h1>
           <p className="subtitle">
-            Thank you for your order. We're printing your custom sticker now.
+            Thank you for your order. We're printing your custom sticker sheet now.
           </p>
         </div>
 
-        {/* Sticker Preview */}
         {orderDetails?.imageUrl && (
           <div className="mb-8 flex justify-center">
             <div
               className="w-32 h-32 rounded-xl overflow-hidden shadow-lg border-4 border-white"
               style={{
                 transform: "rotate(-3deg)",
-                filter: "drop-shadow(4px 4px 8px rgba(0, 0, 0, 0.15))"
+                filter: "drop-shadow(4px 4px 8px rgba(0, 0, 0, 0.15))",
               }}
             >
               <img
@@ -149,7 +134,6 @@ function ConfirmationContent() {
           </div>
         )}
 
-        {/* Order Details */}
         <Card className="mb-6">
           <CardContent className="p-6 space-y-4">
             <div className="flex items-center gap-3">
@@ -158,9 +142,7 @@ function ConfirmationContent() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">Order ID</p>
-                <p className="font-medium text-gray-900">
-                  {orderDetails?.orderId || orderDetails?.printfulOrderId || "Processing..."}
-                </p>
+                <p className="font-medium text-gray-900">{orderDetails?.orderId}</p>
               </div>
             </div>
 
@@ -170,21 +152,18 @@ function ConfirmationContent() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">Estimated Delivery</p>
-                <p className="font-medium text-gray-900">
-                  {orderDetails?.estimatedDelivery || "5-7 business days"}
-                </p>
+                <p className="font-medium text-gray-900">{orderDetails?.estimatedDelivery}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* What's Next */}
         <div className="bg-gray-50 rounded-xl p-4 mb-6">
           <h3 className="font-medium text-gray-900 mb-3">What's Next?</h3>
           <ul className="space-y-2 text-sm text-gray-600">
             <li className="flex items-center gap-2">
               <span className="w-5 h-5 bg-[#00C2FF]/20 rounded-full flex items-center justify-center text-xs font-bold text-[#00C2FF]">1</span>
-              We'll print your sticker with premium quality
+              We'll print your sticker sheet with premium quality
             </li>
             <li className="flex items-center gap-2">
               <span className="w-5 h-5 bg-[#00C2FF]/20 rounded-full flex items-center justify-center text-xs font-bold text-[#00C2FF]">2</span>
@@ -192,16 +171,12 @@ function ConfirmationContent() {
             </li>
             <li className="flex items-center gap-2">
               <span className="w-5 h-5 bg-[#00C2FF]/20 rounded-full flex items-center justify-center text-xs font-bold text-[#00C2FF]">3</span>
-              Your sticker arrives at your door!
+              Your stickers arrive at your door!
             </li>
           </ul>
         </div>
 
-        {/* New Order Button */}
-        <button
-          onClick={handleNewOrder}
-          className="w-full pill-button pill-button-secondary"
-        >
+        <button onClick={handleNewOrder} className="w-full pill-button pill-button-secondary">
           <Home className="w-5 h-5" />
           Create Another Sticker
         </button>
@@ -212,11 +187,13 @@ function ConfirmationContent() {
 
 export default function ConfirmationPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="loading-spinner" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-white flex items-center justify-center">
+          <div className="loading-spinner" />
+        </div>
+      }
+    >
       <ConfirmationContent />
     </Suspense>
   )
