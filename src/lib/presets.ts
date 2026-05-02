@@ -53,7 +53,7 @@ export const stylePresets: StylePreset[] = [
     id: "anime",
     name: "Anime",
     description: "Classic anime / manga look",
-    previewImage: "/presets/chibi.jpg",
+    previewImage: "",
     prompt:
       "Transform this photo into a detailed anime character in modern Japanese animation style. Sharp angular features, dramatic shading, vibrant hair and eye colors, dynamic pose energy. Think Attack on Titan / Jujutsu Kaisen / My Hero Academia character design. Keep the person's face recognizable but fully rendered in anime art style. Sticker-ready with a clean outline edge and transparent background.",
   },
@@ -61,7 +61,7 @@ export const stylePresets: StylePreset[] = [
     id: "comic-book",
     name: "Comic Book",
     description: "Marvel / DC superhero art",
-    previewImage: "/presets/3d-animated.jpg",
+    previewImage: "",
     prompt:
       "Transform this photo into a Marvel/DC comic book superhero illustration. Bold ink outlines, Ben-Day dots, dramatic shadows, dynamic perspective, heroic proportions. Classic American comic book art style — think Jim Lee or Todd McFarlane. Keep the person recognizable as a comic character version of themselves. Sticker-ready with a clean outline edge and transparent background.",
   },
@@ -69,7 +69,7 @@ export const stylePresets: StylePreset[] = [
     id: "watercolor",
     name: "Watercolor",
     description: "Soft painted portrait",
-    previewImage: "/presets/3d-animated.jpg",
+    previewImage: "",
     prompt:
       "Transform this photo into a beautiful watercolor portrait painting. Soft flowing washes of color, visible brushstrokes, gentle blending, artistic splatter effects at the edges. Ethereal and dreamy quality with warm, luminous colors. Keep the person recognizable with their key features captured in painterly strokes. Sticker-ready with a clean outline edge and transparent background.",
   },
