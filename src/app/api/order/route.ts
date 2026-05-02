@@ -2,21 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { createPaymentIntent } from "@/lib/stripe";
 import { uploadImage } from "@/lib/storage";
 import { auth } from "@/lib/auth";
+import { getSessionIdFromCookie } from "@/lib/session";
 import { ShippingAddress } from "@/types";
 
-// Pricing constants — keep in sync with cart.tsx and order-form.tsx
-const PRICE_PER_SHEET_CENTS = 1499; // $14.99
-const SHIPPING_CENTS = 499; // $4.99
+// Pricing (cents) — keep in sync with order-form.tsx
+const SHEET_PRICES_CENTS: Record<number, number> = {
+  1: 1999,
+  2: 3499,
+  3: 4999,
+};
+const PER_SHEET_FALLBACK_CENTS = 1599;
+const HOLOGRAPHIC_UPGRADE_CENTS = 500;
+const SHIPPING_CENTS = 499;
+const FREE_SHIPPING_THRESHOLD = 3500;
 
 interface CartItemInput {
   generatedImage: string;
   sheets: number;
   stylePreset: string;
+  skuId?: string;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
+    const sessionId = getSessionIdFromCookie(request.headers.get("cookie"));
 
     const {
       email,
@@ -43,23 +53,32 @@ export async function POST(request: NextRequest) {
           imageUrl,
           sheets: item.sheets,
           stylePreset: item.stylePreset,
+          skuId: item.skuId || "kiss-cut-sheet",
         };
       })
     );
 
-    // Calculate total
+    // Calculate total with new pricing
+    let subtotalCents = 0;
+    for (const item of items) {
+      const base = SHEET_PRICES_CENTS[item.sheets] ?? item.sheets * PER_SHEET_FALLBACK_CENTS;
+      const holo = item.skuId === "holographic-sheet" ? HOLOGRAPHIC_UPGRADE_CENTS * item.sheets : 0;
+      subtotalCents += base + holo;
+    }
+    const shippingCents = subtotalCents >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_CENTS;
+    const total = subtotalCents + shippingCents;
+
     const totalSheets = items.reduce((sum, i) => sum + i.sheets, 0);
-    const total = totalSheets * PRICE_PER_SHEET_CENTS + SHIPPING_CENTS;
 
     const paymentIntent = await createPaymentIntent(total, {
       email,
       totalSheets: String(totalSheets),
       itemCount: String(items.length),
-      // Store image URLs as JSON for webhook to submit to Printful
       cartItems: JSON.stringify(
         uploadedItems.map((i) => ({
           imageUrl: i.imageUrl,
           quantity: i.sheets,
+          skuId: i.skuId,
         }))
       ),
       addressName: address.name,
@@ -70,6 +89,7 @@ export async function POST(request: NextRequest) {
       countryCode: address.countryCode,
       zip: address.zip,
       ...(session?.user?.id ? { userId: session.user.id } : {}),
+      ...(sessionId ? { sessionId } : {}),
     });
 
     return NextResponse.json({

@@ -27,13 +27,11 @@ export async function POST(request: NextRequest) {
       const paymentIntent = event.data.object;
       const meta = paymentIntent.metadata;
 
-      // Save order to database if user was signed in
+      // Save order to database
       if (meta?.userId && process.env.DATABASE_URL) {
         try {
           const sql = getDb();
-          // Support both old "quantity" and new "totalSheets" metadata keys
           const qty = meta.totalSheets || meta.quantity || "1";
-          // For cart orders, grab first image URL from cartItems; fall back to legacy imageUrl
           let imageUrl = meta.imageUrl || "";
           if (!imageUrl && meta.cartItems) {
             try {
@@ -56,12 +54,11 @@ export async function POST(request: NextRequest) {
             )
           `;
         } catch (dbError) {
-          // Log but don't fail the webhook — Printful order is more important
           console.error("Failed to save order to DB:", dbError);
         }
       }
 
-      // Submit to Printful — supports both new cart format and legacy single-item
+      // Submit to Printful
       const address = {
         name: meta.addressName,
         address1: meta.address1,
@@ -73,11 +70,21 @@ export async function POST(request: NextRequest) {
       };
 
       if (meta?.cartItems) {
-        // New cart format: multiple stickers in one order
-        const cartItems = JSON.parse(meta.cartItems) as { imageUrl: string; quantity: number }[];
-        await createPrintfulOrder(cartItems, address);
+        const cartItems = JSON.parse(meta.cartItems) as {
+          imageUrl: string;
+          quantity: number;
+          skuId?: string;
+        }[];
+        // createPrintfulOrder handles variant selection based on skuId
+        await createPrintfulOrder(
+          cartItems.map((item) => ({
+            imageUrl: item.imageUrl,
+            quantity: item.quantity,
+            skuId: item.skuId,
+          })),
+          address
+        );
       } else if (meta?.imageUrl && meta?.quantity) {
-        // Legacy single-item format
         await createPrintfulOrder(
           [{ imageUrl: meta.imageUrl, quantity: parseInt(meta.quantity) }],
           address

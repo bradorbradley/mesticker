@@ -3,35 +3,48 @@
 import { useState, useCallback, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Lock, Sparkles, Download, Share2, Camera, ShoppingCart } from "lucide-react";
-import { useCart } from "@/lib/cart";
+import {
+  ArrowLeft,
+  Lock,
+  Sparkles,
+  Download,
+  Share2,
+  Camera,
+  ShoppingCart,
+  Wand2,
+  Palette,
+} from "lucide-react";
 import LandingHero from "@/components/landing-hero";
-import ProgressSteps from "@/components/progress-steps";
 import CameraCapture from "@/components/camera-capture";
-import StyleCarousel from "@/components/style-carousel";
+import StyleGrid from "@/components/style-grid";
 import LoadingState from "@/components/loading-state";
+import ImageRevealSlider from "@/components/image-reveal";
+import VariationsGrid from "@/components/variations-grid";
 import OrderForm from "@/components/order-form";
 import PaymentForm from "@/components/payment-form";
 import OrderConfirmation from "@/components/order-confirmation";
-import ImageRevealSlider from "@/components/image-reveal";
 import Gallery from "@/components/gallery";
 import UserMenu from "@/components/user-menu";
 import { useCreations } from "@/hooks/use-creations";
-import { hapticMedium } from "@/lib/haptics";
+import { hapticMedium, hapticSuccess } from "@/lib/haptics";
+import { getSessionId } from "@/lib/session";
+import { resolvePresetPrompt } from "@/lib/presets";
 import type { AppStep, StylePreset, ShippingAddress, Creation } from "@/types";
 import {
   trackCapture,
-  trackStyleSelect,
   trackGenerateStart,
   trackGenerateComplete,
   trackGenerateError,
-  trackAddToCart,
   trackCheckoutStart,
   trackPaymentComplete,
   trackLimitReached,
   trackEmailCapture,
   trackImageDownload,
   trackImageShare,
+  trackRevealViewed,
+  trackOrderClicked,
+  trackVariationsClicked,
+  trackTryAnotherClicked,
 } from "@/lib/analytics";
 
 const FREE_GENERATION_LIMIT = 3;
@@ -93,6 +106,7 @@ export default function Home() {
   const [step, setStep] = useState<AppStep>("capture");
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<StylePreset | null>(null);
+  const [activeStylePrompt, setActiveStylePrompt] = useState<string>("");
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
@@ -105,11 +119,15 @@ export default function Home() {
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
+  // Cart items for order
+  const [cartItems, setCartItems] = useState<
+    { generatedImage: string; originalImage: string; stylePreset: string; sheets: number; isVarietyPack?: boolean }[]
+  >([]);
+
   // Generation limit
   const [limitReached, setLimitReached] = useState(false);
   const [showEmailCapture, setShowEmailCapture] = useState(false);
   const [emailInput, setEmailInput] = useState("");
-  const [serverPurchaseChecked, setServerPurchaseChecked] = useState(false);
   const [serverHasPurchased, setServerHasPurchased] = useState(false);
 
   // Creations
@@ -119,9 +137,13 @@ export default function Home() {
 
   const isSignedIn = !!session?.user;
   const displayCreations = isSignedIn ? dbCreations : localCreations;
-  const cart = useCart();
 
-  // Check if user has seen landing before
+  // Init session ID on mount
+  useEffect(() => {
+    getSessionId();
+  }, []);
+
+  // Check if user has seen landing
   useEffect(() => {
     try {
       if (localStorage.getItem(SEEN_LANDING_KEY) === "true") {
@@ -130,7 +152,7 @@ export default function Home() {
     } catch {}
   }, []);
 
-  // Check purchase status from server when signed in
+  // Check purchase status
   useEffect(() => {
     if (!isSignedIn) return;
     fetch("/api/user/orders")
@@ -141,14 +163,11 @@ export default function Home() {
           setLocalHasPurchased();
           setLimitReached(false);
         }
-        setServerPurchaseChecked(true);
       })
-      .catch(() => {
-        setServerPurchaseChecked(true);
-      });
+      .catch(() => {});
   }, [isSignedIn]);
 
-  // Load creations from DB when signed in
+  // Load DB creations
   useEffect(() => {
     if (!isSignedIn) return;
     fetch("/api/creations")
@@ -157,7 +176,7 @@ export default function Home() {
       .catch(() => {});
   }, [isSignedIn]);
 
-  // Handle redirect return from Stripe
+  // Handle Stripe redirect return
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (
@@ -184,92 +203,175 @@ export default function Home() {
     trackCapture();
   }, []);
 
-  const handleGenerate = useCallback(async () => {
-    if (!capturedImage || !selectedStyle) return;
+  // Style selection triggers generation immediately (no separate button)
+  const handleStyleSelect = useCallback(
+    async (preset: StylePreset, customPrompt?: string) => {
+      if (!capturedImage) return;
 
-    // Enforce generation limit — skip if server confirmed purchase
-    const count = getLocalGenCount();
-    const purchased = getLocalHasPurchased() || serverHasPurchased;
-    const limit = getEffectiveLimit();
-    if (count >= limit && !purchased) {
-      if (!getEmailCaptured() && count >= FREE_GENERATION_LIMIT) {
-        // Show email capture for +1 bonus
-        setShowEmailCapture(true);
-        return;
-      }
-      setLimitReached(true);
-      trackLimitReached();
-      return;
-    }
-
-    setIsGenerating(true);
-    setGenerateError(null);
-    setLimitReached(false);
-    hapticMedium();
-    trackGenerateStart(selectedStyle.id);
-
-    try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          image: capturedImage,
-          styleId: selectedStyle.id,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        if (data.error === "FREE_LIMIT_REACHED") {
-          setLimitReached(true);
+      // Enforce generation limit
+      const count = getLocalGenCount();
+      const purchased = getLocalHasPurchased() || serverHasPurchased;
+      const limit = getEffectiveLimit();
+      if (count >= limit && !purchased) {
+        if (!getEmailCaptured() && count >= FREE_GENERATION_LIMIT) {
+          setShowEmailCapture(true);
           return;
         }
-        throw new Error(data.error || "Generation failed");
+        setLimitReached(true);
+        trackLimitReached();
+        return;
       }
 
-      const data = await res.json();
-      setGeneratedImage(data.generatedImage);
-      incrementLocalGenCount();
-      trackGenerateComplete(selectedStyle.id);
+      setSelectedStyle(preset);
+      setIsGenerating(true);
+      setGenerateError(null);
+      setGeneratedImage(null);
+      setLimitReached(false);
+      hapticMedium();
 
-      addLocalCreation({
-        originalImage: capturedImage,
-        generatedImage: data.generatedImage,
-        stylePreset: selectedStyle.id,
-        ordered: false,
-      });
+      const styleId = preset.id;
+      trackGenerateStart(styleId);
 
-      if (isSignedIn) {
-        try {
-          const saveRes = await fetch("/api/creations", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              originalImage: capturedImage,
-              generatedImage: data.generatedImage,
-              stylePreset: selectedStyle.id,
-            }),
-          });
-          if (saveRes.ok) {
-            const saved = await saveRes.json();
-            setDbCreations((prev) => [saved, ...prev]);
-          }
-        } catch {
-          // DB save failure is non-blocking
+      try {
+        const body: Record<string, string> = { image: capturedImage };
+
+        if (customPrompt) {
+          body.customPrompt = customPrompt;
+        } else {
+          body.styleId = styleId;
         }
+
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          if (data.error === "FREE_LIMIT_REACHED") {
+            setLimitReached(true);
+            setIsGenerating(false);
+            return;
+          }
+          if (data.error === "PROMPT_REJECTED") {
+            setGenerateError("That style description wasn't allowed. Try something different!");
+            setIsGenerating(false);
+            return;
+          }
+          throw new Error(data.error || "Generation failed");
+        }
+
+        const data = await res.json();
+        setGeneratedImage(data.generatedImage);
+
+        // Store the resolved prompt for variations
+        if (customPrompt) {
+          setActiveStylePrompt(
+            `${customPrompt}. Sticker-ready with a clean outline edge and transparent background. Keep the person's face fully recognizable.`
+          );
+        } else {
+          const { prompt } = resolvePresetPrompt(data.stylePreset || styleId);
+          setActiveStylePrompt(prompt);
+        }
+
+        incrementLocalGenCount();
+        trackGenerateComplete(data.stylePreset || styleId);
+        hapticSuccess();
+
+        // Save creation
+        addLocalCreation({
+          originalImage: capturedImage,
+          generatedImage: data.generatedImage,
+          stylePreset: data.stylePreset || styleId,
+          ordered: false,
+        });
+
+        if (isSignedIn) {
+          try {
+            const saveRes = await fetch("/api/creations", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                originalImage: capturedImage,
+                generatedImage: data.generatedImage,
+                stylePreset: data.stylePreset || styleId,
+              }),
+            });
+            if (saveRes.ok) {
+              const saved = await saveRes.json();
+              setDbCreations((prev) => [saved, ...prev]);
+            }
+          } catch {}
+        }
+
+        // Move to reveal screen
+        setStep("reveal");
+        trackRevealViewed();
+      } catch (error) {
+        const errMsg =
+          error instanceof Error ? error.message : "Something went wrong";
+        setGenerateError(errMsg);
+        trackGenerateError(errMsg);
+      } finally {
+        setIsGenerating(false);
       }
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : "Something went wrong";
-      setGenerateError(errMsg);
-      trackGenerateError(errMsg);
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [capturedImage, selectedStyle, addLocalCreation, isSignedIn, serverHasPurchased]);
+    },
+    [capturedImage, addLocalCreation, isSignedIn, serverHasPurchased]
+  );
+
+  // Reveal screen CTAs
+  const handleOrderStickers = useCallback(() => {
+    if (!generatedImage || !capturedImage) return;
+    trackOrderClicked();
+    setCartItems([
+      {
+        generatedImage,
+        originalImage: capturedImage,
+        stylePreset: selectedStyle?.id || "unknown",
+        sheets: 1,
+      },
+    ]);
+    trackCheckoutStart();
+    setStep("order");
+  }, [generatedImage, capturedImage, selectedStyle]);
+
+  const handleCreateVariations = useCallback(() => {
+    trackVariationsClicked();
+    setStep("variations");
+  }, []);
+
+  const handleTryAnotherStyle = useCallback(() => {
+    trackTryAnotherClicked();
+    setGeneratedImage(null);
+    setSelectedStyle(null);
+    setGenerateError(null);
+    // Keep capturedImage — no re-upload needed
+    setStep("style");
+  }, []);
+
+  // Variations -> Order variety pack
+  const handleOrderVarietyPack = useCallback(
+    (selectedImages: string[]) => {
+      if (!capturedImage) return;
+      setCartItems(
+        selectedImages.map((img) => ({
+          generatedImage: img,
+          originalImage: capturedImage,
+          stylePreset: selectedStyle?.id || "unknown",
+          sheets: 1,
+          isVarietyPack: true,
+        }))
+      );
+      trackCheckoutStart();
+      setStep("order");
+    },
+    [capturedImage, selectedStyle]
+  );
 
   const handleOrderSubmit = useCallback(
     async (email: string, quantity: number, address: ShippingAddress) => {
-      if (cart.items.length === 0) return;
+      if (cartItems.length === 0) return;
 
       setIsCreatingOrder(true);
       setPaymentError(null);
@@ -280,7 +382,7 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             email,
-            items: cart.items.map((i) => ({
+            items: cartItems.map((i) => ({
               generatedImage: i.generatedImage,
               sheets: i.sheets,
               stylePreset: i.stylePreset,
@@ -297,7 +399,7 @@ export default function Home() {
         const data = await res.json();
         setClientSecret(data.clientSecret);
         setOrderAmount(data.amount);
-        setOrderQuantity(cart.totalSheets);
+        setOrderQuantity(cartItems.reduce((s, i) => s + i.sheets, 0));
       } catch (error) {
         setPaymentError(
           error instanceof Error ? error.message : "Something went wrong"
@@ -306,7 +408,7 @@ export default function Home() {
         setIsCreatingOrder(false);
       }
     },
-    [cart]
+    [cartItems]
   );
 
   const handlePaymentSuccess = useCallback(() => {
@@ -314,25 +416,21 @@ export default function Home() {
     setLimitReached(false);
     setLocalHasPurchased();
     trackPaymentComplete(orderAmount, orderQuantity);
-    cart.clearCart();
-  }, [cart, orderAmount, orderQuantity]);
+  }, [orderAmount, orderQuantity]);
 
   const handleNewSticker = useCallback(() => {
     setCapturedImage(null);
     setSelectedStyle(null);
     setGeneratedImage(null);
+    setActiveStylePrompt("");
     setClientSecret(null);
     setOrderAmount(0);
     setOrderQuantity(0);
     setPaymentComplete(false);
     setPaymentError(null);
     setGenerateError(null);
+    setCartItems([]);
     setStep("capture");
-  }, []);
-
-  const handleStyleSelect = useCallback((preset: StylePreset) => {
-    setSelectedStyle(preset);
-    trackStyleSelect(preset.id);
   }, []);
 
   const handleGallerySelect = useCallback((creation: Creation) => {
@@ -342,7 +440,8 @@ export default function Home() {
     setClientSecret(null);
     setPaymentError(null);
     setPaymentComplete(false);
-    setStep("style");
+    setStep("reveal");
+    trackRevealViewed();
   }, []);
 
   const goBack = useCallback(() => {
@@ -351,14 +450,25 @@ export default function Home() {
       setSelectedStyle(null);
       setGenerateError(null);
       setStep("capture");
+    } else if (step === "reveal") {
+      // Back to style grid with photo cached
+      setGeneratedImage(null);
+      setSelectedStyle(null);
+      setStep("style");
+    } else if (step === "variations") {
+      setStep("reveal");
     } else if (step === "order") {
       setClientSecret(null);
       setPaymentError(null);
-      setStep("style");
+      if (generatedImage) {
+        setStep("reveal");
+      } else {
+        setStep("style");
+      }
     }
-  }, [step]);
+  }, [step, generatedImage]);
 
-  // Landing page
+  // Landing
   if (showLanding) {
     return <LandingHero onStart={handleLandingStart} />;
   }
@@ -382,10 +492,7 @@ export default function Home() {
           <button
             onClick={() => {
               setShowLanding(true);
-              setCapturedImage(null);
-              setSelectedStyle(null);
-              setGeneratedImage(null);
-              setStep("capture");
+              handleNewSticker();
             }}
             className="font-display text-xl font-bold gradient-text"
           >
@@ -393,31 +500,6 @@ export default function Home() {
           </button>
           <UserMenu />
         </div>
-
-        {/* Progress */}
-        {!paymentComplete && (
-          <ProgressSteps
-            current={step}
-            onStepClick={(s) => {
-              if (s === "capture") {
-                setGeneratedImage(null);
-                setSelectedStyle(null);
-                setGenerateError(null);
-                setStep("capture");
-              } else if (s === "style" && capturedImage) {
-                setGeneratedImage(null);
-                setClientSecret(null);
-                setPaymentError(null);
-                setStep("style");
-              } else if (s === "order" && cart.items.length > 0) {
-                setClientSecret(null);
-                setPaymentError(null);
-                setStep("order");
-              }
-            }}
-            className="mb-5"
-          />
-        )}
 
         {/* Content */}
         <AnimatePresence mode="wait">
@@ -440,7 +522,7 @@ export default function Home() {
             </motion.div>
           )}
 
-          {/* Step 2: Style */}
+          {/* Step 2: Style Grid */}
           {step === "style" && (
             <motion.div
               key="style"
@@ -452,110 +534,16 @@ export default function Home() {
             >
               {isGenerating ? (
                 <LoadingState photo={capturedImage} />
-              ) : generatedImage && capturedImage ? (
-                <div className="flex flex-col gap-4">
-                  <ImageRevealSlider
-                    beforeSrc={capturedImage}
-                    afterSrc={generatedImage}
-                    height={280}
-                  />
-                  {/* Save & Share */}
-                  <div className="flex gap-2 justify-center">
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold glass-strong border border-border shadow-soft"
-                      onClick={() => {
-                        // Download as PNG
-                        const link = document.createElement("a");
-                        link.href = generatedImage;
-                        link.download = `mesticker-${Date.now()}.png`;
-                        link.click();
-                        trackImageDownload();
-                      }}
-                    >
-                      <Download size={16} />
-                      Save
-                    </motion.button>
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold glass-strong border border-border shadow-soft"
-                      onClick={async () => {
-                        trackImageShare();
-                        if (navigator.share) {
-                          try {
-                            const res = await fetch(generatedImage);
-                            const blob = await res.blob();
-                            const file = new File([blob], "mesticker.png", { type: "image/png" });
-                            await navigator.share({
-                              title: "My MeSticker",
-                              text: "Check out my cartoon sticker from mesticker.fun!",
-                              files: [file],
-                            });
-                          } catch {}
-                        } else {
-                          window.open(
-                            `https://twitter.com/intent/tweet?text=${encodeURIComponent("Check out my cartoon sticker from mesticker.fun! 🎨")}`,
-                            "_blank"
-                          );
-                        }
-                      }}
-                    >
-                      <Share2 size={16} />
-                      Share
-                    </motion.button>
-                  </div>
-                  {/* Order Stickers → adds to cart then checkout */}
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    className="w-full py-3 rounded-xl font-bold text-sm btn-gradient shadow-glow flex items-center justify-center gap-2"
-                    onClick={() => {
-                      if (!generatedImage || !capturedImage) return;
-                      cart.addItem({
-                        generatedImage,
-                        originalImage: capturedImage,
-                        stylePreset: selectedStyle?.id || "unknown",
-                      });
-                      hapticMedium();
-                      trackAddToCart(selectedStyle?.id || "gallery");
-                      trackCheckoutStart();
-                      // Immediately set step to order - React will batch this with cart update
-                      setStep("order");
-                    }}
-                  >
-                    <ShoppingCart size={16} />
-                    Order Stickers
-                  </motion.button>
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    className="w-full py-2.5 rounded-xl font-semibold text-sm glass-strong border border-border shadow-soft flex items-center justify-center gap-2"
-                    onClick={() => {
-                      if (generatedImage && capturedImage) {
-                        cart.addItem({
-                          generatedImage,
-                          originalImage: capturedImage,
-                          stylePreset: selectedStyle?.id || "unknown",
-                        });
-                      }
-                      setCapturedImage(null);
-                      setSelectedStyle(null);
-                      setGeneratedImage(null);
-                      setGenerateError(null);
-                      setStep("capture");
-                    }}
-                  >
-                    <Camera size={14} />
-                    Make Another Sticker First
-                  </motion.button>
-                </div>
               ) : (
                 <div className="flex flex-col gap-3">
+                  {/* Photo thumbnail + retake */}
                   {capturedImage && (
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-12 h-12 rounded-xl overflow-hidden shadow-card border-2 border-border">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={capturedImage}
-                          alt="Captured photo"
+                          alt="Your photo"
                           className="w-full h-full object-cover"
                         />
                       </div>
@@ -574,26 +562,27 @@ export default function Home() {
                       </button>
                     </div>
                   )}
-                  <div>
-                    <h2 className="font-display text-lg font-bold text-center mb-2">
-                      Choose your style
-                    </h2>
-                    <StyleCarousel
-                      onSelect={handleStyleSelect}
-                    />
-                  </div>
+
+                  <h2 className="font-display text-lg font-bold text-center">
+                    Tap a style to generate
+                  </h2>
+
                   {generateError && (
                     <p className="text-sm text-red-500 text-center">
                       {generateError}
                     </p>
                   )}
+
                   {showEmailCapture ? (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="rounded-2xl border border-primary/30 bg-primary/5 p-5 text-center"
                     >
-                      <Sparkles size={24} className="mx-auto mb-2 text-primary" />
+                      <Sparkles
+                        size={24}
+                        className="mx-auto mb-2 text-primary"
+                      />
                       <p className="font-bold text-sm">
                         Want 1 more free generation?
                       </p>
@@ -604,14 +593,15 @@ export default function Home() {
                         onSubmit={async (e) => {
                           e.preventDefault();
                           if (emailInput.includes("@")) {
-                            // Send to backend
                             try {
                               await fetch("/api/email-capture", {
                                 method: "POST",
-                                headers: { "Content-Type": "application/json" },
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
                                 body: JSON.stringify({ email: emailInput }),
                               });
-                            } catch {} // Non-blocking
+                            } catch {}
                             setEmailCaptured();
                             setShowEmailCapture(false);
                             setLimitReached(false);
@@ -644,7 +634,10 @@ export default function Home() {
                       animate={{ opacity: 1, y: 0 }}
                       className="rounded-2xl border border-accent-orange/30 bg-accent-orange/5 p-5 text-center"
                     >
-                      <Lock size={24} className="mx-auto mb-2 text-accent-orange" />
+                      <Lock
+                        size={24}
+                        className="mx-auto mb-2 text-accent-orange"
+                      />
                       <p className="font-bold text-sm">
                         Free generations used up
                       </p>
@@ -653,22 +646,138 @@ export default function Home() {
                       </p>
                     </motion.div>
                   ) : (
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      disabled={!selectedStyle}
-                      onClick={handleGenerate}
-                      className="w-full py-4 rounded-2xl font-bold text-base btn-gradient shadow-glow disabled:opacity-40 disabled:shadow-none flex items-center justify-center gap-2"
-                    >
-                      <Sparkles size={18} />
-                      Generate Sticker
-                    </motion.button>
+                    <StyleGrid
+                      onSelect={handleStyleSelect}
+                      disabled={isGenerating}
+                    />
                   )}
                 </div>
               )}
             </motion.div>
           )}
 
-          {/* Step 3: Order */}
+          {/* Step 3: Reveal Screen */}
+          {step === "reveal" && generatedImage && capturedImage && (
+            <motion.div
+              key="reveal"
+              variants={pageVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            >
+              <div className="flex flex-col gap-3">
+                <ImageRevealSlider
+                  beforeSrc={capturedImage}
+                  afterSrc={generatedImage}
+                  height={280}
+                />
+
+                {/* Save & Share row */}
+                <div className="flex gap-2 justify-center">
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold glass-strong border border-border shadow-soft"
+                    onClick={() => {
+                      const link = document.createElement("a");
+                      link.href = generatedImage;
+                      link.download = `mesticker-${Date.now()}.png`;
+                      link.click();
+                      trackImageDownload();
+                    }}
+                  >
+                    <Download size={16} />
+                    Save
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold glass-strong border border-border shadow-soft"
+                    onClick={async () => {
+                      trackImageShare();
+                      if (navigator.share) {
+                        try {
+                          const res = await fetch(generatedImage);
+                          const blob = await res.blob();
+                          const file = new File([blob], "mesticker.png", {
+                            type: "image/png",
+                          });
+                          await navigator.share({
+                            title: "My MeSticker",
+                            text: "Check out my cartoon sticker from mesticker.fun!",
+                            files: [file],
+                          });
+                        } catch {}
+                      } else {
+                        window.open(
+                          `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+                            "Check out my cartoon sticker from mesticker.fun!"
+                          )}`,
+                          "_blank"
+                        );
+                      }
+                    }}
+                  >
+                    <Share2 size={16} />
+                    Share
+                  </motion.button>
+                </div>
+
+                {/* PRIMARY CTA: Order Stickers */}
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  className="w-full py-3.5 rounded-xl font-bold text-sm btn-gradient shadow-glow flex items-center justify-center gap-2"
+                  onClick={handleOrderStickers}
+                >
+                  <ShoppingCart size={16} />
+                  Order Stickers
+                </motion.button>
+
+                {/* SECONDARY CTA: Create Variations */}
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  className="w-full py-3 rounded-xl font-semibold text-sm glass-strong border-2 border-primary/30 shadow-soft flex items-center justify-center gap-2 relative overflow-hidden"
+                  onClick={handleCreateVariations}
+                >
+                  <Wand2 size={14} />
+                  Create Variations
+                  {/* Social proof nudge */}
+                  <span className="absolute -top-0.5 right-3 text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-b-md">
+                    Most popular
+                  </span>
+                </motion.button>
+
+                {/* TERTIARY CTA: Try Another Style */}
+                <button
+                  className="text-sm text-primary font-semibold text-center flex items-center justify-center gap-1.5 py-1"
+                  onClick={handleTryAnotherStyle}
+                >
+                  <Palette size={14} />
+                  Try Another Style
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Step 4: Variations */}
+          {step === "variations" && capturedImage && (
+            <motion.div
+              key="variations"
+              variants={pageVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            >
+              <VariationsGrid
+                originalImage={capturedImage}
+                stylePrompt={activeStylePrompt}
+                onOrderVarietyPack={handleOrderVarietyPack}
+                onTryAnotherStyle={handleTryAnotherStyle}
+              />
+            </motion.div>
+          )}
+
+          {/* Step 5: Order / Checkout */}
           {step === "order" && (
             <motion.div
               key="order"
@@ -680,7 +789,7 @@ export default function Home() {
             >
               {paymentComplete ? (
                 <OrderConfirmation
-                  imageUrl={generatedImage || ""}
+                  imageUrl={generatedImage || cartItems[0]?.generatedImage || ""}
                   quantity={orderQuantity}
                   onNewSticker={handleNewSticker}
                 />
@@ -706,6 +815,7 @@ export default function Home() {
                     </p>
                   )}
                   <OrderForm
+                    cartItems={cartItems}
                     onSubmit={handleOrderSubmit}
                     isLoading={isCreatingOrder}
                   />
