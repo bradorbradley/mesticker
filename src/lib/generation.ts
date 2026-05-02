@@ -42,7 +42,6 @@ export async function generatePreview(
     image: imageFile,
     prompt: stylePrompt,
     quality: "low",
-    background: "transparent",
     size: "1024x1024",
   });
 
@@ -69,7 +68,6 @@ export async function generatePrint(
     image: imageFile,
     prompt: stylePrompt,
     quality: "high",
-    background: "transparent",
     size: "1024x1024",
   });
 
