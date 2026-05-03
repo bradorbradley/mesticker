@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generatePreview } from "@/lib/generation";
-import { buildVariationPrompt, VARIATION_DESCRIPTORS } from "@/lib/presets";
+import { buildVariationPrompt } from "@/lib/presets";
+import { extractSubjectContext, tunedDescriptors } from "@/lib/vision";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { recordGeneration, isThrottled } from "@/lib/spend-tracker";
 
@@ -26,9 +27,8 @@ export async function POST(request: NextRequest) {
     }
 
     // The image we receive is the FIRST cartoon (not the original photo).
-    // Feeding the cartoon back in keeps the character identity locked across
-    // all 6 variations — same face, same outfit, same style, just new pose.
-    const { image } = await request.json();
+    // Optionally also receive the original photo for vision-aware tuning.
+    const { image, originalPhoto } = await request.json();
 
     if (!image) {
       return NextResponse.json(
@@ -37,8 +37,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Vision pass on the original photo to tune variation descriptors.
+    // If no originalPhoto provided or vision fails, we fall back to defaults.
+    const ctx = originalPhoto ? await extractSubjectContext(originalPhoto) : null;
+    const descriptors = tunedDescriptors(ctx);
+
+    // Generate 9 variations in parallel using the cartoon as source
     const results = await Promise.allSettled(
-      VARIATION_DESCRIPTORS.map(async (variation, index) => {
+      descriptors.map(async (variation, index) => {
         const prompt = buildVariationPrompt(variation);
         const startTime = Date.now();
         const result = await generatePreview(image, prompt);
@@ -53,19 +59,17 @@ export async function POST(request: NextRequest) {
     );
 
     const variations = results.map((r, i) => {
-      if (r.status === "fulfilled") {
-        return r.value;
-      }
+      if (r.status === "fulfilled") return r.value;
       return {
         index: i,
         image: null,
         latency: 0,
-        variation: VARIATION_DESCRIPTORS[i],
+        variation: descriptors[i],
         error: r.reason?.message || "Generation failed",
       };
     });
 
-    return NextResponse.json({ variations });
+    return NextResponse.json({ variations, context: ctx });
   } catch (error) {
     console.error("Variations error:", error);
     return NextResponse.json(

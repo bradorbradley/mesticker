@@ -86,7 +86,7 @@ export async function generatePreview(
   imageBase64: string,
   stylePrompt: string
 ): Promise<string> {
-  return editImage(imageBase64, stylePrompt, { quality: "low" });
+  return editImage(imageBase64, stylePrompt, { quality: "medium" });
 }
 
 export async function generatePrint(

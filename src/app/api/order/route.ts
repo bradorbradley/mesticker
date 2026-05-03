@@ -22,10 +22,12 @@ export async function POST(request: NextRequest) {
       email,
       items,
       address,
+      totalCents,
     }: {
       email?: string;
       items: CartItemInput[];
       address?: ShippingAddress;
+      totalCents?: number; // optional cart-level total override (multi-item carts use parent/child pricing)
     } = await request.json();
 
     if (!items?.length) {
@@ -49,10 +51,17 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    const subtotalCents = items.reduce(
-      (sum, i) => sum + getTier(i.tierId).priceCents,
-      0
-    );
+    // If client passed an explicit cart total (multi-item with parent/child
+    // pricing), honor that. Otherwise fall back to per-item tier pricing.
+    let subtotalCents: number;
+    if (typeof totalCents === "number" && totalCents > 0) {
+      subtotalCents = totalCents;
+    } else {
+      subtotalCents = items.reduce(
+        (sum, i) => sum + getTier(i.tierId).priceCents,
+        0
+      );
+    }
     const shippingCents = getShipping();
     const total = subtotalCents + shippingCents;
 
