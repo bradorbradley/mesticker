@@ -4,13 +4,12 @@ import { buildVariationPrompt, VARIATION_DESCRIPTORS } from "@/lib/presets";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { recordGeneration, isThrottled } from "@/lib/spend-tracker";
 
-export const maxDuration = 120; // 6 parallel gens can take a moment
+export const maxDuration = 120;
 
 export async function POST(request: NextRequest) {
   try {
     const clientIP = getClientIP(request);
 
-    // Rate limit (shares the same pool as generate)
     const rateCheck = checkRateLimit(`gen:${clientIP}`, 10, 60 * 60 * 1000);
     if (!rateCheck.allowed) {
       return NextResponse.json(
@@ -26,19 +25,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { image, stylePrompt } = await request.json();
+    // The image we receive is the FIRST cartoon (not the original photo).
+    // Feeding the cartoon back in keeps the character identity locked across
+    // all 6 variations — same face, same outfit, same style, just new pose.
+    const { image } = await request.json();
 
-    if (!image || !stylePrompt) {
+    if (!image) {
       return NextResponse.json(
-        { error: "Missing image or stylePrompt" },
+        { error: "Missing cartoon image" },
         { status: 400 }
       );
     }
 
-    // Generate 6 variations in parallel
     const results = await Promise.allSettled(
       VARIATION_DESCRIPTORS.map(async (variation, index) => {
-        const prompt = buildVariationPrompt(stylePrompt, variation);
+        const prompt = buildVariationPrompt(variation);
         const startTime = Date.now();
         const result = await generatePreview(image, prompt);
         recordGeneration("preview");

@@ -106,17 +106,24 @@ export function resolvePresetPrompt(presetId: string): { prompt: string; resolve
   return { prompt: preset.prompt, resolvedId: preset.id };
 }
 
-/** Build a variation prompt from a base style */
-export function buildVariationPrompt(stylePrompt: string, variation: string): string {
-  return `${stylePrompt} The character is ${variation}. Keep the same person's face, hair, and identity recognizable.`;
+/**
+ * Build a variation prompt. The variations API feeds the FIRST generated
+ * cartoon back in as the input image (not the original photo), so the
+ * character stays locked. We only ask the model to swap pose/expression.
+ */
+export function buildVariationPrompt(variation: string): string {
+  return `Keep this exact same character — same face, same hair, same outfit, same art style. Only change: ${variation}. Sticker-ready with a clean outline edge and transparent background.`;
 }
 
-/** Predefined variation descriptors */
+/**
+ * 6 variation descriptors — pose + expression combos that read well at
+ * sticker size on a phone screen. iMessage-pack vibe.
+ */
 export const VARIATION_DESCRIPTORS = [
-  "wearing a casual hoodie, waving hello, big smile",
-  "wearing formal attire, thumbs up, confident smirk",
-  "in summer beach outfit, peace sign, laughing",
-  "in winter coat, jumping with arms up, surprised expression",
-  "in pajamas, sleeping pose, peaceful look",
-  "wearing party clothes, side profile, silly tongue out",
+  "thumbs up, big smile",
+  "winking with peace sign",
+  "thinking pose with finger on chin",
+  "laughing with both thumbs up",
+  "sleeping with Z's floating",
+  "wearing sunglasses, fist pump",
 ];

@@ -46,13 +46,13 @@ export interface Order {
   totalAmount: number;
 }
 
-export type AppStep = "capture" | "style" | "reveal" | "variations" | "order";
+export type AppStep = "capture" | "style" | "reveal" | "order";
 
 export interface CartItem {
   id: string;
-  generatedImage: string;
+  generatedImage: string; // composed sheet image (Pack of variations OR Stack of one design)
   originalImage: string;
   stylePreset: string;
-  productType: "individual-pack" | "sticker-sheet";
-  tierId: string;
+  sheetVariant: "pack" | "stack";
+  tierId: string; // sheet-1 | sheet-2 | sheet-3
 }

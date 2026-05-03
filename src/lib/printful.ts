@@ -1,9 +1,5 @@
 import { ShippingAddress } from "@/types";
-import {
-  VARIANT_KISS_CUT_SHEET,
-  VARIANT_INDIVIDUAL_3X3,
-  type ProductType,
-} from "@/lib/pricing";
+import { VARIANT_KISS_CUT_SHEET } from "@/lib/pricing";
 
 const PRINTFUL_API = "https://api.printful.com";
 
@@ -17,16 +13,9 @@ function getHeaders() {
   };
 }
 
-function resolveVariantId(productType: ProductType): number {
-  return productType === "individual-pack"
-    ? VARIANT_INDIVIDUAL_3X3
-    : VARIANT_KISS_CUT_SHEET;
-}
-
 export interface PrintfulItem {
   imageUrl: string;
   quantity: number;
-  productType: ProductType;
 }
 
 export async function createPrintfulOrder(
@@ -47,7 +36,7 @@ export async function createPrintfulOrder(
         zip: address.zip,
       },
       items: items.map((item) => ({
-        variant_id: resolveVariantId(item.productType),
+        variant_id: VARIANT_KISS_CUT_SHEET,
         quantity: item.quantity,
         files: [{ type: "default", url: item.imageUrl }],
       })),

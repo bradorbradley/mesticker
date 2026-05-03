@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createPrintfulOrder } from "@/lib/printful";
 import { getDb } from "@/lib/db";
-import type { ProductType } from "@/lib/pricing";
 
 export async function POST(request: NextRequest) {
   const stripe = getStripe();
@@ -77,13 +76,11 @@ export async function POST(request: NextRequest) {
         const cartItems = JSON.parse(meta.cartItems) as {
           imageUrl: string;
           quantity: number;
-          productType: ProductType;
         }[];
         await createPrintfulOrder(
           cartItems.map((item) => ({
             imageUrl: item.imageUrl,
             quantity: item.quantity,
-            productType: item.productType,
           })),
           address
         );

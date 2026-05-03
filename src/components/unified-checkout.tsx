@@ -173,19 +173,18 @@ function CheckoutInner({
   );
 
   const item = cartItems[0];
-  const tier = item ? getTier(item.productType, item.tierId) : null;
+  const tier = item ? getTier(item.tierId) : null;
   const subtotalCents = tier?.priceCents ?? 0;
-  const shippingCents = getShipping(subtotalCents);
+  const shippingCents = getShipping();
 
-  const productLabel =
-    item?.productType === "individual-pack"
-      ? `${tier?.qty ?? 0} Individual Stickers`
-      : `${tier?.qty ?? 0} Sticker Sheet${(tier?.qty ?? 0) > 1 ? "s" : ""}`;
+  const variantLabel = item?.sheetVariant === "stack" ? "Stack of Me" : "Pack of Me";
+  const variantSubtitle =
+    item?.sheetVariant === "stack"
+      ? "6 of the same sticker per sheet"
+      : "6 different poses per sheet";
 
-  const productSubtitle =
-    item?.productType === "individual-pack"
-      ? "3\" × 3\" kiss-cut, your design"
-      : `${(tier?.qty ?? 0) * 6} stickers across ${tier?.qty ?? 0} sheet${(tier?.qty ?? 0) > 1 ? "s" : ""}`;
+  const productLabel = `${variantLabel} — ${tier?.qty ?? 0} Sheet${(tier?.qty ?? 0) > 1 ? "s" : ""}`;
+  const productSubtitle = `${variantSubtitle} · ${(tier?.qty ?? 0) * 6} stickers total`;
 
   return (
     <div className="flex flex-col gap-4">

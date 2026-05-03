@@ -4,16 +4,12 @@ import { uploadImage } from "@/lib/storage";
 import { auth } from "@/lib/auth";
 import { getSessionIdFromCookie } from "@/lib/session";
 import { ShippingAddress } from "@/types";
-import {
-  getTier,
-  getShipping,
-  type ProductType,
-} from "@/lib/pricing";
+import { getTier, getShipping } from "@/lib/pricing";
 
 interface CartItemInput {
   generatedImage: string;
   stylePreset: string;
-  productType: ProductType;
+  sheetVariant: "pack" | "stack";
   tierId: string;
 }
 
@@ -42,22 +38,22 @@ export async function POST(request: NextRequest) {
     const uploadedItems = await Promise.all(
       items.map(async (item) => {
         const imageUrl = await uploadImage(item.generatedImage);
-        const tier = getTier(item.productType, item.tierId);
+        const tier = getTier(item.tierId);
         return {
           imageUrl,
           stylePreset: item.stylePreset,
-          productType: item.productType,
+          sheetVariant: item.sheetVariant,
           tierId: item.tierId,
           quantity: tier.qty,
         };
       })
     );
 
-    let subtotalCents = 0;
-    for (const item of items) {
-      subtotalCents += getTier(item.productType, item.tierId).priceCents;
-    }
-    const shippingCents = getShipping(subtotalCents);
+    const subtotalCents = items.reduce(
+      (sum, i) => sum + getTier(i.tierId).priceCents,
+      0
+    );
+    const shippingCents = getShipping();
     const total = subtotalCents + shippingCents;
 
     const totalQty = uploadedItems.reduce((sum, i) => sum + i.quantity, 0);
@@ -69,8 +65,8 @@ export async function POST(request: NextRequest) {
         uploadedItems.map((i) => ({
           imageUrl: i.imageUrl,
           quantity: i.quantity,
-          productType: i.productType,
           tierId: i.tierId,
+          sheetVariant: i.sheetVariant,
         }))
       ),
       ...(session?.user?.id ? { userId: session.user.id } : {}),
