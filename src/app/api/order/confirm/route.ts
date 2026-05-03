@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createPrintfulOrder } from "@/lib/printful";
 import { getDb } from "@/lib/db";
+import type { ProductType } from "@/lib/pricing";
 
 export async function POST(request: NextRequest) {
   const stripe = getStripe();
@@ -16,7 +17,6 @@ export async function POST(request: NextRequest) {
     const sig = request.headers.get("stripe-signature");
 
     let event;
-
     if (webhookSecret && sig) {
       event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
     } else {
@@ -27,21 +27,18 @@ export async function POST(request: NextRequest) {
       const paymentIntent = event.data.object;
       const meta = paymentIntent.metadata;
 
-      // Safety check: warn if address is missing (PATCH should have populated it)
       if (!meta?.addressName) {
         console.warn(
-          `[webhook] PaymentIntent ${paymentIntent.id} succeeded without addressName in metadata. ` +
-          `Shipping info may be incomplete — check PATCH flow.`
+          `[webhook] PaymentIntent ${paymentIntent.id} succeeded without addressName.`
         );
       }
 
-      // Save order to database
       if (meta?.userId && process.env.DATABASE_URL) {
         try {
           const sql = getDb();
-          const qty = meta.totalSheets || meta.quantity || "1";
-          let imageUrl = meta.imageUrl || "";
-          if (!imageUrl && meta.cartItems) {
+          const qty = meta.totalQty || "1";
+          let imageUrl = "";
+          if (meta.cartItems) {
             try {
               const items = JSON.parse(meta.cartItems);
               imageUrl = items[0]?.imageUrl || "";
@@ -66,7 +63,6 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Submit to Printful
       const address = {
         name: meta.addressName,
         address1: meta.address1,
@@ -81,20 +77,14 @@ export async function POST(request: NextRequest) {
         const cartItems = JSON.parse(meta.cartItems) as {
           imageUrl: string;
           quantity: number;
-          skuId?: string;
+          productType: ProductType;
         }[];
-        // createPrintfulOrder handles variant selection based on skuId
         await createPrintfulOrder(
           cartItems.map((item) => ({
             imageUrl: item.imageUrl,
             quantity: item.quantity,
-            skuId: item.skuId,
+            productType: item.productType,
           })),
-          address
-        );
-      } else if (meta?.imageUrl && meta?.quantity) {
-        await createPrintfulOrder(
-          [{ imageUrl: meta.imageUrl, quantity: parseInt(meta.quantity) }],
           address
         );
       }

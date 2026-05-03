@@ -1,25 +1,28 @@
 /**
- * Image generation module — two tiers using gpt-image-2:
+ * Image generation — uses OpenAI image-edit API.
  *
- * Preview tier (generatePreview): gpt-image-2 quality:low
- *   - Fast, preserves IP style quality (Pixar, Simpsons, etc.)
- *   - Native transparent background — no separate BG removal step
+ * Model is configurable via OPENAI_IMAGE_MODEL env var.
+ * Defaults to gpt-image-1 (known stable). Set to gpt-image-2 for the newer model.
  *
- * Print tier (generatePrint): gpt-image-2 quality:high
- *   - Best quality for 300 DPI physical sticker sheets
- *   - Native transparent background
- *   - Not user-facing latency — runs after purchase
+ * Two tiers:
+ *   - generatePreview: low quality, fast, for the interactive flow
+ *   - generatePrint:   high quality, for Printful fulfillment after purchase
+ *
+ * Background handling: requests transparent background where supported,
+ * with a remove.bg safety net if the model output is opaque.
  */
 
 import OpenAI, { toFile } from "openai";
+import { removeBackground } from "@/lib/removebg";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? "",
 });
 
-/** Cost constants for spend tracking (estimates) */
-export const COST_PREVIEW = 0.011; // gpt-image-2 low 1024x1024
-export const COST_PRINT = 0.08; // gpt-image-2 high 1024x1024
+const MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
+
+export const COST_PREVIEW = 0.011;
+export const COST_PRINT = 0.08;
 
 async function prepareImageFile(imageBase64: string) {
   const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
@@ -27,54 +30,68 @@ async function prepareImageFile(imageBase64: string) {
   return toFile(buffer, "photo.png", { type: "image/png" });
 }
 
-/**
- * Fast preview generation — for the interactive flow.
- * Uses gpt-image-2 quality:low for speed + native transparency.
- */
+interface EditOpts {
+  quality: "low" | "medium" | "high";
+}
+
+async function editImage(
+  imageBase64: string,
+  prompt: string,
+  opts: EditOpts
+): Promise<string> {
+  let response;
+  try {
+    response = await openai.images.edit({
+      model: MODEL,
+      image: await prepareImageFile(imageBase64),
+      prompt,
+      quality: opts.quality,
+      size: "1024x1024",
+      background: "transparent",
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
+    if (/background|param|unsupported|unknown/i.test(msg)) {
+      response = await openai.images.edit({
+        model: MODEL,
+        image: await prepareImageFile(imageBase64),
+        prompt,
+        quality: opts.quality,
+        size: "1024x1024",
+      });
+    } else {
+      throw err;
+    }
+  }
+
+  const outputBase64 = response.data?.[0]?.b64_json;
+  if (!outputBase64) {
+    throw new Error("No image generated");
+  }
+
+  const dataUrl = `data:image/png;base64,${outputBase64}`;
+
+  if (process.env.REMOVEBG_API_KEY) {
+    try {
+      return await removeBackground(dataUrl);
+    } catch {
+      return dataUrl;
+    }
+  }
+
+  return dataUrl;
+}
+
 export async function generatePreview(
   imageBase64: string,
   stylePrompt: string
 ): Promise<string> {
-  const imageFile = await prepareImageFile(imageBase64);
-
-  const response = await openai.images.edit({
-    model: "gpt-image-2",
-    image: imageFile,
-    prompt: stylePrompt,
-    quality: "low",
-    size: "1024x1024",
-  });
-
-  const outputBase64 = response.data?.[0]?.b64_json;
-  if (!outputBase64) {
-    throw new Error("No image generated");
-  }
-
-  return `data:image/png;base64,${outputBase64}`;
+  return editImage(imageBase64, stylePrompt, { quality: "low" });
 }
 
-/**
- * High-quality print generation — for Printful fulfillment.
- * Uses gpt-image-2 quality:high for 300 DPI print quality.
- */
 export async function generatePrint(
   imageBase64: string,
   stylePrompt: string
 ): Promise<string> {
-  const imageFile = await prepareImageFile(imageBase64);
-
-  const response = await openai.images.edit({
-    model: "gpt-image-2",
-    image: imageFile,
-    prompt: stylePrompt,
-    quality: "high",
-    size: "1024x1024",
-  });
-
-  const outputBase64 = response.data?.[0]?.b64_json;
-  if (!outputBase64) {
-    throw new Error("No image generated");
-  }
-
-  return `data:image/png;base64,${outputBase64}`;
+  return editImage(imageBase64, stylePrompt, { quality: "high" });
 }

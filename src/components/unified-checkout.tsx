@@ -15,17 +15,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Lock, Loader2, AlertCircle, Truck, Mail, ChevronDown, ChevronUp } from "lucide-react";
 import {
-  STICKER_PACK_TIERS,
-  VARIATION_SHEET_PRICE_CENTS,
-  SHIPPING_CENTS,
-  FREE_SHIPPING_THRESHOLD_CENTS,
+  getTier,
+  getShipping,
   formatPrice,
 } from "@/lib/pricing";
 import {
   trackExpressCheckoutShown,
   trackExpressCheckoutClicked,
   trackCardFormOpened,
-  trackStickerPackTierSelected,
 } from "@/lib/analytics";
 import type { CartItem, ShippingAddress } from "@/types";
 
@@ -58,7 +55,6 @@ function CheckoutInner({
   const [showCardForm, setShowCardForm] = useState(false);
   const [expressAvailable, setExpressAvailable] = useState(true);
 
-  // Card form state
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState<ShippingAddress>({
     name: "",
@@ -74,7 +70,6 @@ function CheckoutInner({
     setAddress((prev) => ({ ...prev, [field]: value }));
   };
 
-  // PATCH PI metadata with address/email before confirming
   const patchMetadata = useCallback(
     async (patchEmail?: string, patchAddress?: ShippingAddress) => {
       try {
@@ -94,14 +89,11 @@ function CheckoutInner({
     [paymentIntentId]
   );
 
-  // Express Checkout confirm handler
   const handleExpressConfirm = useCallback(
     async (event: StripeExpressCheckoutElementConfirmEvent) => {
       if (!stripe || !elements) return;
-
       trackExpressCheckoutClicked("express");
 
-      // Extract shipping address from the wallet event
       const walletAddress = event.shippingAddress;
       const billingDetails = event.billingDetails;
 
@@ -146,13 +138,11 @@ function CheckoutInner({
     [stripe, elements, patchMetadata, onSuccess, onError]
   );
 
-  // Card form submit
   const handleCardSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
       if (!stripe || !elements || !elementReady) return;
 
-      // PATCH metadata with form data first
       await patchMetadata(email, address);
 
       setIsProcessing(true);
@@ -182,19 +172,23 @@ function CheckoutInner({
     [stripe, elements, elementReady, email, address, patchMetadata, onSuccess, onError]
   );
 
-  // Cart summary
   const item = cartItems[0];
-  const isVariationSheet = item?.productType === "variation-sheet";
+  const tier = item ? getTier(item.productType, item.tierId) : null;
+  const subtotalCents = tier?.priceCents ?? 0;
+  const shippingCents = getShipping(subtotalCents);
 
-  const subtotalCents = isVariationSheet
-    ? VARIATION_SHEET_PRICE_CENTS
-    : (STICKER_PACK_TIERS.find((t) => t.id === item?.tierId) || STICKER_PACK_TIERS[0]).priceCents;
-  const shippingCents =
-    subtotalCents >= FREE_SHIPPING_THRESHOLD_CENTS ? 0 : SHIPPING_CENTS;
+  const productLabel =
+    item?.productType === "individual-pack"
+      ? `${tier?.qty ?? 0} Individual Stickers`
+      : `${tier?.qty ?? 0} Sticker Sheet${(tier?.qty ?? 0) > 1 ? "s" : ""}`;
+
+  const productSubtitle =
+    item?.productType === "individual-pack"
+      ? "3\" × 3\" kiss-cut, your design"
+      : `${(tier?.qty ?? 0) * 6} stickers across ${tier?.qty ?? 0} sheet${(tier?.qty ?? 0) > 1 ? "s" : ""}`;
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Cart Summary */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center gap-3 mb-4">
@@ -205,45 +199,12 @@ function CheckoutInner({
               className="w-16 h-16 rounded-lg object-contain bg-muted"
             />
             <div className="flex-1 min-w-0">
-              <p className="font-display font-bold text-sm">
-                {isVariationSheet ? "Variation Sheet" : "Sticker Pack"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {isVariationSheet
-                  ? "6 unique poses on 1 sheet"
-                  : `${(STICKER_PACK_TIERS.find((t) => t.id === item?.tierId) || STICKER_PACK_TIERS[0]).label}`}
-              </p>
+              <p className="font-display font-bold text-sm">{productLabel}</p>
+              <p className="text-xs text-muted-foreground">{productSubtitle}</p>
             </div>
             <p className="font-bold text-sm">{formatPrice(subtotalCents)}</p>
           </div>
 
-          {/* Tier selector for sticker packs */}
-          {!isVariationSheet && (
-            <div className="flex gap-2 mb-4">
-              {STICKER_PACK_TIERS.map((tier) => (
-                <button
-                  key={tier.id}
-                  type="button"
-                  onClick={() => trackStickerPackTierSelected(tier.id)}
-                  className={`flex-1 text-center py-2 px-1 rounded-xl border-2 transition-all text-xs ${
-                    item?.tierId === tier.id
-                      ? "border-primary bg-primary/10 font-bold"
-                      : "border-border text-muted-foreground"
-                  }`}
-                >
-                  <span className="block font-semibold">{tier.label}</span>
-                  <span className="block text-[10px]">{formatPrice(tier.priceCents)}</span>
-                  {"tag" in tier && tier.tag && (
-                    <span className="block text-[9px] text-primary font-bold mt-0.5">
-                      {tier.tag}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Order totals */}
           <div className="space-y-1 text-sm border-t border-border pt-3">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
@@ -267,7 +228,6 @@ function CheckoutInner({
         </CardContent>
       </Card>
 
-      {/* Express Checkout — Apple Pay / Google Pay / Link */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -284,10 +244,7 @@ function CheckoutInner({
               });
             }}
             options={{
-              buttonType: {
-                applePay: "buy",
-                googlePay: "buy",
-              },
+              buttonType: { applePay: "buy", googlePay: "buy" },
             }}
             onReady={({ availablePaymentMethods }) => {
               if (
@@ -311,7 +268,6 @@ function CheckoutInner({
         </CardContent>
       </Card>
 
-      {/* Card form — collapsible */}
       <form onSubmit={handleCardSubmit}>
         <Card>
           <CardHeader className="pb-2">
@@ -332,7 +288,6 @@ function CheckoutInner({
 
           {showCardForm && (
             <CardContent className="space-y-4">
-              {/* Email */}
               <div>
                 <Label htmlFor="checkout-email" className="flex items-center gap-1.5">
                   <Mail size={14} /> Email
@@ -350,7 +305,6 @@ function CheckoutInner({
                 />
               </div>
 
-              {/* Shipping Address */}
               <div className="space-y-3">
                 <Label className="flex items-center gap-1.5">
                   <Truck size={14} /> Shipping Address
@@ -418,7 +372,6 @@ function CheckoutInner({
                 </div>
               </div>
 
-              {/* Payment Element */}
               {!elementReady && !elementError && (
                 <div className="flex items-center justify-center py-6 text-muted-foreground text-sm gap-2">
                   <Loader2 size={16} className="animate-spin" />
@@ -426,9 +379,7 @@ function CheckoutInner({
                 </div>
               )}
               {elementError && (
-                <p className="text-sm text-red-500 text-center py-4">
-                  {elementError}
-                </p>
+                <p className="text-sm text-red-500 text-center py-4">{elementError}</p>
               )}
               <div className={elementReady ? "" : "sr-only"}>
                 <PaymentElement
@@ -445,9 +396,7 @@ function CheckoutInner({
                 className="w-full mt-2"
                 disabled={!stripe || !elementReady || isProcessing}
               >
-                {isProcessing
-                  ? "Processing..."
-                  : `Pay ${formatPrice(amount)}`}
+                {isProcessing ? "Processing..." : `Pay ${formatPrice(amount)}`}
               </Button>
             </CardContent>
           )}

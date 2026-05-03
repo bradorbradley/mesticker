@@ -1,5 +1,9 @@
 import { ShippingAddress } from "@/types";
-import { VARIANT_KISS_CUT_SHEET, VARIANT_HOLOGRAPHIC_SHEET } from "@/lib/pricing";
+import {
+  VARIANT_KISS_CUT_SHEET,
+  VARIANT_INDIVIDUAL_3X3,
+  type ProductType,
+} from "@/lib/pricing";
 
 const PRINTFUL_API = "https://api.printful.com";
 
@@ -13,21 +17,16 @@ function getHeaders() {
   };
 }
 
-/** Map skuId to Printful variant ID */
-function resolveVariantId(skuId?: string): number {
-  switch (skuId) {
-    case "holographic-sheet":
-      return VARIANT_HOLOGRAPHIC_SHEET;
-    case "kiss-cut-sheet":
-    default:
-      return VARIANT_KISS_CUT_SHEET;
-  }
+function resolveVariantId(productType: ProductType): number {
+  return productType === "individual-pack"
+    ? VARIANT_INDIVIDUAL_3X3
+    : VARIANT_KISS_CUT_SHEET;
 }
 
 export interface PrintfulItem {
   imageUrl: string;
-  quantity: number; // number of sheets
-  skuId?: string;
+  quantity: number;
+  productType: ProductType;
 }
 
 export async function createPrintfulOrder(
@@ -48,14 +47,9 @@ export async function createPrintfulOrder(
         zip: address.zip,
       },
       items: items.map((item) => ({
-        variant_id: resolveVariantId(item.skuId),
+        variant_id: resolveVariantId(item.productType),
         quantity: item.quantity,
-        files: [
-          {
-            type: "default",
-            url: item.imageUrl,
-          },
-        ],
+        files: [{ type: "default", url: item.imageUrl }],
       })),
     }),
   });

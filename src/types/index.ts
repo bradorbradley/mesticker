@@ -50,11 +50,9 @@ export type AppStep = "capture" | "style" | "reveal" | "variations" | "order";
 
 export interface CartItem {
   id: string;
-  generatedImage: string;  // composed sheet image
+  generatedImage: string;
   originalImage: string;
   stylePreset: string;
-  skuId: string;
-  productType: "sticker-pack" | "variation-sheet";
-  tierId?: string;  // for sticker packs: "pack-10" | "pack-25" | "pack-50"
-  sheets: number;   // actual number of Printful sheets to fulfill
+  productType: "individual-pack" | "sticker-sheet";
+  tierId: string;
 }

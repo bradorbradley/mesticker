@@ -5,19 +5,16 @@ import { auth } from "@/lib/auth";
 import { getSessionIdFromCookie } from "@/lib/session";
 import { ShippingAddress } from "@/types";
 import {
-  STICKER_PACK_TIERS,
-  VARIATION_SHEET_PRICE_CENTS,
-  SHIPPING_CENTS,
-  FREE_SHIPPING_THRESHOLD_CENTS,
+  getTier,
+  getShipping,
+  type ProductType,
 } from "@/lib/pricing";
 
 interface CartItemInput {
   generatedImage: string;
-  sheets: number;
   stylePreset: string;
-  skuId?: string;
-  productType?: "sticker-pack" | "variation-sheet";
-  tierId?: string;
+  productType: ProductType;
+  tierId: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -42,47 +39,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upload all images and build metadata
     const uploadedItems = await Promise.all(
       items.map(async (item) => {
         const imageUrl = await uploadImage(item.generatedImage);
+        const tier = getTier(item.productType, item.tierId);
         return {
           imageUrl,
-          sheets: item.sheets,
           stylePreset: item.stylePreset,
-          skuId: item.skuId || "kiss-cut-sheet",
-          productType: item.productType || "sticker-pack",
+          productType: item.productType,
           tierId: item.tierId,
+          quantity: tier.qty,
         };
       })
     );
 
-    // Calculate total with new pricing model
     let subtotalCents = 0;
     for (const item of items) {
-      if (item.productType === "variation-sheet") {
-        subtotalCents += VARIATION_SHEET_PRICE_CENTS;
-      } else {
-        // sticker-pack
-        const tier = STICKER_PACK_TIERS.find((t) => t.id === item.tierId);
-        subtotalCents += tier ? tier.priceCents : STICKER_PACK_TIERS[0].priceCents;
-      }
+      subtotalCents += getTier(item.productType, item.tierId).priceCents;
     }
-    const shippingCents =
-      subtotalCents >= FREE_SHIPPING_THRESHOLD_CENTS ? 0 : SHIPPING_CENTS;
+    const shippingCents = getShipping(subtotalCents);
     const total = subtotalCents + shippingCents;
 
-    const totalSheets = items.reduce((sum, i) => sum + i.sheets, 0);
+    const totalQty = uploadedItems.reduce((sum, i) => sum + i.quantity, 0);
 
-    // Build metadata — address and email are optional now
     const metadata: Record<string, string> = {
-      totalSheets: String(totalSheets),
+      totalQty: String(totalQty),
       itemCount: String(items.length),
       cartItems: JSON.stringify(
         uploadedItems.map((i) => ({
           imageUrl: i.imageUrl,
-          quantity: i.sheets,
-          skuId: i.skuId,
+          quantity: i.quantity,
           productType: i.productType,
           tierId: i.tierId,
         }))
@@ -91,10 +77,7 @@ export async function POST(request: NextRequest) {
       ...(sessionId ? { sessionId } : {}),
     };
 
-    if (email) {
-      metadata.email = email;
-    }
-
+    if (email) metadata.email = email;
     if (address) {
       metadata.addressName = address.name;
       metadata.address1 = address.address1;
@@ -111,6 +94,8 @@ export async function POST(request: NextRequest) {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
       amount: total,
+      subtotalCents,
+      shippingCents,
     });
   } catch (error) {
     console.error("Order error:", error);
@@ -121,7 +106,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH — update PaymentIntent metadata (address/email before confirming)
 export async function PATCH(request: NextRequest) {
   try {
     const {
@@ -142,9 +126,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const metadata: Record<string, string> = {};
-    if (email) {
-      metadata.email = email;
-    }
+    if (email) metadata.email = email;
     if (address) {
       metadata.addressName = address.name;
       metadata.address1 = address.address1;

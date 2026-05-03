@@ -14,7 +14,15 @@ import {
   Wand2,
   Palette,
   Loader2,
+  Layers,
+  Square,
 } from "lucide-react";
+import {
+  INDIVIDUAL_PACK_TIERS,
+  SHEET_TIERS,
+  formatPrice,
+  type ProductType,
+} from "@/lib/pricing";
 import LandingHero from "@/components/landing-hero";
 import CameraCapture from "@/components/camera-capture";
 import StyleGrid from "@/components/style-grid";
@@ -123,6 +131,17 @@ export default function Home() {
   // Cart items for order
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+
+  // Product picker state on reveal screen
+  const [selectedProductType, setSelectedProductType] =
+    useState<ProductType>("individual-pack");
+  const [selectedTierId, setSelectedTierId] = useState<string>("ind-10");
+
+  // Pre-fetched variations (kicked off in background after first generation)
+  const [prefetchedVariations, setPrefetchedVariations] = useState<unknown[] | null>(
+    null
+  );
+  const [variationsFetching, setVariationsFetching] = useState(false);
 
   // Generation limit
   const [limitReached, setLimitReached] = useState(false);
@@ -320,11 +339,11 @@ export default function Home() {
     [capturedImage, addLocalCreation, isSignedIn, serverHasPurchased]
   );
 
-  // Reveal screen CTAs
-  const handleOrderStickers = useCallback(async () => {
+  // Reveal screen — buy the currently-selected product+tier
+  const handleBuyNow = useCallback(async () => {
     if (!generatedImage || !capturedImage) return;
     trackOrderClicked();
-    trackProductTypeSelected("sticker-pack");
+    trackProductTypeSelected(selectedProductType);
 
     const newCartItems: CartItem[] = [
       {
@@ -332,16 +351,13 @@ export default function Home() {
         generatedImage,
         originalImage: capturedImage,
         stylePreset: selectedStyle?.id || "unknown",
-        skuId: "kiss-cut-sheet",
-        productType: "sticker-pack",
-        tierId: "pack-10",
-        sheets: 2,
+        productType: selectedProductType,
+        tierId: selectedTierId,
       },
     ];
     setCartItems(newCartItems);
     trackCheckoutStart();
 
-    // Create PaymentIntent immediately (no address needed)
     setIsCreatingOrder(true);
     setPaymentError(null);
     try {
@@ -351,7 +367,6 @@ export default function Home() {
         body: JSON.stringify({
           items: newCartItems.map((i) => ({
             generatedImage: i.generatedImage,
-            sheets: i.sheets,
             stylePreset: i.stylePreset,
             productType: i.productType,
             tierId: i.tierId,
@@ -366,7 +381,12 @@ export default function Home() {
       setClientSecret(data.clientSecret);
       setPaymentIntentId(data.paymentIntentId);
       setOrderAmount(data.amount);
-      setOrderQuantity(newCartItems.reduce((s, i) => s + i.sheets, 0));
+      // orderQuantity = the qty from the chosen tier
+      const tier =
+        selectedProductType === "individual-pack"
+          ? INDIVIDUAL_PACK_TIERS.find((t) => t.id === selectedTierId)
+          : SHEET_TIERS.find((t) => t.id === selectedTierId);
+      setOrderQuantity(tier?.qty ?? 1);
     } catch (error) {
       setPaymentError(
         error instanceof Error ? error.message : "Something went wrong"
@@ -375,7 +395,7 @@ export default function Home() {
       setIsCreatingOrder(false);
     }
     setStep("order");
-  }, [generatedImage, capturedImage, selectedStyle]);
+  }, [generatedImage, capturedImage, selectedStyle, selectedProductType, selectedTierId]);
 
   const handleCreateVariations = useCallback(() => {
     trackVariationsClicked();
@@ -391,11 +411,11 @@ export default function Home() {
     setStep("style");
   }, []);
 
-  // Variations -> Order variation sheet (receives single composed image)
+  // Variations -> Order variation sheet (receives single composed sheet image + qty tier)
   const handleOrderVarietyPack = useCallback(
-    async (composedImage: string) => {
+    async (composedImage: string, sheetTierId: string = "sheet-1") => {
       if (!capturedImage) return;
-      trackProductTypeSelected("variation-sheet");
+      trackProductTypeSelected("sticker-sheet");
 
       const newCartItems: CartItem[] = [
         {
@@ -403,15 +423,13 @@ export default function Home() {
           generatedImage: composedImage,
           originalImage: capturedImage,
           stylePreset: selectedStyle?.id || "unknown",
-          skuId: "kiss-cut-sheet",
-          productType: "variation-sheet",
-          sheets: 1,
+          productType: "sticker-sheet",
+          tierId: sheetTierId,
         },
       ];
       setCartItems(newCartItems);
       trackCheckoutStart();
 
-      // Create PaymentIntent immediately (no address needed)
       setIsCreatingOrder(true);
       setPaymentError(null);
       try {
@@ -421,7 +439,6 @@ export default function Home() {
           body: JSON.stringify({
             items: newCartItems.map((i) => ({
               generatedImage: i.generatedImage,
-              sheets: i.sheets,
               stylePreset: i.stylePreset,
               productType: i.productType,
               tierId: i.tierId,
@@ -436,7 +453,8 @@ export default function Home() {
         setClientSecret(data.clientSecret);
         setPaymentIntentId(data.paymentIntentId);
         setOrderAmount(data.amount);
-        setOrderQuantity(newCartItems.reduce((s, i) => s + i.sheets, 0));
+        const tier = SHEET_TIERS.find((t) => t.id === sheetTierId);
+        setOrderQuantity(tier?.qty ?? 1);
       } catch (error) {
         setPaymentError(
           error instanceof Error ? error.message : "Something went wrong"
@@ -448,6 +466,35 @@ export default function Home() {
     },
     [capturedImage, selectedStyle]
   );
+
+  // Background pre-fetch of variations as soon as first generation succeeds.
+  // When the user clicks "See Variations" later, the data is already there.
+  useEffect(() => {
+    if (!generatedImage || !capturedImage || !activeStylePrompt) return;
+    if (prefetchedVariations || variationsFetching) return;
+
+    setVariationsFetching(true);
+    fetch("/api/variations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image: capturedImage,
+        stylePrompt: activeStylePrompt,
+      }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.variations) setPrefetchedVariations(data.variations);
+      })
+      .catch(() => {})
+      .finally(() => setVariationsFetching(false));
+  }, [
+    generatedImage,
+    capturedImage,
+    activeStylePrompt,
+    prefetchedVariations,
+    variationsFetching,
+  ]);
 
   const handlePaymentSuccess = useCallback(() => {
     setPaymentComplete(true);
@@ -469,6 +516,10 @@ export default function Home() {
     setPaymentError(null);
     setGenerateError(null);
     setCartItems([]);
+    setPrefetchedVariations(null);
+    setVariationsFetching(false);
+    setSelectedProductType("individual-pack");
+    setSelectedTierId("ind-10");
     setStep("capture");
   }, []);
 
@@ -762,14 +813,119 @@ export default function Home() {
                   </motion.button>
                 </div>
 
-                {/* PRIMARY CTA: Order Stickers */}
+                {/* Product picker — Individual vs Sheet */}
+                <div className="rounded-2xl border border-border bg-card/50 p-3 flex flex-col gap-3">
+                  {/* Product type tabs */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedProductType("individual-pack");
+                        setSelectedTierId("ind-10");
+                      }}
+                      className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 transition-all ${
+                        selectedProductType === "individual-pack"
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-background"
+                      }`}
+                    >
+                      <Square
+                        size={18}
+                        className={
+                          selectedProductType === "individual-pack"
+                            ? "text-primary"
+                            : "text-muted-foreground"
+                        }
+                      />
+                      <span className="text-[11px] font-bold leading-tight">
+                        Individual Stickers
+                      </span>
+                      <span className="text-[9px] text-muted-foreground">
+                        3&quot; × 3&quot; kiss-cut
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedProductType("sticker-sheet");
+                        setSelectedTierId("sheet-1");
+                      }}
+                      className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 transition-all ${
+                        selectedProductType === "sticker-sheet"
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-background"
+                      }`}
+                    >
+                      <Layers
+                        size={18}
+                        className={
+                          selectedProductType === "sticker-sheet"
+                            ? "text-primary"
+                            : "text-muted-foreground"
+                        }
+                      />
+                      <span className="text-[11px] font-bold leading-tight">
+                        Sticker Sheet
+                      </span>
+                      <span className="text-[9px] text-muted-foreground">
+                        6 stickers per sheet
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Tier selector */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {(selectedProductType === "individual-pack"
+                      ? INDIVIDUAL_PACK_TIERS
+                      : SHEET_TIERS
+                    ).map((tier) => (
+                      <button
+                        key={tier.id}
+                        onClick={() => setSelectedTierId(tier.id)}
+                        className={`flex flex-col items-center py-2 px-1 rounded-xl border-2 transition-all ${
+                          selectedTierId === tier.id
+                            ? "border-primary bg-primary/10 font-bold"
+                            : "border-border bg-background"
+                        }`}
+                      >
+                        <span className="text-[11px] font-bold leading-tight">
+                          {tier.label}
+                        </span>
+                        <span className="text-[10px]">
+                          {formatPrice(tier.priceCents)}
+                        </span>
+                        {"tag" in tier && tier.tag && (
+                          <span className="text-[8px] text-primary font-bold mt-0.5">
+                            {tier.tag}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* PRIMARY CTA */}
                 <motion.button
                   whileTap={{ scale: 0.95 }}
                   className="w-full py-3.5 rounded-xl font-bold text-sm btn-gradient shadow-glow flex items-center justify-center gap-2"
-                  onClick={handleOrderStickers}
+                  onClick={handleBuyNow}
+                  disabled={isCreatingOrder}
                 >
-                  <ShoppingCart size={16} />
-                  Order Stickers
+                  {isCreatingOrder ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Setting up...
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingCart size={16} />
+                      Buy Now —{" "}
+                      {formatPrice(
+                        (selectedProductType === "individual-pack"
+                          ? INDIVIDUAL_PACK_TIERS
+                          : SHEET_TIERS
+                        ).find((t) => t.id === selectedTierId)?.priceCents ?? 0
+                      )}
+                    </>
+                  )}
                 </motion.button>
 
                 {/* SECONDARY CTA: Create Variations */}
@@ -779,14 +935,20 @@ export default function Home() {
                   onClick={handleCreateVariations}
                 >
                   <Wand2 size={14} />
-                  Create Variations
-                  {/* Social proof nudge */}
-                  <span className="absolute -top-0.5 right-3 text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-b-md">
-                    Most popular
-                  </span>
+                  See 6 Variations
+                  {prefetchedVariations && (
+                    <span className="absolute -top-0.5 right-3 text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-b-md">
+                      Ready!
+                    </span>
+                  )}
+                  {variationsFetching && !prefetchedVariations && (
+                    <span className="absolute -top-0.5 right-3 text-[9px] font-bold text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded-b-md">
+                      Loading...
+                    </span>
+                  )}
                 </motion.button>
 
-                {/* TERTIARY CTA: Try Another Style */}
+                {/* TERTIARY CTA */}
                 <button
                   className="text-sm text-primary font-semibold text-center flex items-center justify-center gap-1.5 py-1"
                   onClick={handleTryAnotherStyle}
@@ -811,6 +973,17 @@ export default function Home() {
               <VariationsGrid
                 originalImage={capturedImage}
                 stylePrompt={activeStylePrompt}
+                prefetched={
+                  prefetchedVariations as
+                    | {
+                        index: number;
+                        image: string | null;
+                        latency: number;
+                        variation: string;
+                        error?: string;
+                      }[]
+                    | null
+                }
                 onOrderVarietyPack={handleOrderVarietyPack}
                 onTryAnotherStyle={handleTryAnotherStyle}
               />

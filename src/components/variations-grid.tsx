@@ -26,7 +26,8 @@ interface Variation {
 interface VariationsGridProps {
   originalImage: string;
   stylePrompt: string;
-  onOrderVarietyPack: (composedImage: string) => void;
+  prefetched?: Variation[] | null;
+  onOrderVarietyPack: (composedImage: string, sheetTierId?: string) => void;
   onTryAnotherStyle: () => void;
   className?: string;
 }
@@ -34,20 +35,40 @@ interface VariationsGridProps {
 export default function VariationsGrid({
   originalImage,
   stylePrompt,
+  prefetched,
   onOrderVarietyPack,
   onTryAnotherStyle,
   className,
 }: VariationsGridProps) {
-  const [variations, setVariations] = useState<Variation[]>([]);
-  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
-  const [loading, setLoading] = useState(true);
+  const [variations, setVariations] = useState<Variation[]>(
+    prefetched ?? []
+  );
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(() => {
+    if (!prefetched) return new Set();
+    return new Set(
+      prefetched.filter((v) => v.image).map((v) => v.index)
+    );
+  });
+  const [loading, setLoading] = useState(!prefetched);
   const [error, setError] = useState<string | null>(null);
   const startTime = useRef(Date.now());
   const hasStarted = useRef(false);
 
-  // Generate variations on mount
+  // Skip fetching if pre-fetched data was provided
+  useEffect(() => {
+    if (prefetched && prefetched.length > 0) {
+      hasStarted.current = true;
+      // Track tile loads for the cached set
+      for (const v of prefetched) {
+        if (v.image) trackVariationTileLoaded(v.index, v.latency);
+      }
+      hapticSuccess();
+    }
+  }, [prefetched]);
+
   useEffect(() => {
     if (hasStarted.current) return;
+    if (prefetched && prefetched.length > 0) return;
     hasStarted.current = true;
 
     const generate = async () => {
@@ -74,14 +95,12 @@ export default function VariationsGrid({
         const data = await res.json();
         setVariations(data.variations);
 
-        // Track individual tile loads
         for (const v of data.variations) {
           if (v.image) {
             trackVariationTileLoaded(v.index, v.latency);
           }
         }
 
-        // Auto-select all successful variations
         const successful = new Set<number>(
           data.variations
             .filter((v: Variation) => v.image)
@@ -99,7 +118,7 @@ export default function VariationsGrid({
     };
 
     generate();
-  }, [originalImage, stylePrompt]);
+  }, [originalImage, stylePrompt, prefetched]);
 
   const toggleSelect = useCallback((index: number) => {
     setSelectedIndices((prev) => {
