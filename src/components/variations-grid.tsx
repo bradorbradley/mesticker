@@ -12,6 +12,7 @@ import {
   trackVariationTileSelected,
   trackVariationTileRegenerated,
   trackVarietyPackBuilt,
+  trackSheetComposed,
 } from "@/lib/analytics";
 
 interface Variation {
@@ -25,7 +26,7 @@ interface Variation {
 interface VariationsGridProps {
   originalImage: string;
   stylePrompt: string;
-  onOrderVarietyPack: (selectedImages: string[]) => void;
+  onOrderVarietyPack: (composedImage: string) => void;
   onTryAnotherStyle: () => void;
   className?: string;
 }
@@ -148,7 +149,9 @@ export default function VariationsGrid({
     [originalImage, stylePrompt]
   );
 
-  const handleOrderVarietyPack = useCallback(() => {
+  const [isComposing, setIsComposing] = useState(false);
+
+  const handleOrderVarietyPack = useCallback(async () => {
     const selectedImages = variations
       .filter((v) => selectedIndices.has(v.index) && v.image)
       .map((v) => v.image!);
@@ -157,7 +160,28 @@ export default function VariationsGrid({
 
     trackVarietyPackBuilt(selectedImages.length);
     hapticMedium();
-    onOrderVarietyPack(selectedImages);
+
+    // Compose selected images into a single sheet
+    setIsComposing(true);
+    try {
+      const res = await fetch("/api/compose-sheet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images: selectedImages }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Sheet composition failed");
+      }
+
+      const data = await res.json();
+      trackSheetComposed(selectedImages.length);
+      onOrderVarietyPack(data.composedImage);
+    } catch (err) {
+      console.error("Compose error:", err);
+      setIsComposing(false);
+    }
   }, [variations, selectedIndices, onOrderVarietyPack]);
 
   const selectedCount = selectedIndices.size;
@@ -253,12 +277,21 @@ export default function VariationsGrid({
       {/* Order CTA */}
       <motion.button
         whileTap={{ scale: 0.95 }}
-        disabled={selectedCount === 0 || loading}
+        disabled={selectedCount === 0 || loading || isComposing}
         onClick={handleOrderVarietyPack}
         className="w-full py-3.5 rounded-xl font-bold text-sm btn-gradient shadow-glow disabled:opacity-40 flex items-center justify-center gap-2"
       >
-        <ShoppingCart size={16} />
-        Order Variety Pack ({selectedCount} stickers)
+        {isComposing ? (
+          <>
+            <Loader2 size={16} className="animate-spin" />
+            Composing sheet...
+          </>
+        ) : (
+          <>
+            <ShoppingCart size={16} />
+            Order Variation Sheet ({selectedCount} stickers)
+          </>
+        )}
       </motion.button>
 
       <button

@@ -3,68 +3,47 @@
  * Prices in cents for Stripe, display helpers in dollars.
  */
 
-export interface SkuOption {
-  id: string;
-  name: string;
-  description: string;
-  priceCents: number;
-  printfulVariantId: number;
-  /** Additional cost on top of base (e.g. holographic upgrade) */
-  addonCents?: number;
-}
-
 // Printful variant IDs
-export const VARIANT_KISS_CUT_SHEET = 12917; // 5.83"×8.27" kiss-cut sticker sheet
+export const VARIANT_KISS_CUT_SHEET = 12917; // 5.83"x8.27" kiss-cut sticker sheet
 export const VARIANT_HOLOGRAPHIC_SHEET = 13032; // holographic kiss-cut sticker sheet (same size)
 
-export const SKU_OPTIONS: SkuOption[] = [
-  {
-    id: "kiss-cut-sheet",
-    name: "Kiss-Cut Sheet",
-    description: "6 stickers on a 5.83×8.27\" sheet",
-    priceCents: 1999, // $19.99
-    printfulVariantId: VARIANT_KISS_CUT_SHEET,
-  },
-  {
-    id: "holographic-sheet",
-    name: "Holographic Sheet",
-    description: "6 holographic stickers — extra shine",
-    priceCents: 2499, // $24.99 ($19.99 + $5 upgrade)
-    printfulVariantId: VARIANT_HOLOGRAPHIC_SHEET,
-    addonCents: 500,
-  },
-];
-
-// Quantity pricing tiers (cents)
-export const QUANTITY_TIERS = [
-  { qty: 1, priceCents: 1999, label: "1 Sheet", sublabel: "6 stickers" },
-  { qty: 2, priceCents: 3499, label: "2 Sheets", sublabel: "12 stickers", tag: "Save $5" },
-  { qty: 3, priceCents: 4999, label: "3 Sheets", sublabel: "18 stickers", tag: "Best Value" },
+// --- Sticker Pack tiers ---
+export const STICKER_PACK_TIERS = [
+  { id: "pack-10", qty: 10, sheets: 2, priceCents: 1999, label: "10+ Stickers" },
+  { id: "pack-25", qty: 25, sheets: 5, priceCents: 3499, label: "25+ Stickers", tag: "Most Popular" },
+  { id: "pack-50", qty: 50, sheets: 9, priceCents: 5999, label: "50+ Stickers", tag: "Best Value" },
 ] as const;
 
+// --- Variation Sheet pricing ---
+export const VARIATION_SHEET_PRICE_CENTS = 1499; // $14.99
+
+// --- Shipping ---
 export const SHIPPING_CENTS = 499; // $4.99
-export const FREE_SHIPPING_THRESHOLD_CENTS = 3500; // free over $35
+export const FREE_SHIPPING_THRESHOLD_CENTS = 3000; // Free shipping over $30
 
 export function getShipping(subtotalCents: number): number {
   return subtotalCents >= FREE_SHIPPING_THRESHOLD_CENTS ? 0 : SHIPPING_CENTS;
 }
 
-export function calculateCartTotal(items: { skuId: string; quantity: number }[]): {
+export type ProductType = "sticker-pack" | "variation-sheet";
+
+export interface CartPricingItem {
+  productType: ProductType;
+  tierId?: string; // for sticker packs
+}
+
+export function calculateCartTotal(items: CartPricingItem[]): {
   subtotalCents: number;
   shippingCents: number;
   totalCents: number;
 } {
   let subtotalCents = 0;
   for (const item of items) {
-    const sku = SKU_OPTIONS.find((s) => s.id === item.skuId);
-    if (!sku) continue;
-    // Use tier pricing for quantity
-    const tier = QUANTITY_TIERS.find((t) => t.qty === item.quantity);
-    if (tier) {
-      const holoUpgrade = sku.addonCents ? sku.addonCents * item.quantity : 0;
-      subtotalCents += tier.priceCents + holoUpgrade;
-    } else {
-      subtotalCents += sku.priceCents * item.quantity;
+    if (item.productType === "sticker-pack") {
+      const tier = STICKER_PACK_TIERS.find((t) => t.id === item.tierId);
+      subtotalCents += tier ? tier.priceCents : STICKER_PACK_TIERS[0].priceCents;
+    } else if (item.productType === "variation-sheet") {
+      subtotalCents += VARIATION_SHEET_PRICE_CENTS;
     }
   }
   const shippingCents = getShipping(subtotalCents);

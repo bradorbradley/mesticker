@@ -13,6 +13,7 @@ import {
   ShoppingCart,
   Wand2,
   Palette,
+  Loader2,
 } from "lucide-react";
 import LandingHero from "@/components/landing-hero";
 import CameraCapture from "@/components/camera-capture";
@@ -20,8 +21,7 @@ import StyleGrid from "@/components/style-grid";
 import LoadingState from "@/components/loading-state";
 import ImageRevealSlider from "@/components/image-reveal";
 import VariationsGrid from "@/components/variations-grid";
-import OrderForm from "@/components/order-form";
-import PaymentForm from "@/components/payment-form";
+import UnifiedCheckout from "@/components/unified-checkout";
 import OrderConfirmation from "@/components/order-confirmation";
 import Gallery from "@/components/gallery";
 import UserMenu from "@/components/user-menu";
@@ -29,7 +29,7 @@ import { useCreations } from "@/hooks/use-creations";
 import { hapticMedium, hapticSuccess } from "@/lib/haptics";
 import { getSessionId } from "@/lib/session";
 import { resolvePresetPrompt } from "@/lib/presets";
-import type { AppStep, StylePreset, ShippingAddress, Creation } from "@/types";
+import type { AppStep, StylePreset, Creation, CartItem } from "@/types";
 import {
   trackCapture,
   trackGenerateStart,
@@ -45,6 +45,7 @@ import {
   trackOrderClicked,
   trackVariationsClicked,
   trackTryAnotherClicked,
+  trackProductTypeSelected,
 } from "@/lib/analytics";
 
 const FREE_GENERATION_LIMIT = 3;
@@ -120,9 +121,8 @@ export default function Home() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
   // Cart items for order
-  const [cartItems, setCartItems] = useState<
-    { generatedImage: string; originalImage: string; stylePreset: string; sheets: number; isVarietyPack?: boolean }[]
-  >([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
 
   // Generation limit
   const [limitReached, setLimitReached] = useState(false);
@@ -321,18 +321,59 @@ export default function Home() {
   );
 
   // Reveal screen CTAs
-  const handleOrderStickers = useCallback(() => {
+  const handleOrderStickers = useCallback(async () => {
     if (!generatedImage || !capturedImage) return;
     trackOrderClicked();
-    setCartItems([
+    trackProductTypeSelected("sticker-pack");
+
+    const newCartItems: CartItem[] = [
       {
+        id: `item-${Date.now()}`,
         generatedImage,
         originalImage: capturedImage,
         stylePreset: selectedStyle?.id || "unknown",
-        sheets: 1,
+        skuId: "kiss-cut-sheet",
+        productType: "sticker-pack",
+        tierId: "pack-10",
+        sheets: 2,
       },
-    ]);
+    ];
+    setCartItems(newCartItems);
     trackCheckoutStart();
+
+    // Create PaymentIntent immediately (no address needed)
+    setIsCreatingOrder(true);
+    setPaymentError(null);
+    try {
+      const res = await fetch("/api/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: newCartItems.map((i) => ({
+            generatedImage: i.generatedImage,
+            sheets: i.sheets,
+            stylePreset: i.stylePreset,
+            productType: i.productType,
+            tierId: i.tierId,
+          })),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Order creation failed");
+      }
+      const data = await res.json();
+      setClientSecret(data.clientSecret);
+      setPaymentIntentId(data.paymentIntentId);
+      setOrderAmount(data.amount);
+      setOrderQuantity(newCartItems.reduce((s, i) => s + i.sheets, 0));
+    } catch (error) {
+      setPaymentError(
+        error instanceof Error ? error.message : "Something went wrong"
+      );
+    } finally {
+      setIsCreatingOrder(false);
+    }
     setStep("order");
   }, [generatedImage, capturedImage, selectedStyle]);
 
@@ -350,56 +391,52 @@ export default function Home() {
     setStep("style");
   }, []);
 
-  // Variations -> Order variety pack
+  // Variations -> Order variation sheet (receives single composed image)
   const handleOrderVarietyPack = useCallback(
-    (selectedImages: string[]) => {
+    async (composedImage: string) => {
       if (!capturedImage) return;
-      setCartItems(
-        selectedImages.map((img) => ({
-          generatedImage: img,
+      trackProductTypeSelected("variation-sheet");
+
+      const newCartItems: CartItem[] = [
+        {
+          id: `item-${Date.now()}`,
+          generatedImage: composedImage,
           originalImage: capturedImage,
           stylePreset: selectedStyle?.id || "unknown",
+          skuId: "kiss-cut-sheet",
+          productType: "variation-sheet",
           sheets: 1,
-          isVarietyPack: true,
-        }))
-      );
+        },
+      ];
+      setCartItems(newCartItems);
       trackCheckoutStart();
-      setStep("order");
-    },
-    [capturedImage, selectedStyle]
-  );
 
-  const handleOrderSubmit = useCallback(
-    async (email: string, quantity: number, address: ShippingAddress) => {
-      if (cartItems.length === 0) return;
-
+      // Create PaymentIntent immediately (no address needed)
       setIsCreatingOrder(true);
       setPaymentError(null);
-
       try {
         const res = await fetch("/api/order", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            email,
-            items: cartItems.map((i) => ({
+            items: newCartItems.map((i) => ({
               generatedImage: i.generatedImage,
               sheets: i.sheets,
               stylePreset: i.stylePreset,
+              productType: i.productType,
+              tierId: i.tierId,
             })),
-            address,
           }),
         });
-
         if (!res.ok) {
           const data = await res.json();
           throw new Error(data.error || "Order creation failed");
         }
-
         const data = await res.json();
         setClientSecret(data.clientSecret);
+        setPaymentIntentId(data.paymentIntentId);
         setOrderAmount(data.amount);
-        setOrderQuantity(cartItems.reduce((s, i) => s + i.sheets, 0));
+        setOrderQuantity(newCartItems.reduce((s, i) => s + i.sheets, 0));
       } catch (error) {
         setPaymentError(
           error instanceof Error ? error.message : "Something went wrong"
@@ -407,8 +444,9 @@ export default function Home() {
       } finally {
         setIsCreatingOrder(false);
       }
+      setStep("order");
     },
-    [cartItems]
+    [capturedImage, selectedStyle]
   );
 
   const handlePaymentSuccess = useCallback(() => {
@@ -424,6 +462,7 @@ export default function Home() {
     setGeneratedImage(null);
     setActiveStylePrompt("");
     setClientSecret(null);
+    setPaymentIntentId(null);
     setOrderAmount(0);
     setOrderQuantity(0);
     setPaymentComplete(false);
@@ -459,6 +498,7 @@ export default function Home() {
       setStep("reveal");
     } else if (step === "order") {
       setClientSecret(null);
+      setPaymentIntentId(null);
       setPaymentError(null);
       if (generatedImage) {
         setStep("reveal");
@@ -793,32 +833,35 @@ export default function Home() {
                   quantity={orderQuantity}
                   onNewSticker={handleNewSticker}
                 />
-              ) : clientSecret ? (
+              ) : isCreatingOrder ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 size={24} className="animate-spin text-primary" />
+                  <p className="text-sm text-muted-foreground">Setting up checkout...</p>
+                </div>
+              ) : clientSecret && paymentIntentId ? (
                 <div>
                   {paymentError && (
                     <p className="text-sm text-red-500 text-center mb-4">
                       {paymentError}
                     </p>
                   )}
-                  <PaymentForm
+                  <UnifiedCheckout
                     clientSecret={clientSecret}
+                    paymentIntentId={paymentIntentId}
                     amount={orderAmount}
+                    cartItems={cartItems}
                     onSuccess={handlePaymentSuccess}
                     onError={setPaymentError}
                   />
                 </div>
               ) : (
-                <div>
+                <div className="text-center py-12">
                   {paymentError && (
-                    <p className="text-sm text-red-500 text-center mb-4">
-                      {paymentError}
-                    </p>
+                    <p className="text-sm text-red-500 mb-4">{paymentError}</p>
                   )}
-                  <OrderForm
-                    cartItems={cartItems}
-                    onSubmit={handleOrderSubmit}
-                    isLoading={isCreatingOrder}
-                  />
+                  <p className="text-sm text-muted-foreground">
+                    Something went wrong. Please go back and try again.
+                  </p>
                 </div>
               )}
             </motion.div>

@@ -35,3 +35,8 @@ export async function createPaymentIntent(amountCents: number, metadata: Record<
     automatic_payment_methods: { enabled: true },
   });
 }
+
+export async function updatePaymentIntentMetadata(id: string, metadata: Record<string, string>) {
+  const stripe = getStripe();
+  return stripe.paymentIntents.update(id, { metadata });
+}

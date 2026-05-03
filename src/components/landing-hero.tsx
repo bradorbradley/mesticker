@@ -205,12 +205,87 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
         </div>
       </motion.div>
 
+      {/* What you get — Product Showcase */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.7 }}
+        className="px-6 py-6"
+      >
+        <p className="text-xs text-center text-muted-foreground font-semibold uppercase tracking-wider mb-4">
+          What you get
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {/* Sticker Pack Card */}
+          <div className="glass-strong rounded-2xl p-4 shadow-soft flex flex-col items-center text-center gap-2">
+            <div className="relative w-full h-24 flex items-center justify-center">
+              {/* Fan layout: 3 overlapping copies */}
+              {[-12, 0, 12].map((rotate, i) => (
+                <div
+                  key={i}
+                  className="absolute w-16 h-16 rounded-lg overflow-hidden shadow-card border border-border"
+                  style={{
+                    transform: `rotate(${rotate}deg)`,
+                    zIndex: i,
+                    left: `calc(50% - 32px + ${(i - 1) * 6}px)`,
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/presets/hero-after.jpg"
+                    alt="Sticker"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+            <div>
+              <p className="font-display font-bold text-sm">Sticker Pack</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                From $19.99 / 10+ identical stickers
+              </p>
+            </div>
+          </div>
+
+          {/* Variation Sheet Card */}
+          <div className="glass-strong rounded-2xl p-4 shadow-soft flex flex-col items-center text-center gap-2">
+            <div className="relative w-full h-24 flex items-center justify-center">
+              {/* Mini 2x3 grid */}
+              <div className="grid grid-cols-3 grid-rows-2 gap-1">
+                {[...Array(6)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="w-7 h-7 rounded-md overflow-hidden border border-border bg-muted/30"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/presets/hero-after.jpg"
+                      alt={`Variation ${i + 1}`}
+                      className="w-full h-full object-cover"
+                      style={{
+                        filter: `hue-rotate(${i * 40}deg)`,
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="font-display font-bold text-sm">Variation Sheet</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                $14.99 / 6 unique poses
+              </p>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
       {/* How it works */}
       <div className="px-6 pb-10">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
+          transition={{ delay: 0.9 }}
           className="flex items-center justify-center gap-1 mb-6 text-muted-foreground"
         >
           <span className="text-xs font-semibold uppercase tracking-wider">How it works</span>
@@ -223,7 +298,7 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
               key={step.title}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.9 + i * 0.15, duration: 0.4 }}
+              transition={{ delay: 1.0 + i * 0.15, duration: 0.4 }}
               className="flex items-center gap-4 glass-strong rounded-2xl p-4 shadow-soft"
             >
               <div

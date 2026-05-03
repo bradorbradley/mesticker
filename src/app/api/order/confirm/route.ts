@@ -27,6 +27,14 @@ export async function POST(request: NextRequest) {
       const paymentIntent = event.data.object;
       const meta = paymentIntent.metadata;
 
+      // Safety check: warn if address is missing (PATCH should have populated it)
+      if (!meta?.addressName) {
+        console.warn(
+          `[webhook] PaymentIntent ${paymentIntent.id} succeeded without addressName in metadata. ` +
+          `Shipping info may be incomplete — check PATCH flow.`
+        );
+      }
+
       // Save order to database
       if (meta?.userId && process.env.DATABASE_URL) {
         try {

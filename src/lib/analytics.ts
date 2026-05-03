@@ -120,3 +120,29 @@ export function trackVarietyPackBuilt(count: number) {
 export function trackSkuSelected(skuId: string) {
   posthog.capture("sku_selected", { skuId });
 }
+
+// Sprint 1.5 events
+
+export function trackExpressCheckoutShown() {
+  posthog.capture("express_checkout_shown");
+}
+
+export function trackExpressCheckoutClicked(method: string) {
+  posthog.capture("express_checkout_clicked", { method });
+}
+
+export function trackCardFormOpened() {
+  posthog.capture("card_form_opened");
+}
+
+export function trackSheetComposed(imageCount: number) {
+  posthog.capture("sheet_composed", { imageCount });
+}
+
+export function trackProductTypeSelected(productType: string) {
+  posthog.capture("product_type_selected", { productType });
+}
+
+export function trackStickerPackTierSelected(tierId: string) {
+  posthog.capture("sticker_pack_tier_selected", { tierId });
+}

@@ -1,26 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPaymentIntent } from "@/lib/stripe";
+import { createPaymentIntent, updatePaymentIntentMetadata } from "@/lib/stripe";
 import { uploadImage } from "@/lib/storage";
 import { auth } from "@/lib/auth";
 import { getSessionIdFromCookie } from "@/lib/session";
 import { ShippingAddress } from "@/types";
-
-// Pricing (cents) — keep in sync with order-form.tsx
-const SHEET_PRICES_CENTS: Record<number, number> = {
-  1: 1999,
-  2: 3499,
-  3: 4999,
-};
-const PER_SHEET_FALLBACK_CENTS = 1599;
-const HOLOGRAPHIC_UPGRADE_CENTS = 500;
-const SHIPPING_CENTS = 499;
-const FREE_SHIPPING_THRESHOLD = 3500;
+import {
+  STICKER_PACK_TIERS,
+  VARIATION_SHEET_PRICE_CENTS,
+  SHIPPING_CENTS,
+  FREE_SHIPPING_THRESHOLD_CENTS,
+} from "@/lib/pricing";
 
 interface CartItemInput {
   generatedImage: string;
   sheets: number;
   stylePreset: string;
   skuId?: string;
+  productType?: "sticker-pack" | "variation-sheet";
+  tierId?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -33,14 +30,14 @@ export async function POST(request: NextRequest) {
       items,
       address,
     }: {
-      email: string;
+      email?: string;
       items: CartItemInput[];
-      address: ShippingAddress;
+      address?: ShippingAddress;
     } = await request.json();
 
-    if (!email || !items?.length || !address) {
+    if (!items?.length) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "At least one item is required" },
         { status: 400 }
       );
     }
@@ -54,24 +51,31 @@ export async function POST(request: NextRequest) {
           sheets: item.sheets,
           stylePreset: item.stylePreset,
           skuId: item.skuId || "kiss-cut-sheet",
+          productType: item.productType || "sticker-pack",
+          tierId: item.tierId,
         };
       })
     );
 
-    // Calculate total with new pricing
+    // Calculate total with new pricing model
     let subtotalCents = 0;
     for (const item of items) {
-      const base = SHEET_PRICES_CENTS[item.sheets] ?? item.sheets * PER_SHEET_FALLBACK_CENTS;
-      const holo = item.skuId === "holographic-sheet" ? HOLOGRAPHIC_UPGRADE_CENTS * item.sheets : 0;
-      subtotalCents += base + holo;
+      if (item.productType === "variation-sheet") {
+        subtotalCents += VARIATION_SHEET_PRICE_CENTS;
+      } else {
+        // sticker-pack
+        const tier = STICKER_PACK_TIERS.find((t) => t.id === item.tierId);
+        subtotalCents += tier ? tier.priceCents : STICKER_PACK_TIERS[0].priceCents;
+      }
     }
-    const shippingCents = subtotalCents >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_CENTS;
+    const shippingCents =
+      subtotalCents >= FREE_SHIPPING_THRESHOLD_CENTS ? 0 : SHIPPING_CENTS;
     const total = subtotalCents + shippingCents;
 
     const totalSheets = items.reduce((sum, i) => sum + i.sheets, 0);
 
-    const paymentIntent = await createPaymentIntent(total, {
-      email,
+    // Build metadata — address and email are optional now
+    const metadata: Record<string, string> = {
       totalSheets: String(totalSheets),
       itemCount: String(items.length),
       cartItems: JSON.stringify(
@@ -79,27 +83,85 @@ export async function POST(request: NextRequest) {
           imageUrl: i.imageUrl,
           quantity: i.sheets,
           skuId: i.skuId,
+          productType: i.productType,
+          tierId: i.tierId,
         }))
       ),
-      addressName: address.name,
-      address1: address.address1,
-      address2: address.address2 || "",
-      city: address.city,
-      stateCode: address.stateCode,
-      countryCode: address.countryCode,
-      zip: address.zip,
       ...(session?.user?.id ? { userId: session.user.id } : {}),
       ...(sessionId ? { sessionId } : {}),
-    });
+    };
+
+    if (email) {
+      metadata.email = email;
+    }
+
+    if (address) {
+      metadata.addressName = address.name;
+      metadata.address1 = address.address1;
+      metadata.address2 = address.address2 || "";
+      metadata.city = address.city;
+      metadata.stateCode = address.stateCode;
+      metadata.countryCode = address.countryCode;
+      metadata.zip = address.zip;
+    }
+
+    const paymentIntent = await createPaymentIntent(total, metadata);
 
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
       amount: total,
     });
   } catch (error) {
     console.error("Order error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Order creation failed" },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH — update PaymentIntent metadata (address/email before confirming)
+export async function PATCH(request: NextRequest) {
+  try {
+    const {
+      paymentIntentId,
+      email,
+      address,
+    }: {
+      paymentIntentId: string;
+      email?: string;
+      address?: ShippingAddress;
+    } = await request.json();
+
+    if (!paymentIntentId) {
+      return NextResponse.json(
+        { error: "paymentIntentId is required" },
+        { status: 400 }
+      );
+    }
+
+    const metadata: Record<string, string> = {};
+    if (email) {
+      metadata.email = email;
+    }
+    if (address) {
+      metadata.addressName = address.name;
+      metadata.address1 = address.address1;
+      metadata.address2 = address.address2 || "";
+      metadata.city = address.city;
+      metadata.stateCode = address.stateCode;
+      metadata.countryCode = address.countryCode;
+      metadata.zip = address.zip;
+    }
+
+    await updatePaymentIntentMetadata(paymentIntentId, metadata);
+
+    return NextResponse.json({ updated: true });
+  } catch (error) {
+    console.error("Order PATCH error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Update failed" },
       { status: 500 }
     );
   }
