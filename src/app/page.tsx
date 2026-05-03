@@ -5,8 +5,6 @@ import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
-  Lock,
-  Sparkles,
   Download,
   Share2,
   Camera,
@@ -17,9 +15,10 @@ import {
   Check,
   X,
   Trash2,
+  Sparkles,
 } from "lucide-react";
 import { formatPrice } from "@/lib/pricing";
-import { useCart, FIRST_SHEET_CENTS, ADDITIONAL_SHEET_CENTS, pricePreview } from "@/lib/cart";
+import { useCart, FIRST_SHEET_CENTS, ADDITIONAL_SHEET_CENTS } from "@/lib/cart";
 import LandingHero from "@/components/landing-hero";
 import CameraCapture from "@/components/camera-capture";
 import StyleGrid from "@/components/style-grid";
@@ -33,6 +32,7 @@ import IPhoneStickerPack from "@/components/iphone-sticker-pack";
 import { useCreations } from "@/hooks/use-creations";
 import { hapticLight, hapticMedium, hapticSuccess } from "@/lib/haptics";
 import { getSessionId } from "@/lib/session";
+import { stylePresets } from "@/lib/presets";
 import type { AppStep, StylePreset, Creation } from "@/types";
 import {
   trackCapture,
@@ -41,8 +41,6 @@ import {
   trackGenerateError,
   trackCheckoutStart,
   trackPaymentComplete,
-  trackLimitReached,
-  trackEmailCapture,
   trackImageDownload,
   trackImageShare,
   trackRevealViewed,
@@ -51,20 +49,18 @@ import {
   trackProductTypeSelected,
 } from "@/lib/analytics";
 
-const FREE_GENERATION_LIMIT = 3;
-const EMAIL_BONUS_LIMIT = 1;
 const GEN_COUNT_KEY = "mesticker-gen-count";
 const HAS_PURCHASED_KEY = "mesticker-has-purchased";
 const SEEN_LANDING_KEY = "mesticker-seen-landing";
-const EMAIL_CAPTURED_KEY = "mesticker-email-captured";
 
-function getLocalGenCount() { try { return parseInt(localStorage.getItem(GEN_COUNT_KEY) || "0", 10); } catch { return 0; } }
-function incrementLocalGenCount() { try { localStorage.setItem(GEN_COUNT_KEY, String(getLocalGenCount() + 1)); } catch {} }
+function incrementLocalGenCount() {
+  try {
+    const current = parseInt(localStorage.getItem(GEN_COUNT_KEY) || "0", 10);
+    localStorage.setItem(GEN_COUNT_KEY, String(current + 1));
+  } catch {}
+}
 function getLocalHasPurchased() { try { return localStorage.getItem(HAS_PURCHASED_KEY) === "true"; } catch { return false; } }
 function setLocalHasPurchased() { try { localStorage.setItem(HAS_PURCHASED_KEY, "true"); } catch {} }
-function getEmailCaptured() { try { return localStorage.getItem(EMAIL_CAPTURED_KEY) === "true"; } catch { return false; } }
-function setEmailCaptured() { try { localStorage.setItem(EMAIL_CAPTURED_KEY, "true"); } catch {} }
-function getEffectiveLimit() { return FREE_GENERATION_LIMIT + (getEmailCaptured() ? EMAIL_BONUS_LIMIT : 0); }
 
 const pageVariants = {
   enter: { opacity: 0, y: 20, scale: 0.98 },
@@ -139,10 +135,7 @@ export default function Home() {
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [showCart, setShowCart] = useState(false);
 
-  // Generation limit
-  const [limitReached, setLimitReached] = useState(false);
-  const [showEmailCapture, setShowEmailCapture] = useState(false);
-  const [emailInput, setEmailInput] = useState("");
+  // Server-side purchase status (for returning-user detection)
   const [serverHasPurchased, setServerHasPurchased] = useState(false);
 
   // Creations
@@ -151,6 +144,18 @@ export default function Home() {
 
   const isSignedIn = !!session?.user;
   const displayCreations = isSignedIn ? dbCreations : localCreations;
+
+  // First-time vs returning user. Returning users get the multi-style picker;
+  // first-timers go straight to Chibi for the fastest path to delight.
+  const isReturningUser = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const hasLocalCreations = localCreations.length > 0;
+    const hasPurchased = getLocalHasPurchased() || serverHasPurchased;
+    return hasLocalCreations || hasPurchased;
+  }, [localCreations.length, serverHasPurchased]);
+
+  // Pre-composed sheets for each variation tile so tile-tap is instant
+  const [tileSheets, setTileSheets] = useState<Record<number, string>>({});
 
   useEffect(() => { getSessionId(); }, []);
   useEffect(() => { try { if (localStorage.getItem(SEEN_LANDING_KEY) === "true") setShowLanding(false); } catch {} }, []);
@@ -163,7 +168,6 @@ export default function Home() {
         if (orders && orders.length > 0) {
           setServerHasPurchased(true);
           setLocalHasPurchased();
-          setLimitReached(false);
         }
       })
       .catch(() => {});
@@ -189,28 +193,10 @@ export default function Home() {
     try { localStorage.setItem(SEEN_LANDING_KEY, "true"); } catch {}
   }, []);
 
-  const handleCapture = useCallback((imageBase64: string) => {
-    setCapturedImage(imageBase64);
-    setStep("style");
-    trackCapture();
-  }, []);
-
   const handleStyleSelect = useCallback(
-    async (preset: StylePreset, customPrompt?: string) => {
-      if (!capturedImage) return;
-
-      const count = getLocalGenCount();
-      const purchased = getLocalHasPurchased() || serverHasPurchased;
-      const limit = getEffectiveLimit();
-      if (count >= limit && !purchased) {
-        if (!getEmailCaptured() && count >= FREE_GENERATION_LIMIT) {
-          setShowEmailCapture(true);
-          return;
-        }
-        setLimitReached(true);
-        trackLimitReached();
-        return;
-      }
+    async (preset: StylePreset, customPrompt?: string, imageOverride?: string) => {
+      const imageToUse = imageOverride ?? capturedImage;
+      if (!imageToUse) return;
 
       setSelectedStyle(preset);
       setIsGenerating(true);
@@ -218,14 +204,15 @@ export default function Home() {
       setGeneratedImage(null);
       setVariations([]);
       setPackSheet(null);
-      setLimitReached(false);
+      setTileSheets({});
+      setStep("style");
       hapticMedium();
 
       const styleId = preset.id;
       trackGenerateStart(styleId);
 
       try {
-        const body: Record<string, string> = { image: capturedImage };
+        const body: Record<string, string> = { image: imageToUse };
         if (customPrompt) body.customPrompt = customPrompt;
         else body.styleId = styleId;
 
@@ -237,7 +224,6 @@ export default function Home() {
 
         if (!res.ok) {
           const data = await res.json();
-          if (data.error === "FREE_LIMIT_REACHED") { setLimitReached(true); setIsGenerating(false); return; }
           if (data.error === "PROMPT_REJECTED") { setGenerateError("That style description wasn't allowed. Try something different!"); setIsGenerating(false); return; }
           throw new Error(data.error || "Generation failed");
         }
@@ -249,7 +235,7 @@ export default function Home() {
         hapticSuccess();
 
         addLocalCreation({
-          originalImage: capturedImage,
+          originalImage: imageToUse,
           generatedImage: data.generatedImage,
           stylePreset: data.stylePreset || styleId,
           ordered: false,
@@ -261,7 +247,7 @@ export default function Home() {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                originalImage: capturedImage,
+                originalImage: imageToUse,
                 generatedImage: data.generatedImage,
                 stylePreset: data.stylePreset || styleId,
               }),
@@ -283,7 +269,28 @@ export default function Home() {
         setIsGenerating(false);
       }
     },
-    [capturedImage, addLocalCreation, isSignedIn, serverHasPurchased]
+    [capturedImage, addLocalCreation, isSignedIn]
+  );
+
+  // Chibi-first auto-gen: snap photo → straight to Chibi for first-timers.
+  // Returning users see the style grid (they've earned it).
+  const handleCapture = useCallback(
+    (imageBase64: string) => {
+      setCapturedImage(imageBase64);
+      trackCapture();
+
+      if (isReturningUser) {
+        setStep("style");
+      } else {
+        const chibi = stylePresets.find((p) => p.id === "chibi");
+        if (chibi) {
+          handleStyleSelect(chibi, undefined, imageBase64);
+        } else {
+          setStep("style");
+        }
+      }
+    },
+    [isReturningUser, handleStyleSelect]
   );
 
   // As soon as we have a cartoon, kick off variations
@@ -317,6 +324,27 @@ export default function Home() {
       .catch(() => {});
   }, [variations, packSheet]);
 
+  // Pre-compose a sheet for EACH variation tile in background, so when the user
+  // taps a tile to add it to cart there's zero wait.
+  useEffect(() => {
+    variations.forEach((v) => {
+      if (!v.image) return;
+      if (tileSheets[v.index]) return;
+      fetch("/api/compose-sheet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images: [v.image], repeat: 6 }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.composedImage) {
+            setTileSheets((prev) => ({ ...prev, [v.index]: data.composedImage }));
+          }
+        })
+        .catch(() => {});
+    });
+  }, [variations, tileSheets]);
+
   const addPackToCart = useCallback(() => {
     if (!packSheet || !generatedImage) return;
     cart.addItem({
@@ -331,6 +359,21 @@ export default function Home() {
 
   const addSingleTileToCart = useCallback(
     async (tileImage: string, idx: number) => {
+      // Use pre-composed sheet if available — zero wait.
+      const cached = tileSheets[idx];
+      if (cached) {
+        cart.addItem({
+          kind: "single",
+          composedImage: cached,
+          thumbnail: tileImage,
+          label: "Sheet of one design — 6 of this sticker",
+        });
+        trackProductTypeSelected("single");
+        hapticSuccess();
+        return;
+      }
+
+      // Fallback if pre-compose hasn't finished yet
       setComposingTileIdx(idx);
       try {
         const res = await fetch("/api/compose-sheet", {
@@ -341,6 +384,7 @@ export default function Home() {
         if (!res.ok) return;
         const data = await res.json();
         if (data?.composedImage) {
+          setTileSheets((prev) => ({ ...prev, [idx]: data.composedImage }));
           cart.addItem({
             kind: "single",
             composedImage: data.composedImage,
@@ -354,7 +398,7 @@ export default function Home() {
         setComposingTileIdx(null);
       }
     },
-    [cart]
+    [cart, tileSheets]
   );
 
   const startCheckout = useCallback(async () => {
@@ -409,7 +453,6 @@ export default function Home() {
 
   const handlePaymentSuccess = useCallback(() => {
     setPaymentComplete(true);
-    setLimitReached(false);
     setLocalHasPurchased();
     cart.clear();
     trackPaymentComplete(orderAmount, orderQuantity);
@@ -538,34 +581,7 @@ export default function Home() {
                   <h2 className="font-display text-lg font-bold text-center">Tap a style to generate</h2>
                   {generateError && <p className="text-sm text-red-500 text-center">{generateError}</p>}
 
-                  {showEmailCapture ? (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-primary/30 bg-primary/5 p-5 text-center">
-                      <Sparkles size={24} className="mx-auto mb-2 text-primary" />
-                      <p className="font-bold text-sm">Want 1 more free generation?</p>
-                      <p className="text-xs text-muted-foreground mt-1 mb-3">Drop your email and we&apos;ll unlock one more!</p>
-                      <form
-                        onSubmit={async (e) => {
-                          e.preventDefault();
-                          if (emailInput.includes("@")) {
-                            try { await fetch("/api/email-capture", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: emailInput }) }); } catch {}
-                            setEmailCaptured(); setShowEmailCapture(false); setLimitReached(false); trackEmailCapture();
-                          }
-                        }}
-                        className="flex gap-2"
-                      >
-                        <input type="email" required placeholder="you@email.com" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} className="flex-1 px-3 py-2 rounded-xl border border-border text-sm bg-background" autoComplete="email" />
-                        <motion.button whileTap={{ scale: 0.95 }} type="submit" className="px-4 py-2 rounded-xl font-bold text-sm btn-gradient shadow-glow">Unlock</motion.button>
-                      </form>
-                    </motion.div>
-                  ) : limitReached ? (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-accent-orange/30 bg-accent-orange/5 p-5 text-center">
-                      <Lock size={24} className="mx-auto mb-2 text-accent-orange" />
-                      <p className="font-bold text-sm">Free generations used up</p>
-                      <p className="text-xs text-muted-foreground mt-1">Order any sticker to unlock unlimited creations!</p>
-                    </motion.div>
-                  ) : (
-                    <StyleGrid onSelect={handleStyleSelect} disabled={isGenerating} />
-                  )}
+                  <StyleGrid onSelect={handleStyleSelect} disabled={isGenerating} />
                 </div>
               )}
             </motion.div>

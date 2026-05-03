@@ -2,17 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { generatePreview } from "@/lib/generation";
 import { stylePresets, resolvePresetPrompt } from "@/lib/presets";
 import { moderatePrompt } from "@/lib/moderation";
-import { auth } from "@/lib/auth";
-import { getDb } from "@/lib/db";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { recordGeneration, recordError, isThrottled } from "@/lib/spend-tracker";
 import { sendAlert } from "@/lib/alerts";
 import { getSessionIdFromCookie } from "@/lib/session";
 
-const FREE_GENERATION_LIMIT = 3;
-
-// Rate limits
-const RATE_LIMIT_PER_IP = 10;
+// Rate limits — generous since we removed the per-user free cap.
+// Spend-tracker auto-throttle kicks in if daily cost spikes.
+const RATE_LIMIT_PER_IP = 30;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 export const maxDuration = 60;
@@ -92,28 +89,11 @@ export async function POST(request: NextRequest) {
       resolvedStyleId = resolved.resolvedId;
     }
 
-    // 3. Enforce generation limit for signed-in users
-    if (process.env.DATABASE_URL) {
-      const session = await auth();
-      if (session?.user?.id) {
-        const sql = getDb();
-        const [countRow] = await sql`
-          SELECT COUNT(*)::int AS count FROM creations WHERE user_id = ${session.user.id}
-        `;
-        const [orderRow] = await sql`
-          SELECT COUNT(*)::int AS count FROM orders WHERE user_id = ${session.user.id}
-        `;
-        const creationCount = countRow?.count ?? 0;
-        const hasOrdered = (orderRow?.count ?? 0) > 0;
-
-        if (creationCount >= FREE_GENERATION_LIMIT && !hasOrdered) {
-          return NextResponse.json(
-            { error: "FREE_LIMIT_REACHED" },
-            { status: 403 }
-          );
-        }
-      }
-    }
+    // Free generation is unlimited per user — abuse is controlled by:
+    //   - Per-IP rate limit above (10/hour)
+    //   - The spend-tracker auto-throttle when daily OpenAI cost spikes
+    // This trades a generation-cost ceiling for the higher-conversion funnel
+    // of letting people experiment freely until they fall in love with one.
 
     // 4. Generate the image (preview tier — fast)
     const styledImage = await generatePreview(image, prompt);
