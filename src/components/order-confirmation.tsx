@@ -2,19 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { PartyPopper, Package, Sparkles, Share2, Copy, Check } from "lucide-react";
+import { PartyPopper, Package, Sparkles, Share2, Check, Grid3x3 } from "lucide-react";
 import { hapticSuccess } from "@/lib/haptics";
 
 interface OrderConfirmationProps {
   imageUrl: string;
   quantity: number;
   onNewSticker: () => void;
+  onBrowseVariations?: () => void;
 }
 
 export default function OrderConfirmation({
   imageUrl,
   quantity,
   onNewSticker,
+  onBrowseVariations,
 }: OrderConfirmationProps) {
   const [copied, setCopied] = useState(false);
 
@@ -151,10 +153,24 @@ export default function OrderConfirmation({
         </motion.button>
       </motion.div>
 
+      {onBrowseVariations && (
+        <motion.button
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onBrowseVariations}
+          className="w-full py-3 rounded-2xl text-sm font-bold btn-gradient shadow-glow flex items-center justify-center gap-2"
+        >
+          <Grid3x3 size={16} />
+          See 9 more variations of your character
+        </motion.button>
+      )}
+
       <motion.button
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.85 }}
+        transition={{ delay: 0.9 }}
         whileTap={{ scale: 0.95 }}
         onClick={onNewSticker}
         className="w-full glass-strong border border-border py-3 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2"
