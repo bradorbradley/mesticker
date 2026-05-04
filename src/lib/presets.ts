@@ -10,6 +10,15 @@ const STICKER_SUFFIX =
 
 export const stylePresets: StylePreset[] = [
   {
+    id: "chibi",
+    name: "Chibi",
+    description: "Adorable anime chibi style",
+    previewImage: "/presets/chibi.jpg",
+    prompt:
+      "Transform this photo into an adorable chibi anime character. Enormous head (2-3x body size), tiny stubby body, huge sparkly eyes, simplified kawaii features, vibrant anime coloring. Match their hairstyle, hair color, and clothing." +
+      STICKER_SUFFIX,
+  },
+  {
     id: "pixar",
     name: "Pixar",
     description: "3D animated movie character",
@@ -52,42 +61,6 @@ export const stylePresets: StylePreset[] = [
     previewImage: "/presets/family-guy.webp",
     prompt:
       "Transform this photo into a character from Family Guy. Round/oval head shape, small simple white-circle eyes, prominent chin, flat colors. Seth MacFarlane animation style. Keep recognizable features like hairstyle and clothing." +
-      STICKER_SUFFIX,
-  },
-  {
-    id: "chibi",
-    name: "Chibi",
-    description: "Adorable anime chibi style",
-    previewImage: "/presets/chibi.jpg",
-    prompt:
-      "Transform this photo into an adorable chibi anime character. Enormous head (2-3x body size), tiny stubby body, huge sparkly eyes, simplified kawaii features, vibrant anime coloring. Match their hairstyle, hair color, and clothing." +
-      STICKER_SUFFIX,
-  },
-  {
-    id: "anime",
-    name: "Anime",
-    description: "Classic anime / manga look",
-    previewImage: "",
-    prompt:
-      "Transform this photo into a detailed anime character in modern Japanese animation style. Sharp angular features, dramatic cel-shading, vibrant hair and eye colors. Attack on Titan / Jujutsu Kaisen / MHA design language. Keep the person's face recognizable." +
-      STICKER_SUFFIX,
-  },
-  {
-    id: "comic-book",
-    name: "Comic Book",
-    description: "Marvel / DC superhero art",
-    previewImage: "",
-    prompt:
-      "Transform this photo into a Marvel/DC comic book superhero illustration. Bold ink outlines, Ben-Day dots, dramatic high-contrast shadows, dynamic perspective, heroic proportions. Jim Lee / Todd McFarlane vibe. Keep the person recognizable." +
-      STICKER_SUFFIX,
-  },
-  {
-    id: "watercolor",
-    name: "Watercolor",
-    description: "Soft painted portrait",
-    previewImage: "",
-    prompt:
-      "Transform this photo into a watercolor portrait painting with a hard sticker outline. Soft flowing washes of color INSIDE the outline, visible brushstrokes, gentle blending. Painterly but die-cut. Keep the person recognizable." +
       STICKER_SUFFIX,
   },
   {
