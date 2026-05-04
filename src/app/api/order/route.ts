@@ -33,20 +33,33 @@ interface CartBlobItem {
   sheetVariant: "pack" | "stack" | "original";
 }
 
+/**
+ * Helper: returns the input as-is if it's already an http(s) URL, or
+ * uploads it as a base64 image and returns the resulting URL.
+ */
+async function urlOrUpload(input: string | undefined): Promise<string | undefined> {
+  if (!input) return undefined;
+  if (/^https?:\/\//i.test(input)) return input;
+  return uploadImage(input);
+}
+
 async function buildCartBlob(items: CartItemInput[]): Promise<{
   cartUrl: string;
   totalQty: number;
   itemCount: number;
 }> {
+  // We deliberately do NOT upload `generatedImage` (the composed sheet) here.
+  // The composed sheet is up to ~22MB base64 — uploading it on every cart
+  // change made checkout setup take 10-30 seconds.
+  //
+  // Instead the webhook recomposes the sheet server-side from sourceCartoonUrl
+  // (which is small — 1024x1024 cartoon, optionally already a Blob URL).
   const blobItems: CartBlobItem[] = await Promise.all(
     items.map(async (item) => {
-      const composedImageUrl = await uploadImage(item.generatedImage);
-      const sourceCartoonUrl = item.sourceCartoon
-        ? await uploadImage(item.sourceCartoon)
-        : undefined;
+      const sourceCartoonUrl = await urlOrUpload(item.sourceCartoon);
       const tier = getTier(item.tierId);
       return {
-        composedImageUrl,
+        composedImageUrl: "", // intentionally empty — webhook recomposes
         sourceCartoonUrl,
         prompts: item.prompts || [],
         quantity: tier.qty,

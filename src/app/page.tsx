@@ -162,6 +162,9 @@ export default function Home() {
   const [tileSheets, setTileSheets] = useState<Record<number, string>>({});
   // Pack composition error state — surfaces if Canvas compose fails
   const [packError, setPackError] = useState<string | null>(null);
+  // Cartoon uploaded to Blob ONCE post-generation; reused by every cart op
+  // so order/PATCH calls don't have to upload anything (fast checkout).
+  const [cartoonUrl, setCartoonUrl] = useState<string | null>(null);
 
   useEffect(() => { getSessionId(); }, []);
   useEffect(() => { try { if (localStorage.getItem(SEEN_LANDING_KEY) === "true") setShowLanding(false); } catch {} }, []);
@@ -371,6 +374,23 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [generatedImage, originalSheet]);
 
+  // Upload the generated cartoon to Blob ONCE so subsequent order/PATCH
+  // calls can reference it by URL instead of re-uploading megabytes of
+  // base64 every time the cart changes. This is what makes checkout fast.
+  useEffect(() => {
+    if (!generatedImage || cartoonUrl) return;
+    let cancelled = false;
+    fetch("/api/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: generatedImage }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (!cancelled && data?.url) setCartoonUrl(data.url); })
+      .catch((err) => console.error("Cartoon upload failed:", err));
+    return () => { cancelled = true; };
+  }, [generatedImage, cartoonUrl]);
+
   // Auto-add 1 original sheet to cart the moment the original sheet is ready
   // and the user is on the reveal screen with an empty cart. Default state
   // is "1 sheet ready to buy" — quantity stepper takes it from there.
@@ -388,8 +408,10 @@ export default function Home() {
       composedImage: originalSheet,
       thumbnail: generatedImage,
       label: "Sheet of your sticker — 6 of this design",
+      sourceCartoon: cartoonUrl || generatedImage,
+      prompts: [],
     });
-  }, [step, originalSheet, generatedImage, cart, paymentComplete]);
+  }, [step, originalSheet, generatedImage, cart, paymentComplete, cartoonUrl]);
 
   const addPackToCart = useCallback(() => {
     if (!packSheet || !generatedImage) return;
@@ -401,7 +423,7 @@ export default function Home() {
       composedImage: packSheet,
       thumbnail: generatedImage,
       label: "Variations Pack — 6 poses of you",
-      sourceCartoon: generatedImage,
+      sourceCartoon: cartoonUrl || generatedImage,
       prompts: successful.map((v) => v.variation),
     });
     trackProductTypeSelected("variations");
@@ -433,7 +455,7 @@ export default function Home() {
           composedImage: cached,
           thumbnail: tileImage,
           label: "Sheet of one design — 6 of this sticker",
-          sourceCartoon: generatedImage || undefined,
+          sourceCartoon: cartoonUrl || generatedImage || undefined,
           prompts: variationPrompt ? [variationPrompt] : [],
         });
         trackProductTypeSelected("single");
@@ -451,7 +473,7 @@ export default function Home() {
           composedImage: composed,
           thumbnail: tileImage,
           label: "Sheet of one design — 6 of this sticker",
-          sourceCartoon: generatedImage || undefined,
+          sourceCartoon: cartoonUrl || generatedImage || undefined,
           prompts: variationPrompt ? [variationPrompt] : [],
         });
         trackProductTypeSelected("single");
@@ -746,6 +768,8 @@ export default function Home() {
                 composedImage: originalSheet,
                 thumbnail: generatedImage,
                 label: "Sheet of your sticker — 6 of this design",
+                sourceCartoon: cartoonUrl || generatedImage,
+                prompts: [],
               });
             };
             const decrementQty = () => {

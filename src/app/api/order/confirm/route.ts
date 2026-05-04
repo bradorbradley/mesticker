@@ -39,20 +39,31 @@ async function fetchAsBuffer(dataUrl: string): Promise<Buffer> {
  * user already paid, we still want to ship something).
  */
 async function regenerateHQ(item: CartBlobItem): Promise<string> {
-  if (!item.sourceCartoonUrl || item.prompts.length === 0) {
-    return item.composedImageUrl;
+  // We need a sourceCartoonUrl no matter what — the webhook always recomposes
+  // server-side now (the order POST no longer uploads the giant composed sheet).
+  if (!item.sourceCartoonUrl) {
+    throw new Error("Cart item missing sourceCartoonUrl — cannot fulfill");
   }
 
   try {
     const cartoonDataUrl = await fetchAsBase64(item.sourceCartoonUrl);
 
+    // ORIGINAL: 6 copies of the cartoon as-is. No regen, no prompts —
+    // the cartoon was already generated at medium quality which prints fine.
+    if (item.sheetVariant === "original" || item.prompts.length === 0) {
+      const cartoonBuf = await fetchAsBuffer(cartoonDataUrl);
+      const { buffer: composedBuf } = await composeSheet(Array(6).fill(cartoonBuf));
+      const dataUrl = `data:image/png;base64,${composedBuf.toString("base64")}`;
+      return await uploadImage(dataUrl);
+    }
+
+    // SINGLE / VARIATIONS: regenerate each prompt at quality:high, then
+    // compose the sheet (single repeats 1 tile × 6, variations uses 6 distinct).
     const tilesHQ = await Promise.all(
       item.prompts.map((prompt) => generatePrint(cartoonDataUrl, prompt))
     );
 
     const buffers = await Promise.all(tilesHQ.map(fetchAsBuffer));
-    // Single-design sheets repeat 1 image to fill 6 cells; pack sheets use
-    // the actual variations. Match the client-side composer's logic.
     const composeBuffers =
       item.sheetVariant === "stack" && buffers.length === 1
         ? Array(6).fill(buffers[0])
@@ -62,8 +73,18 @@ async function regenerateHQ(item: CartBlobItem): Promise<string> {
     const dataUrl = `data:image/png;base64,${composedBuf.toString("base64")}`;
     return await uploadImage(dataUrl);
   } catch (err) {
-    console.error("[hq-regen] failed for item, falling back:", err);
-    return item.composedImageUrl;
+    console.error("[hq-regen] failed for item:", err);
+    // Last-ditch: if the cartoon is fetchable, ship a low-quality compose
+    // so the customer at least gets stickers.
+    try {
+      const cartoonDataUrl = await fetchAsBase64(item.sourceCartoonUrl);
+      const cartoonBuf = await fetchAsBuffer(cartoonDataUrl);
+      const { buffer } = await composeSheet(Array(6).fill(cartoonBuf));
+      return await uploadImage(`data:image/png;base64,${buffer.toString("base64")}`);
+    } catch (fallbackErr) {
+      console.error("[hq-regen] fallback also failed:", fallbackErr);
+      throw err;
+    }
   }
 }
 
