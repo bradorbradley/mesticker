@@ -124,6 +124,7 @@ export default function Home() {
   const [variations, setVariations] = useState<Variation[]>([]);
   const [variationsLoading, setVariationsLoading] = useState(false);
   const [packSheet, setPackSheet] = useState<string | null>(null); // composed Variations Pack
+  const [originalSheet, setOriginalSheet] = useState<string | null>(null); // 6-of-original sheet, pre-composed
   const [composingTileIdx, setComposingTileIdx] = useState<number | null>(null);
 
   // Order state
@@ -337,6 +338,18 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [variations, packSheet]);
 
+  // Pre-compose the "original sticker as a sheet of 6" the moment the cartoon
+  // lands. Lets the user buy the original right from the reveal screen with
+  // zero wait.
+  useEffect(() => {
+    if (!generatedImage || originalSheet) return;
+    let cancelled = false;
+    composeSheetClient([generatedImage], 6)
+      .then((composed) => { if (!cancelled) setOriginalSheet(composed); })
+      .catch((err) => console.error("Original sheet compose failed:", err));
+    return () => { cancelled = true; };
+  }, [generatedImage, originalSheet]);
+
   const addPackToCart = useCallback(() => {
     if (!packSheet || !generatedImage) return;
     cart.addItem({
@@ -348,6 +361,18 @@ export default function Home() {
     trackProductTypeSelected("variations");
     hapticSuccess();
   }, [cart, packSheet, generatedImage]);
+
+  const addOriginalToCart = useCallback(() => {
+    if (!originalSheet || !generatedImage) return;
+    cart.addItem({
+      kind: "single",
+      composedImage: originalSheet,
+      thumbnail: generatedImage,
+      label: "Sheet of your original sticker — 6 of this design",
+    });
+    trackProductTypeSelected("single");
+    hapticSuccess();
+  }, [cart, originalSheet, generatedImage]);
 
   const addSingleTileToCart = useCallback(
     async (tileImage: string, idx: number) => {
@@ -474,6 +499,8 @@ export default function Home() {
     setGenerateError(null);
     setVariations([]);
     setPackSheet(null);
+    setOriginalSheet(null);
+    setTileSheets({});
     setStep("style");
   }, []);
 
@@ -497,6 +524,8 @@ export default function Home() {
     setGenerateError(null);
     setVariations([]);
     setPackSheet(null);
+    setOriginalSheet(null);
+    setTileSheets({});
     cart.clear();
     setStep("capture");
   }, [cart]);
@@ -510,6 +539,8 @@ export default function Home() {
     setPaymentComplete(false);
     setVariations([]);
     setPackSheet(null);
+    setOriginalSheet(null);
+    setTileSheets({});
     setStep("reveal");
     trackRevealViewed();
   }, []);
@@ -525,7 +556,12 @@ export default function Home() {
       setSelectedStyle(null);
       setVariations([]);
       setPackSheet(null);
+      setOriginalSheet(null);
+      setTileSheets({});
       setStep("style");
+    } else if (step === "variations") {
+      // Back from variations returns to reveal — cart preserved
+      setStep("reveal");
     } else if (step === "order") {
       setClientSecret(null);
       setPaymentIntentId(null);
@@ -613,44 +649,184 @@ export default function Home() {
             </motion.div>
           )}
 
-          {step === "reveal" && generatedImage && capturedImage && (
-            <motion.div key="reveal" variants={pageVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.3, ease: "easeOut" }}>
-              <div className="flex flex-col gap-4">
-                {/* Reveal slider — auto-animates to show comparison */}
-                <ImageRevealSlider beforeSrc={capturedImage} afterSrc={generatedImage} height={300} />
+          {step === "reveal" && generatedImage && capturedImage && (() => {
+            const variationsReadyCount = variations.filter((v) => v.image).length;
+            const originalInCart = !!cart.items.find(
+              (it) => it.kind === "single" && it.thumbnail === generatedImage
+            );
+            const originalCartItem = cart.items.find(
+              (it) => it.kind === "single" && it.thumbnail === generatedImage
+            );
+            return (
+              <motion.div key="reveal" variants={pageVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.3, ease: "easeOut" }}>
+                <div className="flex flex-col gap-4">
+                  {/* Reveal slider — auto-animates to show comparison */}
+                  <ImageRevealSlider beforeSrc={capturedImage} afterSrc={generatedImage} height={300} />
 
-                {/* Save / Share */}
-                <div className="flex gap-2 justify-center">
+                  {/* Save / Share */}
+                  <div className="flex gap-2 justify-center">
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold glass-strong border border-border shadow-soft"
+                      onClick={() => {
+                        const link = document.createElement("a");
+                        link.href = generatedImage;
+                        link.download = `mesticker-${Date.now()}.png`;
+                        link.click();
+                        trackImageDownload();
+                      }}
+                    >
+                      <Download size={16} /> Save
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold glass-strong border border-border shadow-soft"
+                      onClick={async () => {
+                        trackImageShare();
+                        if (navigator.share) {
+                          try {
+                            const res = await fetch(generatedImage);
+                            const blob = await res.blob();
+                            const file = new File([blob], "mesticker.png", { type: "image/png" });
+                            await navigator.share({ title: "My MeSticker", text: "Check out my cartoon sticker from mesticker.fun!", files: [file] });
+                          } catch {}
+                        }
+                      }}
+                    >
+                      <Share2 size={16} /> Share
+                    </motion.button>
+                  </div>
+
+                  {/* THIS STICKER — toggle to add a sheet of 6 originals */}
                   <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold glass-strong border border-border shadow-soft"
+                    whileTap={{ scale: 0.97 }}
                     onClick={() => {
-                      const link = document.createElement("a");
-                      link.href = generatedImage;
-                      link.download = `mesticker-${Date.now()}.png`;
-                      link.click();
-                      trackImageDownload();
-                    }}
-                  >
-                    <Download size={16} /> Save
-                  </motion.button>
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold glass-strong border border-border shadow-soft"
-                    onClick={async () => {
-                      trackImageShare();
-                      if (navigator.share) {
-                        try {
-                          const res = await fetch(generatedImage);
-                          const blob = await res.blob();
-                          const file = new File([blob], "mesticker.png", { type: "image/png" });
-                          await navigator.share({ title: "My MeSticker", text: "Check out my cartoon sticker from mesticker.fun!", files: [file] });
-                        } catch {}
+                      if (originalInCart && originalCartItem) {
+                        cart.removeItem(originalCartItem.id);
+                        hapticLight();
+                      } else {
+                        addOriginalToCart();
                       }
                     }}
+                    disabled={!originalSheet}
+                    className={`w-full p-3 rounded-2xl border-2 transition-all flex items-center gap-3 disabled:opacity-50 ${
+                      originalInCart
+                        ? "border-primary bg-primary/10 ring-2 ring-primary/20"
+                        : "border-border bg-card/50"
+                    }`}
                   >
-                    <Share2 size={16} /> Share
+                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-muted/30 flex items-center justify-center flex-shrink-0">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={generatedImage} alt="" className="w-full h-full object-contain" />
+                    </div>
+                    <div className="flex-1 text-left min-w-0">
+                      <p className="text-sm font-bold truncate">
+                        Get this sticker — {formatPrice(FIRST_SHEET_CENTS)}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        Sheet of 6 of this exact design · free US shipping
+                      </p>
+                    </div>
+                    <div className="flex-shrink-0">
+                      {originalInCart ? (
+                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-md">
+                          <Check size={16} className="text-white" />
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center">
+                          <Plus size={16} className="text-primary" />
+                        </div>
+                      )}
+                    </div>
                   </motion.button>
+
+                  {/* INLINE CHECKOUT — appears the moment cart has items */}
+                  {cart.count === 0 ? (
+                    <div className="w-full py-3 rounded-xl border-2 border-dashed border-border bg-muted/20 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                      <ShoppingCart size={14} /> Add a sticker above to check out
+                    </div>
+                  ) : paymentComplete ? (
+                    <OrderConfirmation
+                      imageUrl={generatedImage || ""}
+                      quantity={orderQuantity}
+                      onNewSticker={handleNewSticker}
+                    />
+                  ) : isCreatingOrder && !clientSecret ? (
+                    <div className="w-full py-6 rounded-xl border border-border bg-card/50 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 size={16} className="animate-spin" /> Loading checkout…
+                    </div>
+                  ) : clientSecret && paymentIntentId ? (
+                    <div className="rounded-2xl border border-border bg-card/50 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                          <Lock size={12} /> Pay {formatPrice(cart.totalCents)}
+                        </p>
+                        <span className="text-[10px] text-muted-foreground">
+                          {cart.count} {cart.count === 1 ? "sheet" : "sheets"} · free US shipping
+                        </span>
+                      </div>
+                      {paymentError && (
+                        <p className="text-xs text-red-500 text-center mb-2">{paymentError}</p>
+                      )}
+                      <UnifiedCheckout
+                        clientSecret={clientSecret}
+                        paymentIntentId={paymentIntentId}
+                        amount={orderAmount}
+                        cartItems={cart.items.map((i) => ({
+                          id: i.id,
+                          generatedImage: i.composedImage,
+                          originalImage: capturedImage || "",
+                          stylePreset: selectedStyle?.id || "unknown",
+                          sheetVariant: i.kind === "variations" ? ("pack" as const) : ("stack" as const),
+                          tierId: "sheet-1",
+                        }))}
+                        onSuccess={handlePaymentSuccess}
+                        onError={setPaymentError}
+                        compact
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-full py-3 text-xs text-muted-foreground text-center">
+                      {paymentError || "Setting up checkout..."}
+                    </div>
+                  )}
+
+                  {/* View Variations — secondary CTA, takes user to the 9-grid */}
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setStep("variations")}
+                    className="w-full py-3 rounded-xl font-semibold text-sm glass-strong border-2 border-primary/30 shadow-soft flex items-center justify-center gap-2 relative"
+                  >
+                    <Sparkles size={14} className="text-primary" />
+                    View 9 More Variations
+                    {variationsReadyCount > 0 && variationsReadyCount < 9 && (
+                      <span className="text-[10px] text-muted-foreground ml-1">({variationsReadyCount}/9 ready)</span>
+                    )}
+                    {variationsReadyCount >= 9 && (
+                      <span className="absolute -top-0.5 right-3 text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-b-md">
+                        Ready
+                      </span>
+                    )}
+                  </motion.button>
+
+                  <IPhoneStickerPack originalImage={generatedImage} variations={variationsForIPhone} />
+
+                  <button className="text-sm text-primary font-semibold text-center flex items-center justify-center gap-1.5 py-1" onClick={handleTryAnotherStyle}>
+                    <Palette size={14} /> Try Another Style
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })()}
+
+          {step === "variations" && generatedImage && capturedImage && (
+            <motion.div key="variations" variants={pageVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.3, ease: "easeOut" }}>
+              <div className="flex flex-col gap-4">
+                <div className="text-center">
+                  <h2 className="font-display text-lg font-bold">More variations of you</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Tap any sticker to add a sheet of that design
+                  </p>
                 </div>
 
                 {/* 9-grid sticker pack with skeleton tiles */}
@@ -696,7 +872,6 @@ export default function Home() {
                             >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={v.image} alt="" className="w-full h-full object-contain" />
-                              {/* Persistent state badge — visible at all times on mobile */}
                               <div className="absolute top-1 right-1">
                                 {composingTileIdx === i ? (
                                   <div className="w-6 h-6 rounded-full bg-white/90 shadow-lg flex items-center justify-center">
@@ -720,9 +895,6 @@ export default function Home() {
                       );
                     })}
                   </div>
-                  <p className="text-[10px] text-muted-foreground text-center mt-2">
-                    Tap any sticker to add a sheet of that one design
-                  </p>
                 </div>
 
                 {/* Variations Pack — clear card with add/remove toggle */}
@@ -791,11 +963,10 @@ export default function Home() {
                   );
                 })()}
 
-                {/* INLINE CHECKOUT — appears the moment cart has items.
-                    Apple Pay / Google Pay / Link buttons are right here. */}
+                {/* INLINE CHECKOUT — same as reveal, cart persists */}
                 {cart.count === 0 ? (
                   <div className="w-full py-3 rounded-xl border-2 border-dashed border-border bg-muted/20 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <ShoppingCart size={14} /> Add a sticker above to check out
+                    <ShoppingCart size={14} /> Pick a sticker above to check out
                   </div>
                 ) : paymentComplete ? (
                   <OrderConfirmation
@@ -848,10 +1019,8 @@ export default function Home() {
                   </p>
                 )}
 
-                <IPhoneStickerPack originalImage={generatedImage} variations={variationsForIPhone} />
-
-                <button className="text-sm text-primary font-semibold text-center flex items-center justify-center gap-1.5 py-1" onClick={handleTryAnotherStyle}>
-                  <Palette size={14} /> Try Another Style
+                <button className="text-sm text-primary font-semibold text-center flex items-center justify-center gap-1.5 py-1" onClick={() => setStep("reveal")}>
+                  <ArrowLeft size={14} /> Back to your sticker
                 </button>
               </div>
             </motion.div>

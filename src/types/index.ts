@@ -46,7 +46,7 @@ export interface Order {
   totalAmount: number;
 }
 
-export type AppStep = "capture" | "style" | "reveal" | "order";
+export type AppStep = "capture" | "style" | "reveal" | "variations" | "order";
 
 export interface CartItem {
   id: string;
