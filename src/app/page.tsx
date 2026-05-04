@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { formatPrice } from "@/lib/pricing";
 import { useCart, FIRST_SHEET_CENTS, ADDITIONAL_SHEET_CENTS } from "@/lib/cart";
+import { composeSheetClient } from "@/lib/compose-sheet-client";
 import LandingHero from "@/components/landing-hero";
 import CameraCapture from "@/components/camera-capture";
 import StyleGrid from "@/components/style-grid";
@@ -156,6 +157,8 @@ export default function Home() {
 
   // Pre-composed sheets for each variation tile so tile-tap is instant
   const [tileSheets, setTileSheets] = useState<Record<number, string>>({});
+  // Pack composition error state — surfaces if Canvas compose fails
+  const [packError, setPackError] = useState<string | null>(null);
 
   useEffect(() => { getSessionId(); }, []);
   useEffect(() => { try { if (localStorage.getItem(SEEN_LANDING_KEY) === "true") setShowLanding(false); } catch {} }, []);
@@ -309,41 +312,30 @@ export default function Home() {
       .finally(() => setVariationsLoading(false));
   }, [generatedImage, variations.length, variationsLoading]);
 
-  // When 6+ variations land, compose the Pack sheet so it's ready when user clicks
+  // When 6+ variations land, compose the Pack sheet client-side via Canvas.
+  // Runs in the browser in <100ms — no serverless round-trip, no saturation.
   useEffect(() => {
     if (packSheet) return;
     const successful = variations.filter((v) => v.image).map((v) => v.image!);
     if (successful.length < 6) return;
-    fetch("/api/compose-sheet", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ images: successful.slice(0, 6) }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (data?.composedImage) setPackSheet(data.composedImage); })
-      .catch(() => {});
-  }, [variations, packSheet]);
 
-  // Pre-compose a sheet for EACH variation tile in background, so when the user
-  // taps a tile to add it to cart there's zero wait.
-  useEffect(() => {
-    variations.forEach((v) => {
-      if (!v.image) return;
-      if (tileSheets[v.index]) return;
-      fetch("/api/compose-sheet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images: [v.image], repeat: 6 }),
+    let cancelled = false;
+    composeSheetClient(successful.slice(0, 6))
+      .then((composed) => {
+        if (!cancelled) {
+          setPackSheet(composed);
+          setPackError(null);
+        }
       })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (data?.composedImage) {
-            setTileSheets((prev) => ({ ...prev, [v.index]: data.composedImage }));
-          }
-        })
-        .catch(() => {});
-    });
-  }, [variations, tileSheets]);
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("Pack compose failed:", err);
+          setPackError(err instanceof Error ? err.message : "Pack compose failed");
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [variations, packSheet]);
 
   const addPackToCart = useCallback(() => {
     if (!packSheet || !generatedImage) return;
@@ -359,7 +351,7 @@ export default function Home() {
 
   const addSingleTileToCart = useCallback(
     async (tileImage: string, idx: number) => {
-      // Use pre-composed sheet if available — zero wait.
+      // Use pre-composed sheet if cached
       const cached = tileSheets[idx];
       if (cached) {
         cart.addItem({
@@ -373,27 +365,21 @@ export default function Home() {
         return;
       }
 
-      // Fallback if pre-compose hasn't finished yet
+      // Compose on the fly client-side (fast — <100ms via Canvas)
       setComposingTileIdx(idx);
       try {
-        const res = await fetch("/api/compose-sheet", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ images: [tileImage], repeat: 6 }),
+        const composed = await composeSheetClient([tileImage], 6);
+        setTileSheets((prev) => ({ ...prev, [idx]: composed }));
+        cart.addItem({
+          kind: "single",
+          composedImage: composed,
+          thumbnail: tileImage,
+          label: "Sheet of one design — 6 of this sticker",
         });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data?.composedImage) {
-          setTileSheets((prev) => ({ ...prev, [idx]: data.composedImage }));
-          cart.addItem({
-            kind: "single",
-            composedImage: data.composedImage,
-            thumbnail: tileImage,
-            label: "Sheet of one design — 6 of this sticker",
-          });
-          trackProductTypeSelected("single");
-          hapticSuccess();
-        }
+        trackProductTypeSelected("single");
+        hapticSuccess();
+      } catch (err) {
+        console.error("Tile compose failed:", err);
       } finally {
         setComposingTileIdx(null);
       }
@@ -681,10 +667,23 @@ export default function Home() {
                 <motion.button
                   whileTap={{ scale: 0.95 }}
                   className="w-full py-3.5 rounded-xl font-bold text-sm btn-gradient shadow-glow flex items-center justify-center gap-2 disabled:opacity-50"
-                  onClick={addPackToCart}
-                  disabled={!packSheet}
+                  onClick={() => {
+                    if (packError) {
+                      // Retry: clear error, the useEffect will recompose
+                      setPackError(null);
+                      setPackSheet(null);
+                    } else {
+                      addPackToCart();
+                    }
+                  }}
+                  disabled={!packSheet && !packError}
                 >
-                  {!packSheet ? (
+                  {packError ? (
+                    <>
+                      <ShoppingCart size={16} />
+                      Couldn&apos;t build pack — tap to retry
+                    </>
+                  ) : !packSheet ? (
                     <>
                       <Loader2 size={14} className="animate-spin" />
                       Building your pack…
