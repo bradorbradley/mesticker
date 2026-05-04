@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/components/auth-provider";
 import { PostHogProvider } from "@/components/posthog-provider";
 import { CartProvider } from "@/lib/cart";
+import Footer from "@/components/footer";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -70,7 +71,14 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-dvh bg-background antialiased font-body">
-        <PostHogProvider><AuthProvider><CartProvider>{children}</CartProvider></AuthProvider></PostHogProvider>
+        <PostHogProvider>
+          <AuthProvider>
+            <CartProvider>
+              {children}
+              <Footer />
+            </CartProvider>
+          </AuthProvider>
+        </PostHogProvider>
       </body>
     </html>
   );

@@ -154,7 +154,7 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
           transition={{ delay: 0.7 }}
           className="mt-3 text-xs text-muted-foreground"
         >
-          3 free creations, no sign-up needed
+          Free shipping in the US · ships in 3–5 days
         </motion.p>
       </div>
 
@@ -240,9 +240,9 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
               ))}
             </div>
             <div>
-              <p className="font-display font-bold text-sm">Sticker Pack</p>
+              <p className="font-display font-bold text-sm">Stack of Me</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                From $19.99 / 10+ identical stickers
+                $14.99 · 6 of one sticker
               </p>
             </div>
           </div>
@@ -271,9 +271,9 @@ export default function LandingHero({ onStart }: LandingHeroProps) {
               </div>
             </div>
             <div>
-              <p className="font-display font-bold text-sm">Variation Sheet</p>
+              <p className="font-display font-bold text-sm">Pack of Me</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                $14.99 / 6 unique poses
+                $14.99 · 6 unique poses
               </p>
             </div>
           </div>
