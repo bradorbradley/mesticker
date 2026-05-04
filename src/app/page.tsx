@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -12,6 +12,7 @@ import {
   Palette,
   Loader2,
   Plus,
+  Minus,
   Check,
   X,
   Trash2,
@@ -53,6 +54,7 @@ import {
 const GEN_COUNT_KEY = "mesticker-gen-count";
 const HAS_PURCHASED_KEY = "mesticker-has-purchased";
 const SEEN_LANDING_KEY = "mesticker-seen-landing";
+const LAST_PURCHASE_KEY = "mesticker-last-purchase"; // for post-redirect confirmation
 
 function incrementLocalGenCount() {
   try {
@@ -185,9 +187,28 @@ export default function Home() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("payment") === "success" || params.get("redirect_status") === "succeeded") {
+      // Restore the last-purchase context so the confirmation actually shows
+      // the user's sticker, the right qty, etc. Persisted right before
+      // confirmPayment redirected them out.
+      try {
+        const raw = localStorage.getItem(LAST_PURCHASE_KEY);
+        if (raw) {
+          const last = JSON.parse(raw) as {
+            generatedImage?: string;
+            capturedImage?: string;
+            orderAmount?: number;
+            orderQuantity?: number;
+          };
+          if (last.generatedImage) setGeneratedImage(last.generatedImage);
+          if (last.capturedImage) setCapturedImage(last.capturedImage);
+          if (last.orderAmount) setOrderAmount(last.orderAmount);
+          if (last.orderQuantity) setOrderQuantity(last.orderQuantity);
+        }
+      } catch {}
       setPaymentComplete(true);
-      setStep("order");
+      setStep("reveal");
       setShowLanding(false);
+      setLocalHasPurchased();
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
@@ -349,6 +370,26 @@ export default function Home() {
       .catch((err) => console.error("Original sheet compose failed:", err));
     return () => { cancelled = true; };
   }, [generatedImage, originalSheet]);
+
+  // Auto-add 1 original sheet to cart the moment the original sheet is ready
+  // and the user is on the reveal screen with an empty cart. Default state
+  // is "1 sheet ready to buy" — quantity stepper takes it from there.
+  const autoAddedRef = useRef(false);
+  useEffect(() => {
+    if (step !== "reveal") return;
+    if (!originalSheet || !generatedImage) return;
+    if (cart.count > 0) return;
+    if (autoAddedRef.current) return;
+    if (paymentComplete) return;
+
+    autoAddedRef.current = true;
+    cart.addItem({
+      kind: "original",
+      composedImage: originalSheet,
+      thumbnail: generatedImage,
+      label: "Sheet of your sticker — 6 of this design",
+    });
+  }, [step, originalSheet, generatedImage, cart, paymentComplete]);
 
   const addPackToCart = useCallback(() => {
     if (!packSheet || !generatedImage) return;
@@ -523,9 +564,23 @@ export default function Home() {
   const handlePaymentSuccess = useCallback(() => {
     setPaymentComplete(true);
     setLocalHasPurchased();
+    // Persist enough state so the confirmation survives a redirect-back
+    // (e.g. Link's auth flow returns to ?payment=success on a fresh page).
+    try {
+      localStorage.setItem(
+        LAST_PURCHASE_KEY,
+        JSON.stringify({
+          generatedImage,
+          capturedImage,
+          orderAmount,
+          orderQuantity,
+          ts: Date.now(),
+        })
+      );
+    } catch {}
     cart.clear();
     trackPaymentComplete(orderAmount, orderQuantity);
-  }, [orderAmount, orderQuantity, cart]);
+  }, [orderAmount, orderQuantity, cart, generatedImage, capturedImage]);
 
   const handleNewSticker = useCallback(() => {
     setCapturedImage(null);
@@ -542,8 +597,23 @@ export default function Home() {
     setPackSheet(null);
     setOriginalSheet(null);
     setTileSheets({});
+    autoAddedRef.current = false;
     cart.clear();
     setStep("capture");
+  }, [cart]);
+
+  // Reset payment state for a NEW order without losing the cartoon/variations.
+  // Used post-purchase when the user wants to order more variations as a
+  // separate transaction.
+  const resetForNewOrder = useCallback(() => {
+    setClientSecret(null);
+    setPaymentIntentId(null);
+    setOrderAmount(0);
+    setOrderQuantity(0);
+    setPaymentComplete(false);
+    setPaymentError(null);
+    autoAddedRef.current = true; // don't auto-add on the next render
+    cart.clear();
   }, [cart]);
 
   const handleGallerySelect = useCallback((creation: Creation) => {
@@ -666,13 +736,24 @@ export default function Home() {
           )}
 
           {step === "reveal" && generatedImage && capturedImage && (() => {
-            const variationsReadyCount = variations.filter((v) => v.image).length;
-            const originalInCart = !!cart.items.find(
-              (it) => it.kind === "single" && it.thumbnail === generatedImage
-            );
-            const originalCartItem = cart.items.find(
-              (it) => it.kind === "single" && it.thumbnail === generatedImage
-            );
+            const originalItems = cart.items.filter((it) => it.kind === "original");
+            const sheetCount = originalItems.length;
+            const incrementQty = () => {
+              if (!originalSheet || !generatedImage) return;
+              hapticLight();
+              cart.addItem({
+                kind: "original",
+                composedImage: originalSheet,
+                thumbnail: generatedImage,
+                label: "Sheet of your sticker — 6 of this design",
+              });
+            };
+            const decrementQty = () => {
+              if (sheetCount <= 1) return;
+              hapticLight();
+              const last = originalItems[originalItems.length - 1];
+              cart.removeItem(last.id);
+            };
             return (
               <motion.div key="reveal" variants={pageVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.3, ease: "easeOut" }}>
                 <div className="flex flex-col gap-4">
@@ -713,76 +794,86 @@ export default function Home() {
                     </motion.button>
                   </div>
 
-                  {/* THIS STICKER — toggle to add a sheet of 6 originals */}
-                  <motion.button
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => {
-                      if (originalInCart && originalCartItem) {
-                        cart.removeItem(originalCartItem.id);
-                        hapticLight();
-                      } else {
-                        addOriginalToCart();
-                      }
-                    }}
-                    disabled={!originalSheet}
-                    className={`w-full p-3 rounded-2xl border-2 transition-all flex items-center gap-3 disabled:opacity-50 ${
-                      originalInCart
-                        ? "border-primary bg-primary/10 ring-2 ring-primary/20"
-                        : "border-border bg-card/50"
-                    }`}
-                  >
-                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-muted/30 flex items-center justify-center flex-shrink-0">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={generatedImage} alt="" className="w-full h-full object-contain" />
+                  {/* PRODUCT CARD — preview, quantity stepper, live total. The
+                      whole interface is the buy interface. */}
+                  <div className="rounded-2xl border-2 border-primary/30 bg-card shadow-card p-4 flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-muted/30 flex items-center justify-center flex-shrink-0 border border-border">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={generatedImage} alt="" className="w-full h-full object-contain" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold">Your sticker sheet</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          6 of this design per sheet · 5.83″ × 8.27″ kiss-cut
+                        </p>
+                        <p className="text-[10px] text-green-600 font-semibold mt-0.5">
+                          Free US shipping · 3–5 days
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1 text-left min-w-0">
-                      <p className="text-sm font-bold truncate">
-                        Get this sticker — {formatPrice(FIRST_SHEET_CENTS)}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground truncate">
-                        Sheet of 6 of this exact design · free US shipping
-                      </p>
-                    </div>
-                    <div className="flex-shrink-0">
-                      {originalInCart ? (
-                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-md">
-                          <Check size={16} className="text-white" />
-                        </div>
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center">
-                          <Plus size={16} className="text-primary" />
-                        </div>
-                      )}
-                    </div>
-                  </motion.button>
 
-                  {/* INLINE CHECKOUT — appears the moment cart has items */}
-                  {cart.count === 0 ? (
-                    <div className="w-full py-3 rounded-xl border-2 border-dashed border-border bg-muted/20 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                      <ShoppingCart size={14} /> Add a sticker above to check out
+                    <div className="flex items-center justify-between rounded-xl bg-muted/30 p-2">
+                      <span className="text-xs font-semibold text-muted-foreground ml-2">
+                        Sheets
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
+                          onClick={decrementQty}
+                          disabled={sheetCount <= 1}
+                          className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+                          aria-label="Decrease quantity"
+                        >
+                          <Minus size={14} />
+                        </motion.button>
+                        <span className="w-6 text-center font-bold text-base">
+                          {sheetCount}
+                        </span>
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
+                          onClick={incrementQty}
+                          disabled={!originalSheet}
+                          className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center shadow-md disabled:opacity-50"
+                          aria-label="Increase quantity"
+                        >
+                          <Plus size={14} />
+                        </motion.button>
+                      </div>
                     </div>
-                  ) : paymentComplete ? (
+
+                    <div className="flex items-baseline justify-between border-t border-border pt-3">
+                      <span className="text-xs text-muted-foreground">Total</span>
+                      <span className="font-display text-2xl font-bold gradient-text">
+                        {formatPrice(cart.totalCents)}
+                      </span>
+                    </div>
+                    {sheetCount > 1 && (
+                      <p className="text-[10px] text-muted-foreground -mt-1 text-right">
+                        {formatPrice(FIRST_SHEET_CENTS)} first · {formatPrice(ADDITIONAL_SHEET_CENTS)} each additional
+                      </p>
+                    )}
+                  </div>
+
+                  {/* PAY — Apple Pay / Google Pay / Link / Card all inline */}
+                  {paymentComplete ? (
                     <OrderConfirmation
                       imageUrl={generatedImage || ""}
                       quantity={orderQuantity}
                       onNewSticker={handleNewSticker}
+                      onBrowseVariations={() => {
+                        resetForNewOrder();
+                        setStep("variations");
+                      }}
                     />
                   ) : isCreatingOrder && !clientSecret ? (
                     <div className="w-full py-6 rounded-xl border border-border bg-card/50 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 size={16} className="animate-spin" /> Loading checkout…
+                      <Loader2 size={16} className="animate-spin" /> Setting up checkout…
                     </div>
                   ) : clientSecret && paymentIntentId ? (
-                    <div className="rounded-2xl border border-border bg-card/50 p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-                          <Lock size={12} /> Pay {formatPrice(cart.totalCents)}
-                        </p>
-                        <span className="text-[10px] text-muted-foreground">
-                          {cart.count} {cart.count === 1 ? "sheet" : "sheets"} · free US shipping
-                        </span>
-                      </div>
+                    <div className="flex flex-col gap-2">
                       {paymentError && (
-                        <p className="text-xs text-red-500 text-center mb-2">{paymentError}</p>
+                        <p className="text-xs text-red-500 text-center">{paymentError}</p>
                       )}
                       <UnifiedCheckout
                         clientSecret={clientSecret}
@@ -802,28 +893,10 @@ export default function Home() {
                       />
                     </div>
                   ) : (
-                    <div className="w-full py-3 text-xs text-muted-foreground text-center">
-                      {paymentError || "Setting up checkout..."}
+                    <div className="w-full py-6 rounded-xl border border-border bg-card/50 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 size={16} className="animate-spin" /> Loading payment…
                     </div>
                   )}
-
-                  {/* View Variations — secondary CTA, takes user to the 9-grid */}
-                  <motion.button
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => setStep("variations")}
-                    className="w-full py-3 rounded-xl font-semibold text-sm glass-strong border-2 border-primary/30 shadow-soft flex items-center justify-center gap-2 relative"
-                  >
-                    <Sparkles size={14} className="text-primary" />
-                    View 9 More Variations
-                    {variationsReadyCount > 0 && variationsReadyCount < 9 && (
-                      <span className="text-[10px] text-muted-foreground ml-1">({variationsReadyCount}/9 ready)</span>
-                    )}
-                    {variationsReadyCount >= 9 && (
-                      <span className="absolute -top-0.5 right-3 text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-b-md">
-                        Ready
-                      </span>
-                    )}
-                  </motion.button>
 
                   <IPhoneStickerPack originalImage={generatedImage} variations={variationsForIPhone} />
 
