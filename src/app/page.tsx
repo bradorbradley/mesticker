@@ -16,6 +16,7 @@ import {
   X,
   Trash2,
   Sparkles,
+  Lock,
 } from "lucide-react";
 import { formatPrice } from "@/lib/pricing";
 import { useCart, FIRST_SHEET_CENTS, ADDITIONAL_SHEET_CENTS } from "@/lib/cart";
@@ -627,6 +628,9 @@ export default function Home() {
                     {Array.from({ length: 9 }).map((_, i) => {
                       const v = variations[i];
                       const styleId = selectedStyle?.id || "random";
+                      const inCart = !!cart.items.find(
+                        (it) => it.kind === "single" && it.thumbnail === v?.image
+                      );
                       return (
                         <div key={i} className="relative">
                           {v?.image ? (
@@ -635,20 +639,39 @@ export default function Home() {
                               animate={{ opacity: 1, scale: 1 }}
                               transition={{ duration: 0.3 }}
                               whileTap={{ scale: 0.95 }}
-                              onClick={() => { hapticLight(); addSingleTileToCart(v.image!, i); }}
+                              onClick={() => {
+                                hapticLight();
+                                if (inCart) {
+                                  const item = cart.items.find(
+                                    (it) => it.kind === "single" && it.thumbnail === v.image
+                                  );
+                                  if (item) cart.removeItem(item.id);
+                                } else {
+                                  addSingleTileToCart(v.image!, i);
+                                }
+                              }}
                               disabled={composingTileIdx === i}
-                              className="relative w-full aspect-square rounded-xl overflow-hidden bg-muted/30 border-2 border-border hover:border-primary transition-colors disabled:opacity-60"
+                              className={`relative w-full aspect-square rounded-xl overflow-hidden bg-muted/30 border-2 transition-colors disabled:opacity-60 ${
+                                inCart ? "border-primary ring-2 ring-primary/30" : "border-border"
+                              }`}
                             >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={v.image} alt="" className="w-full h-full object-contain" />
-                              <div className="absolute inset-0 bg-black/0 hover:bg-black/40 active:bg-black/60 transition-colors flex items-center justify-center opacity-0 hover:opacity-100 active:opacity-100">
-                                <div className="bg-white text-primary px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-lg">
-                                  {composingTileIdx === i ? (
-                                    <><Loader2 size={10} className="animate-spin" /> Adding</>
-                                  ) : (
-                                    <><Plus size={10} /> Sheet of this</>
-                                  )}
-                                </div>
+                              {/* Persistent state badge — visible at all times on mobile */}
+                              <div className="absolute top-1 right-1">
+                                {composingTileIdx === i ? (
+                                  <div className="w-6 h-6 rounded-full bg-white/90 shadow-lg flex items-center justify-center">
+                                    <Loader2 size={12} className="animate-spin text-primary" />
+                                  </div>
+                                ) : inCart ? (
+                                  <div className="w-6 h-6 rounded-full bg-primary shadow-lg flex items-center justify-center">
+                                    <Check size={12} className="text-white" />
+                                  </div>
+                                ) : (
+                                  <div className="w-6 h-6 rounded-full bg-white/90 shadow-lg flex items-center justify-center">
+                                    <Plus size={12} className="text-primary" />
+                                  </div>
+                                )}
                               </div>
                             </motion.button>
                           ) : (
@@ -659,54 +682,107 @@ export default function Home() {
                     })}
                   </div>
                   <p className="text-[10px] text-muted-foreground text-center mt-2">
-                    Tap any sticker to add a sheet of that one design to your cart
+                    Tap any sticker to add a sheet of that one design
                   </p>
                 </div>
 
-                {/* Primary CTA — Variations Pack */}
+                {/* Variations Pack — clear card with add/remove toggle */}
+                {(() => {
+                  const packInCart = !!cart.items.find((it) => it.kind === "variations");
+                  const packItem = cart.items.find((it) => it.kind === "variations");
+                  return (
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => {
+                        if (packError) {
+                          setPackError(null);
+                          setPackSheet(null);
+                          return;
+                        }
+                        if (packInCart && packItem) {
+                          cart.removeItem(packItem.id);
+                          hapticLight();
+                          return;
+                        }
+                        addPackToCart();
+                      }}
+                      disabled={!packSheet && !packError}
+                      className={`w-full p-3 rounded-2xl border-2 transition-all flex items-center gap-3 disabled:opacity-50 ${
+                        packInCart
+                          ? "border-primary bg-primary/10 ring-2 ring-primary/20"
+                          : "border-border bg-card/50"
+                      }`}
+                    >
+                      <div className="w-14 h-14 rounded-xl overflow-hidden bg-muted/30 flex items-center justify-center flex-shrink-0">
+                        {packSheet ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={packSheet} alt="" className="w-full h-full object-contain" />
+                        ) : (
+                          <Loader2 size={16} className="animate-spin text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="flex-1 text-left min-w-0">
+                        <p className="text-sm font-bold truncate">
+                          Variations Pack — {formatPrice(FIRST_SHEET_CENTS)}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {packError
+                            ? "Couldn't build pack — tap to retry"
+                            : !packSheet
+                            ? "Building your pack…"
+                            : "All 9 unique poses on one sheet"}
+                        </p>
+                      </div>
+                      <div className="flex-shrink-0">
+                        {packError ? (
+                          <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
+                            <Plus size={16} className="text-orange-600" />
+                          </div>
+                        ) : packInCart ? (
+                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-md">
+                            <Check size={16} className="text-white" />
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center">
+                            <Plus size={16} className="text-primary" />
+                          </div>
+                        )}
+                      </div>
+                    </motion.button>
+                  );
+                })()}
+
+                {/* SINGLE PERSISTENT CHECKOUT BUTTON — always at the bottom */}
                 <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  className="w-full py-3.5 rounded-xl font-bold text-sm btn-gradient shadow-glow flex items-center justify-center gap-2 disabled:opacity-50"
+                  whileTap={{ scale: 0.96 }}
+                  className="w-full py-4 rounded-xl font-bold text-base btn-gradient shadow-glow flex items-center justify-center gap-2 disabled:opacity-40 disabled:saturate-50"
                   onClick={() => {
-                    if (packError) {
-                      // Retry: clear error, the useEffect will recompose
-                      setPackError(null);
-                      setPackSheet(null);
-                    } else {
-                      addPackToCart();
-                    }
+                    if (cart.count === 0) return;
+                    startCheckout();
                   }}
-                  disabled={!packSheet && !packError}
+                  disabled={cart.count === 0 || isCreatingOrder}
                 >
-                  {packError ? (
+                  {isCreatingOrder ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Loading checkout…
+                    </>
+                  ) : cart.count === 0 ? (
                     <>
                       <ShoppingCart size={16} />
-                      Couldn&apos;t build pack — tap to retry
-                    </>
-                  ) : !packSheet ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      Building your pack…
+                      Add a sticker to checkout
                     </>
                   ) : (
                     <>
-                      <ShoppingCart size={16} />
-                      Add Variations Pack — {formatPrice(cart.count === 0 ? FIRST_SHEET_CENTS : ADDITIONAL_SHEET_CENTS)}
+                      <Lock size={14} />
+                      Checkout {cart.count} {cart.count === 1 ? "sheet" : "sheets"} — {formatPrice(cart.totalCents)}
                     </>
                   )}
                 </motion.button>
-
-                {cart.count > 0 && (
-                  <motion.button
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => setShowCart(true)}
-                    className="w-full py-2.5 rounded-xl font-semibold text-xs glass-strong border border-primary/30 shadow-soft flex items-center justify-center gap-2 text-primary"
-                  >
-                    <ShoppingCart size={14} />
-                    View Cart ({cart.count}) — {formatPrice(cart.totalCents)} → Checkout
-                  </motion.button>
+                {cart.count > 1 && (
+                  <p className="text-[10px] text-muted-foreground text-center -mt-2">
+                    {formatPrice(FIRST_SHEET_CENTS)} first sheet · {formatPrice(ADDITIONAL_SHEET_CENTS)} each additional · free US shipping
+                  </p>
                 )}
 
                 <IPhoneStickerPack originalImage={generatedImage} variations={variationsForIPhone} />
