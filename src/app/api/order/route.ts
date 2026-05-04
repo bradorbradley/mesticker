@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPaymentIntent, updatePaymentIntentMetadata } from "@/lib/stripe";
+import {
+  createPaymentIntent,
+  updatePaymentIntentMetadata,
+  updatePaymentIntentAmount,
+} from "@/lib/stripe";
 import { uploadImage } from "@/lib/storage";
 import { auth } from "@/lib/auth";
 import { getSessionIdFromCookie } from "@/lib/session";
@@ -111,16 +115,27 @@ export async function POST(request: NextRequest) {
   }
 }
 
+interface CartItemPatch {
+  generatedImage: string;
+  stylePreset: string;
+  sheetVariant: "pack" | "stack";
+  tierId: string;
+}
+
 export async function PATCH(request: NextRequest) {
   try {
     const {
       paymentIntentId,
       email,
       address,
+      totalCents,
+      items,
     }: {
       paymentIntentId: string;
       email?: string;
       address?: ShippingAddress;
+      totalCents?: number;
+      items?: CartItemPatch[];
     } = await request.json();
 
     if (!paymentIntentId) {
@@ -142,9 +157,38 @@ export async function PATCH(request: NextRequest) {
       metadata.zip = address.zip;
     }
 
-    await updatePaymentIntentMetadata(paymentIntentId, metadata);
+    // Cart changed → re-upload images and refresh cartItems metadata.
+    // This keeps the webhook's Printful submission in sync with the cart.
+    if (items && items.length > 0) {
+      const uploaded = await Promise.all(
+        items.map(async (item) => {
+          const imageUrl = await uploadImage(item.generatedImage);
+          const tier = getTier(item.tierId);
+          return {
+            imageUrl,
+            quantity: tier.qty,
+            tierId: item.tierId,
+            sheetVariant: item.sheetVariant,
+          };
+        })
+      );
+      metadata.totalQty = String(uploaded.reduce((s, i) => s + i.quantity, 0));
+      metadata.itemCount = String(items.length);
+      metadata.cartItems = JSON.stringify(uploaded);
+    }
 
-    return NextResponse.json({ updated: true });
+    // Update amount + metadata together where possible
+    if (typeof totalCents === "number" && totalCents > 0) {
+      await updatePaymentIntentAmount(
+        paymentIntentId,
+        totalCents,
+        Object.keys(metadata).length ? metadata : undefined
+      );
+    } else if (Object.keys(metadata).length) {
+      await updatePaymentIntentMetadata(paymentIntentId, metadata);
+    }
+
+    return NextResponse.json({ updated: true, amount: totalCents });
   } catch (error) {
     console.error("Order PATCH error:", error);
     return NextResponse.json(

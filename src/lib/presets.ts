@@ -125,13 +125,11 @@ export function resolvePresetPrompt(presetId: string): { prompt: string; resolve
  * Build a variation prompt. The variations API feeds the FIRST generated
  * cartoon back in as the input image, so the character identity is locked.
  *
- * The prompt is intentionally heavy-handed about preservation because GPT
- * image-edit will sometimes drop facial hair, accessories, or outfit
- * details when given pose-change instructions. We treat the variation as
- * an OVERLAY on top of the existing character, not a new generation.
+ * Heavy-handed about preservation AND about banning text/captions/speech
+ * bubbles entirely — the variation should be pure visual character work.
  */
 export function buildVariationPrompt(variation: string): string {
-  return `Treat this image as a character template that must be preserved EXACTLY. Do NOT remove or alter: the beard, mustache, glasses, hat, jacket, shirt, hair color, hair style, skin tone, eye color, or facial structure. Keep ALL clothing and accessories visible at the same proportions. Use the EXACT same color palette and art style. The ONLY allowed change is: ${variation}. Treat the variation as an addition or overlay — never as a replacement of identity-defining features.${STICKER_SUFFIX}`;
+  return `Treat this image as a character template that must be preserved EXACTLY. Do NOT remove or alter: the beard, mustache, glasses, hat, jacket, shirt, hair color, hair style, skin tone, eye color, or facial structure. Keep ALL clothing and accessories visible at the same proportions. Use the EXACT same color palette and art style. NO TEXT, NO CAPTIONS, NO SPEECH BUBBLES, NO LETTERS, NO WORDS — none anywhere in the image. The ONLY allowed change is: ${variation}. Treat the variation as an addition or overlay — never as a replacement of identity-defining features.${STICKER_SUFFIX}`;
 }
 
 /**

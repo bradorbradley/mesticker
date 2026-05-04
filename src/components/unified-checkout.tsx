@@ -38,6 +38,8 @@ interface UnifiedCheckoutProps {
   cartItems: CartItem[];
   onSuccess: () => void;
   onError: (error: string) => void;
+  /** When true, hides the duplicate cart-summary card (parent already shows total) */
+  compact?: boolean;
 }
 
 function CheckoutInner({
@@ -46,6 +48,7 @@ function CheckoutInner({
   cartItems,
   onSuccess,
   onError,
+  compact,
 }: Omit<UnifiedCheckoutProps, "clientSecret">) {
   const stripe = useStripe();
   const elements = useElements();
@@ -187,45 +190,47 @@ function CheckoutInner({
   const productSubtitle = `${variantSubtitle} · ${(tier?.qty ?? 0) * 6} stickers total`;
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-3 mb-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={item?.generatedImage || ""}
-              alt="Your sticker"
-              className="w-16 h-16 rounded-lg object-contain bg-muted"
-            />
-            <div className="flex-1 min-w-0">
-              <p className="font-display font-bold text-sm">{productLabel}</p>
-              <p className="text-xs text-muted-foreground">{productSubtitle}</p>
+    <div className="flex flex-col gap-3">
+      {!compact && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3 mb-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={item?.generatedImage || ""}
+                alt="Your sticker"
+                className="w-16 h-16 rounded-lg object-contain bg-muted"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="font-display font-bold text-sm">{productLabel}</p>
+                <p className="text-xs text-muted-foreground">{productSubtitle}</p>
+              </div>
+              <p className="font-bold text-sm">{formatPrice(subtotalCents)}</p>
             </div>
-            <p className="font-bold text-sm">{formatPrice(subtotalCents)}</p>
-          </div>
 
-          <div className="space-y-1 text-sm border-t border-border pt-3">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatPrice(subtotalCents)}</span>
+            <div className="space-y-1 text-sm border-t border-border pt-3">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>{formatPrice(subtotalCents)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Shipping</span>
+                <span>
+                  {shippingCents === 0 ? (
+                    <span className="text-green-600 font-semibold">FREE</span>
+                  ) : (
+                    formatPrice(shippingCents)
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-border font-bold text-base">
+                <span>Total</span>
+                <span>{formatPrice(amount)}</span>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Shipping</span>
-              <span>
-                {shippingCents === 0 ? (
-                  <span className="text-green-600 font-semibold">FREE</span>
-                ) : (
-                  formatPrice(shippingCents)
-                )}
-              </span>
-            </div>
-            <div className="flex justify-between pt-2 border-t border-border font-bold text-base">
-              <span>Total</span>
-              <span>{formatPrice(amount)}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-2">
@@ -444,6 +449,7 @@ export default function UnifiedCheckout(props: UnifiedCheckoutProps) {
         cartItems={props.cartItems}
         onSuccess={props.onSuccess}
         onError={props.onError}
+        compact={props.compact}
       />
     </Elements>
   );

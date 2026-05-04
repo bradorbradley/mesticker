@@ -46,7 +46,6 @@ import {
   trackImageDownload,
   trackImageShare,
   trackRevealViewed,
-  trackOrderClicked,
   trackTryAnotherClicked,
   trackProductTypeSelected,
 } from "@/lib/analytics";
@@ -388,45 +387,85 @@ export default function Home() {
     [cart, tileSheets]
   );
 
-  const startCheckout = useCallback(async () => {
-    if (cart.items.length === 0) return;
-    trackOrderClicked();
-    trackCheckoutStart();
+  // INLINE CHECKOUT: auto-create the PaymentIntent the first time the user
+  // adds anything to the cart, and PATCH it whenever the cart changes.
+  // This makes Apple Pay / Google Pay / Link / Card buttons render right
+  // on the reveal screen — no separate checkout page tap.
+  const cartItemsKey = useMemo(
+    () => cart.items.map((i) => `${i.kind}:${i.id}`).join("|"),
+    [cart.items]
+  );
+  const cartTotalCentsKey = cart.totalCents;
+  const cartCount = cart.count;
+
+  // Create PI on first add
+  useEffect(() => {
+    if (cartCount === 0) return;
+    if (clientSecret || paymentIntentId) return; // already exists
+    if (isCreatingOrder) return;
 
     setIsCreatingOrder(true);
     setPaymentError(null);
-    try {
-      const res = await fetch("/api/order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: cart.items.map((i) => ({
-            generatedImage: i.composedImage,
-            stylePreset: selectedStyle?.id || "unknown",
-            sheetVariant: i.kind === "variations" ? "pack" : "stack",
-            tierId: "sheet-1",
-          })),
-          // Custom total override — cart pricing differs from per-item tier pricing
-          totalCents: cart.totalCents,
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Order creation failed");
-      }
-      const data = await res.json();
-      setClientSecret(data.clientSecret);
-      setPaymentIntentId(data.paymentIntentId);
-      setOrderAmount(data.amount);
-      setOrderQuantity(cart.items.length);
-      setShowCart(false);
-      setStep("order");
-    } catch (error) {
-      setPaymentError(error instanceof Error ? error.message : "Something went wrong");
-    } finally {
-      setIsCreatingOrder(false);
-    }
-  }, [cart, selectedStyle]);
+    fetch("/api/order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: cart.items.map((i) => ({
+          generatedImage: i.composedImage,
+          stylePreset: selectedStyle?.id || "unknown",
+          sheetVariant: i.kind === "variations" ? "pack" : "stack",
+          tierId: "sheet-1",
+        })),
+        totalCents: cart.totalCents,
+      }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Order creation failed"))))
+      .then((data) => {
+        setClientSecret(data.clientSecret);
+        setPaymentIntentId(data.paymentIntentId);
+        setOrderAmount(data.amount);
+        setOrderQuantity(cart.items.length);
+        trackCheckoutStart();
+      })
+      .catch((err) => {
+        setPaymentError(err instanceof Error ? err.message : "Checkout setup failed");
+      })
+      .finally(() => setIsCreatingOrder(false));
+    // intentionally only depends on cartCount transition + clientSecret
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartCount, clientSecret, paymentIntentId, isCreatingOrder]);
+
+  // PATCH PI when cart changes (after PI exists)
+  useEffect(() => {
+    if (!paymentIntentId || cartCount === 0) return;
+    // Skip the initial set (PI was just created with this cart)
+    const controller = new AbortController();
+    fetch("/api/order", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        paymentIntentId,
+        totalCents: cart.totalCents,
+        items: cart.items.map((i) => ({
+          generatedImage: i.composedImage,
+          stylePreset: selectedStyle?.id || "unknown",
+          sheetVariant: i.kind === "variations" ? "pack" : "stack",
+          tierId: "sheet-1",
+        })),
+      }),
+      signal: controller.signal,
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.amount) {
+          setOrderAmount(data.amount);
+          setOrderQuantity(cart.items.length);
+        }
+      })
+      .catch(() => {});
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartItemsKey, cartTotalCentsKey, paymentIntentId]);
 
   const handleTryAnotherStyle = useCallback(() => {
     trackTryAnotherClicked();
@@ -752,36 +791,60 @@ export default function Home() {
                   );
                 })()}
 
-                {/* SINGLE PERSISTENT CHECKOUT BUTTON — always at the bottom */}
-                <motion.button
-                  whileTap={{ scale: 0.96 }}
-                  className="w-full py-4 rounded-xl font-bold text-base btn-gradient shadow-glow flex items-center justify-center gap-2 disabled:opacity-40 disabled:saturate-50"
-                  onClick={() => {
-                    if (cart.count === 0) return;
-                    startCheckout();
-                  }}
-                  disabled={cart.count === 0 || isCreatingOrder}
-                >
-                  {isCreatingOrder ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      Loading checkout…
-                    </>
-                  ) : cart.count === 0 ? (
-                    <>
-                      <ShoppingCart size={16} />
-                      Add a sticker to checkout
-                    </>
-                  ) : (
-                    <>
-                      <Lock size={14} />
-                      Checkout {cart.count} {cart.count === 1 ? "sheet" : "sheets"} — {formatPrice(cart.totalCents)}
-                    </>
-                  )}
-                </motion.button>
-                {cart.count > 1 && (
+                {/* INLINE CHECKOUT — appears the moment cart has items.
+                    Apple Pay / Google Pay / Link buttons are right here. */}
+                {cart.count === 0 ? (
+                  <div className="w-full py-3 rounded-xl border-2 border-dashed border-border bg-muted/20 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <ShoppingCart size={14} /> Add a sticker above to check out
+                  </div>
+                ) : paymentComplete ? (
+                  <OrderConfirmation
+                    imageUrl={generatedImage || ""}
+                    quantity={orderQuantity}
+                    onNewSticker={handleNewSticker}
+                  />
+                ) : isCreatingOrder && !clientSecret ? (
+                  <div className="w-full py-6 rounded-xl border border-border bg-card/50 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 size={16} className="animate-spin" /> Loading checkout…
+                  </div>
+                ) : clientSecret && paymentIntentId ? (
+                  <div className="rounded-2xl border border-border bg-card/50 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                        <Lock size={12} /> Pay {formatPrice(cart.totalCents)}
+                      </p>
+                      <span className="text-[10px] text-muted-foreground">
+                        {cart.count} {cart.count === 1 ? "sheet" : "sheets"} · free US shipping
+                      </span>
+                    </div>
+                    {paymentError && (
+                      <p className="text-xs text-red-500 text-center mb-2">{paymentError}</p>
+                    )}
+                    <UnifiedCheckout
+                      clientSecret={clientSecret}
+                      paymentIntentId={paymentIntentId}
+                      amount={orderAmount}
+                      cartItems={cart.items.map((i) => ({
+                        id: i.id,
+                        generatedImage: i.composedImage,
+                        originalImage: capturedImage || "",
+                        stylePreset: selectedStyle?.id || "unknown",
+                        sheetVariant: i.kind === "variations" ? ("pack" as const) : ("stack" as const),
+                        tierId: "sheet-1",
+                      }))}
+                      onSuccess={handlePaymentSuccess}
+                      onError={setPaymentError}
+                      compact
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full py-3 text-xs text-muted-foreground text-center">
+                    {paymentError || "Setting up checkout..."}
+                  </div>
+                )}
+                {cart.count > 1 && !paymentComplete && (
                   <p className="text-[10px] text-muted-foreground text-center -mt-2">
-                    {formatPrice(FIRST_SHEET_CENTS)} first sheet · {formatPrice(ADDITIONAL_SHEET_CENTS)} each additional · free US shipping
+                    {formatPrice(FIRST_SHEET_CENTS)} first sheet · {formatPrice(ADDITIONAL_SHEET_CENTS)} each additional
                   </p>
                 )}
 
@@ -794,44 +857,16 @@ export default function Home() {
             </motion.div>
           )}
 
-          {step === "order" && (
+          {/* Fallback: lands here only after a Stripe-hosted redirect with
+              ?payment=success. Inline checkout on the reveal screen handles
+              the normal Apple Pay / card flow without needing this step. */}
+          {step === "order" && paymentComplete && (
             <motion.div key="order" variants={pageVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.3, ease: "easeOut" }}>
-              {paymentComplete ? (
-                <OrderConfirmation
-                  imageUrl={generatedImage || ""}
-                  quantity={orderQuantity}
-                  onNewSticker={handleNewSticker}
-                />
-              ) : isCreatingOrder ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                  <Loader2 size={24} className="animate-spin text-primary" />
-                  <p className="text-sm text-muted-foreground">Setting up checkout...</p>
-                </div>
-              ) : clientSecret && paymentIntentId ? (
-                <div>
-                  {paymentError && <p className="text-sm text-red-500 text-center mb-4">{paymentError}</p>}
-                  <UnifiedCheckout
-                    clientSecret={clientSecret}
-                    paymentIntentId={paymentIntentId}
-                    amount={orderAmount}
-                    cartItems={cart.items.map((i, idx) => ({
-                      id: i.id,
-                      generatedImage: i.composedImage,
-                      originalImage: capturedImage || "",
-                      stylePreset: selectedStyle?.id || "unknown",
-                      sheetVariant: i.kind === "variations" ? ("pack" as const) : ("stack" as const),
-                      tierId: "sheet-1",
-                    }))}
-                    onSuccess={handlePaymentSuccess}
-                    onError={setPaymentError}
-                  />
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  {paymentError && <p className="text-sm text-red-500 mb-4">{paymentError}</p>}
-                  <p className="text-sm text-muted-foreground">Something went wrong. Please go back and try again.</p>
-                </div>
-              )}
+              <OrderConfirmation
+                imageUrl={generatedImage || ""}
+                quantity={orderQuantity}
+                onNewSticker={handleNewSticker}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -889,15 +924,14 @@ export default function Home() {
 
                     <motion.button
                       whileTap={{ scale: 0.95 }}
-                      onClick={startCheckout}
-                      disabled={isCreatingOrder}
-                      className="w-full py-3 rounded-xl font-bold text-sm btn-gradient shadow-glow disabled:opacity-50 flex items-center justify-center gap-2"
+                      onClick={() => setShowCart(false)}
+                      className="w-full py-3 rounded-xl font-bold text-sm btn-gradient shadow-glow flex items-center justify-center gap-2"
                     >
-                      {isCreatingOrder ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                      Checkout — {formatPrice(cart.totalCents)}
+                      <Check size={14} />
+                      Looks good — pay below
                     </motion.button>
                     <p className="text-[10px] text-muted-foreground text-center mt-2">
-                      Free US shipping · ships in 3–5 days
+                      Apple Pay & card on the main screen · free US shipping
                     </p>
                   </>
                 )}
