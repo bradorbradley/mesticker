@@ -97,6 +97,12 @@ function CheckoutInner({
       if (!stripe || !elements) return;
       trackExpressCheckoutClicked("express");
 
+      console.log("[express-checkout] confirm event:", {
+        expressPaymentType: event.expressPaymentType,
+        hasShippingAddress: !!event.shippingAddress,
+        hasBillingDetails: !!event.billingDetails,
+      });
+
       const walletAddress = event.shippingAddress;
       const billingDetails = event.billingDetails;
 
@@ -112,6 +118,8 @@ function CheckoutInner({
         };
         const walletEmail = billingDetails?.email || "";
         await patchMetadata(walletEmail, addr);
+      } else {
+        console.warn("[express-checkout] no shipping/billing in event — Printful submission will fail without an address");
       }
 
       setIsProcessing(true);
@@ -125,15 +133,19 @@ function CheckoutInner({
         });
 
         if (error) {
-          onError(error.message || "Payment failed");
+          console.error("[express-checkout] confirmPayment error:", error);
+          onError(error.message || `Payment failed (${error.code || "unknown"})`);
           setIsProcessing(false);
         } else if (paymentIntent && paymentIntent.status === "succeeded") {
+          console.log("[express-checkout] payment succeeded:", paymentIntent.id);
           onSuccess();
         } else {
-          onError("Payment was not completed. Please try again.");
+          console.warn("[express-checkout] payment did not succeed:", paymentIntent?.status);
+          onError(`Payment status: ${paymentIntent?.status || "unknown"}. Please try again.`);
           setIsProcessing(false);
         }
       } catch (err) {
+        console.error("[express-checkout] confirmPayment threw:", err);
         onError(err instanceof Error ? err.message : "Payment failed unexpectedly");
         setIsProcessing(false);
       }
@@ -242,15 +254,52 @@ function CheckoutInner({
           <ExpressCheckoutElement
             onConfirm={handleExpressConfirm}
             onClick={({ resolve }) => {
+              // Link requires shippingRates AND lineItems to fully complete
+              // its checkout drawer. Apple Pay / Google Pay tolerate fewer
+              // fields but providing them gives a better UX everywhere.
               resolve({
-                shippingAddressRequired: true,
                 emailRequired: true,
+                phoneNumberRequired: false,
+                shippingAddressRequired: true,
+                shippingRates: [
+                  {
+                    id: "free-us-shipping",
+                    amount: 0,
+                    displayName: "Free US shipping",
+                    deliveryEstimate: {
+                      minimum: { unit: "business_day", value: 3 },
+                      maximum: { unit: "business_day", value: 5 },
+                    },
+                  },
+                ],
+                lineItems:
+                  cartItems.length > 0
+                    ? cartItems.map((it, idx) => ({
+                        name:
+                          idx === 0
+                            ? "Sticker sheet"
+                            : "Additional sticker sheet",
+                        amount:
+                          idx === 0
+                            ? Math.max(0, amount - (cartItems.length - 1) * 999)
+                            : 999,
+                      }))
+                    : [{ name: "Sticker sheet", amount }],
               });
             }}
             options={{
-              buttonType: { applePay: "buy", googlePay: "buy" },
+              buttonType: {
+                applePay: "buy",
+                googlePay: "buy",
+              },
+              paymentMethods: {
+                applePay: "auto",
+                googlePay: "auto",
+                link: "auto",
+              },
             }}
             onReady={({ availablePaymentMethods }) => {
+              console.log("[express-checkout] available:", availablePaymentMethods);
               if (
                 availablePaymentMethods?.applePay ||
                 availablePaymentMethods?.googlePay ||
@@ -262,6 +311,10 @@ function CheckoutInner({
                 setExpressAvailable(false);
                 setShowCardForm(true);
               }
+            }}
+            onLoadError={(e) => {
+              console.error("[express-checkout] load error:", e);
+              setElementError(e.error?.message || "Express checkout failed to load");
             }}
           />
           {!expressAvailable && (
