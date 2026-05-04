@@ -818,13 +818,42 @@ export default function Home() {
                     </motion.button>
                   </div>
 
-                  {/* PRODUCT CARD — preview, quantity stepper, live total. The
-                      whole interface is the buy interface. */}
+                  {/* PRODUCT CARD — preview of the actual sheet, qty stepper,
+                      live total. Whole interface is the buy interface. */}
                   <div className="rounded-2xl border-2 border-primary/30 bg-card shadow-card p-4 flex flex-col gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-muted/30 flex items-center justify-center flex-shrink-0 border border-border">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={generatedImage} alt="" className="w-full h-full object-contain" />
+                      {/* Sheet preview — exactly what arrives in the mail */}
+                      <div className="w-24 aspect-[7/10] rounded-lg overflow-hidden bg-white border border-border shadow-soft flex-shrink-0 relative">
+                        {originalSheet ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={originalSheet}
+                            alt="Your sticker sheet"
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          // Fallback while composer is still running: CSS grid
+                          // of 6 copies so the user immediately sees the layout.
+                          <div className="grid grid-cols-2 grid-rows-3 gap-1.5 p-1.5 w-full h-full">
+                            {[...Array(6)].map((_, i) => (
+                              <div
+                                key={i}
+                                className="rounded overflow-hidden bg-muted/20 flex items-center justify-center"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={generatedImage}
+                                  alt=""
+                                  className="w-full h-full object-contain"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {/* Subtle "1 sheet" badge over the preview */}
+                        <div className="absolute bottom-1 right-1 bg-white/90 rounded-full px-1.5 py-0.5 text-[8px] font-bold text-primary shadow-sm">
+                          {sheetCount}× sheet
+                        </div>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold">Your sticker sheet</p>
