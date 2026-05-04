@@ -2,10 +2,11 @@ import posthog from "posthog-js";
 
 /**
  * Track key funnel events for MeSticker.
- * 
- * Funnel: Landing → Capture → Style Select → Generate → Reveal → Order → Payment
+ *
+ * Funnel: Landing -> Capture -> Style Grid -> Generate -> Reveal -> Order/Variations -> Payment
  */
 
+// Existing events (preserved)
 export function trackCapture() {
   posthog.capture("photo_captured");
 }
@@ -56,4 +57,92 @@ export function trackImageDownload() {
 
 export function trackImageShare() {
   posthog.capture("image_shared");
+}
+
+// New events for Sprint 1
+
+export function trackStyleGridViewed() {
+  posthog.capture("style_grid_viewed");
+}
+
+export function trackCustomPromptOpened() {
+  posthog.capture("custom_prompt_opened");
+}
+
+export function trackCustomPromptSubmitted(promptLength: number) {
+  posthog.capture("custom_prompt_submitted", { promptLength });
+}
+
+export function trackCustomPromptRejected(reason: string) {
+  posthog.capture("custom_prompt_rejected", { reason });
+}
+
+export function trackRevealViewed() {
+  posthog.capture("reveal_viewed");
+}
+
+export function trackOrderClicked() {
+  posthog.capture("order_clicked");
+}
+
+export function trackVariationsClicked() {
+  posthog.capture("variations_clicked");
+}
+
+export function trackTryAnotherClicked() {
+  posthog.capture("try_another_clicked");
+}
+
+export function trackVariationsStarted() {
+  posthog.capture("variations_generation_started");
+}
+
+export function trackVariationTileLoaded(index: number, latency: number) {
+  posthog.capture("variations_tile_loaded", { index, latency });
+}
+
+export function trackVariationsComplete(totalLatency: number) {
+  posthog.capture("variations_complete", { totalLatency });
+}
+
+export function trackVariationTileSelected(index: number) {
+  posthog.capture("variations_tile_selected", { index });
+}
+
+export function trackVariationTileRegenerated(index: number) {
+  posthog.capture("variations_tile_regenerated", { index });
+}
+
+export function trackVarietyPackBuilt(count: number) {
+  posthog.capture("variety_pack_built", { count });
+}
+
+export function trackSkuSelected(skuId: string) {
+  posthog.capture("sku_selected", { skuId });
+}
+
+// Sprint 1.5 events
+
+export function trackExpressCheckoutShown() {
+  posthog.capture("express_checkout_shown");
+}
+
+export function trackExpressCheckoutClicked(method: string) {
+  posthog.capture("express_checkout_clicked", { method });
+}
+
+export function trackCardFormOpened() {
+  posthog.capture("card_form_opened");
+}
+
+export function trackSheetComposed(imageCount: number) {
+  posthog.capture("sheet_composed", { imageCount });
+}
+
+export function trackProductTypeSelected(productType: string) {
+  posthog.capture("product_type_selected", { productType });
+}
+
+export function trackStickerPackTierSelected(tierId: string) {
+  posthog.capture("sticker_pack_tier_selected", { tierId });
 }

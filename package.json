@@ -28,6 +28,7 @@
     "posthog-js": "^1.364.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sharp": "^0.34.5",
     "stripe": "^17.5.0",
     "tailwind-merge": "^2.6.0"
   },

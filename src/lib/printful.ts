@@ -1,4 +1,5 @@
 import { ShippingAddress } from "@/types";
+import { VARIANT_KISS_CUT_SHEET } from "@/lib/pricing";
 
 const PRINTFUL_API = "https://api.printful.com";
 
@@ -12,13 +13,9 @@ function getHeaders() {
   };
 }
 
-// Kiss-cut sticker SHEET product/variant IDs from Printful catalog
-// Product 505 = Kiss-cut sticker sheet, variant 12917 = 5.83"×8.27" (fits 6 stickers)
-const STICKER_VARIANT_ID = 12917;
-
 export interface PrintfulItem {
   imageUrl: string;
-  quantity: number; // number of sheets
+  quantity: number;
 }
 
 export async function createPrintfulOrder(
@@ -39,14 +36,9 @@ export async function createPrintfulOrder(
         zip: address.zip,
       },
       items: items.map((item) => ({
-        variant_id: STICKER_VARIANT_ID,
+        variant_id: VARIANT_KISS_CUT_SHEET,
         quantity: item.quantity,
-        files: [
-          {
-            type: "default",
-            url: item.imageUrl,
-          },
-        ],
+        files: [{ type: "default", url: item.imageUrl }],
       })),
     }),
   });

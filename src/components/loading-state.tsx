@@ -20,11 +20,21 @@ interface LoadingStateProps {
 
 export default function LoadingState({ photo, className }: LoadingStateProps) {
   const [msgIndex, setMsgIndex] = useState(0);
+  const [countdown, setCountdown] = useState(30);
 
+  // Countdown timer — ticks every second
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCountdown((c) => (c > 0 ? c - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Rotate messages every 4300ms (~7 messages across 30s)
   useEffect(() => {
     const interval = setInterval(() => {
       setMsgIndex((i) => (i + 1) % messages.length);
-    }, 2500);
+    }, 4300);
     return () => clearInterval(interval);
   }, []);
 
@@ -99,6 +109,34 @@ export default function LoadingState({ photo, className }: LoadingStateProps) {
         ))}
       </div>
 
+      {/* Countdown number */}
+      <div className="flex flex-col items-center gap-2">
+        <AnimatePresence mode="wait">
+          {countdown > 0 ? (
+            <motion.div
+              key={countdown}
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.2 }}
+              transition={{ duration: 0.3 }}
+              className="text-4xl font-display font-bold gradient-text tabular-nums"
+            >
+              {countdown}
+            </motion.div>
+          ) : (
+            <motion.p
+              key="finishing"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+              className="text-lg font-display font-bold text-primary"
+            >
+              Finishing up...
+            </motion.p>
+          )}
+        </AnimatePresence>
+      </div>
+
       {/* Animated message */}
       <div className="h-6 flex items-center justify-center">
         <AnimatePresence mode="wait">
@@ -114,20 +152,6 @@ export default function LoadingState({ photo, className }: LoadingStateProps) {
           </motion.p>
         </AnimatePresence>
       </div>
-
-      {/* Progress bar */}
-      <div className="w-56 h-2 bg-muted rounded-full overflow-hidden">
-        <motion.div
-          className="h-full rounded-full gradient-primary"
-          initial={{ width: "0%" }}
-          animate={{ width: "100%" }}
-          transition={{ duration: 15, ease: "easeInOut" }}
-        />
-      </div>
-
-      <p className="text-xs text-muted-foreground/60">
-        This usually takes 10-15 seconds
-      </p>
     </div>
   );
 }

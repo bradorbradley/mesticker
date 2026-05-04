@@ -1,67 +1,82 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+/**
+ * Cart with parent/child sheet hierarchy.
+ *
+ * One product type — the kiss-cut sticker sheet (variant 12917).
+ * Two layouts (item kinds):
+ *   - "variations": 6 different poses of the character on one sheet
+ *   - "single":     6 of one specific design on one sheet
+ *
+ * Pricing: $14.99 first sheet, $9.99 each additional. Free US shipping.
+ * Volume gives the user a reason to add more, supporting the "I love
+ * the bottom-left tile, give me a sheet of just THAT" flow.
+ */
+
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from "react";
+
+export type CartItemKind = "variations" | "single" | "original";
 
 export interface CartItem {
   id: string;
-  generatedImage: string;
-  originalImage: string;
-  stylePreset: string;
-  sheets: number; // number of sheets (each sheet = 6 stickers)
+  kind: CartItemKind;
+  composedImage: string; // low-res sheet for preview / fallback only
+  thumbnail: string;     // small representative image for cart display
+  label: string;         // user-facing name
+
+  // For HQ regen at print time. The webhook regenerates each prompt at
+  // quality:high using sourceCartoon as input, recomposes the sheet, then
+  // sends THAT to Printful instead of the low-res composedImage.
+  // Empty prompts = no regen (use composedImage as-is, e.g. original sheet).
+  sourceCartoon?: string;
+  prompts?: string[];
 }
 
-interface CartContextType {
+interface CartCtx {
   items: CartItem[];
-  addItem: (item: Omit<CartItem, "id" | "sheets">) => void;
+  addItem: (item: Omit<CartItem, "id">) => void;
   removeItem: (id: string) => void;
-  updateSheets: (id: string, sheets: number) => void;
-  clearCart: () => void;
-  totalSheets: number;
-  totalPrice: number;
-  shipping: number;
-  grandTotal: number;
+  clear: () => void;
+  count: number;
+  subtotalCents: number;
+  totalCents: number;
 }
 
-// Pricing: $14.99 per sheet, $4.99 flat shipping
-const PRICE_PER_SHEET = 14.99;
-const SHIPPING = 4.99;
+export const FIRST_SHEET_CENTS = 1499;
+export const ADDITIONAL_SHEET_CENTS = 999;
 
-const CartContext = createContext<CartContextType | null>(null);
+function calculateSubtotal(count: number): number {
+  if (count <= 0) return 0;
+  return FIRST_SHEET_CENTS + Math.max(0, count - 1) * ADDITIONAL_SHEET_CENTS;
+}
+
+const CartContext = createContext<CartCtx | null>(null);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
 
-  const addItem = useCallback((item: Omit<CartItem, "id" | "sheets">) => {
-    // Check if this exact image is already in cart — increment sheets instead of duplicating
-    setItems((prev) => {
-      const existing = prev.find((i) => i.generatedImage === item.generatedImage);
-      if (existing) {
-        return prev.map((i) =>
-          i.id === existing.id ? { ...i, sheets: i.sheets + 1 } : i
-        );
-      }
-      const id = `cart-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      return [...prev, { ...item, id, sheets: 1 }];
-    });
+  const addItem = useCallback((item: Omit<CartItem, "id">) => {
+    setItems((prev) => [
+      ...prev,
+      { ...item, id: `cart-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` },
+    ]);
   }, []);
 
   const removeItem = useCallback((id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
   }, []);
 
-  const updateSheets = useCallback((id: string, sheets: number) => {
-    if (sheets < 1) return;
-    setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, sheets } : i))
-    );
-  }, []);
+  const clear = useCallback(() => setItems([]), []);
 
-  const clearCart = useCallback(() => setItems([]), []);
-
-  const totalSheets = items.reduce((sum, i) => sum + i.sheets, 0);
-  const totalPrice = totalSheets * PRICE_PER_SHEET;
-  const shipping = items.length > 0 ? SHIPPING : 0;
-  const grandTotal = totalPrice + shipping;
+  const subtotalCents = useMemo(() => calculateSubtotal(items.length), [items.length]);
+  const totalCents = subtotalCents; // free shipping baked in
 
   return (
     <CartContext.Provider
@@ -69,12 +84,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
         items,
         addItem,
         removeItem,
-        updateSheets,
-        clearCart,
-        totalSheets,
-        totalPrice,
-        shipping,
-        grandTotal,
+        clear,
+        count: items.length,
+        subtotalCents,
+        totalCents,
       }}
     >
       {children}
@@ -86,4 +99,8 @@ export function useCart() {
   const ctx = useContext(CartContext);
   if (!ctx) throw new Error("useCart must be used within CartProvider");
   return ctx;
+}
+
+export function pricePreview(count: number): number {
+  return calculateSubtotal(count);
 }

@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Elements,
   PaymentElement,
-  PaymentRequestButtonElement,
+  ExpressCheckoutElement,
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
-import { loadStripe, Stripe, PaymentRequest } from "@stripe/stripe-js";
+import { loadStripe, Stripe } from "@stripe/stripe-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lock, Loader2, AlertCircle } from "lucide-react";
@@ -25,64 +25,20 @@ interface PaymentFormProps {
   onError: (error: string) => void;
 }
 
-function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "clientSecret">) {
+function CheckoutForm({
+  amount,
+  onSuccess,
+  onError,
+}: Omit<PaymentFormProps, "clientSecret">) {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [elementReady, setElementReady] = useState(false);
   const [elementError, setElementError] = useState<string | null>(null);
-  const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
-  const [canMakePayment, setCanMakePayment] = useState(false);
+  const [showCardForm, setShowCardForm] = useState(false);
 
-  // Set up Apple Pay / Google Pay
-  useEffect(() => {
-    if (!stripe || !amount) return;
-
-    const pr = stripe.paymentRequest({
-      country: "US",
-      currency: "usd",
-      total: {
-        label: "MeSticker Order",
-        amount: amount, // already in cents
-      },
-      requestPayerName: true,
-      requestPayerEmail: true,
-    });
-
-    pr.canMakePayment().then((result) => {
-      if (result) {
-        setPaymentRequest(pr);
-        setCanMakePayment(true);
-      }
-    });
-
-    pr.on("paymentmethod", async (ev) => {
-      if (!elements) {
-        ev.complete("fail");
-        return;
-      }
-      const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
-        elements,
-        confirmParams: { return_url: `${window.location.origin}?payment=success` },
-        redirect: "if_required",
-      });
-
-      if (confirmError) {
-        ev.complete("fail");
-        onError(confirmError.message || "Payment failed");
-      } else if (paymentIntent?.status === "succeeded") {
-        ev.complete("success");
-        onSuccess();
-      } else {
-        ev.complete("fail");
-        onError("Payment was not completed.");
-      }
-    });
-  }, [stripe, amount, elements, onSuccess, onError]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!stripe || !elements || !elementReady) return;
+  const handleConfirmPayment = useCallback(async () => {
+    if (!stripe || !elements) return;
 
     setIsProcessing(true);
     try {
@@ -105,64 +61,113 @@ function CheckoutForm({ amount, onSuccess, onError }: Omit<PaymentFormProps, "cl
       }
     } catch (err) {
       console.error("Payment confirmation error:", err);
-      onError(err instanceof Error ? err.message : "Payment failed unexpectedly");
+      onError(
+        err instanceof Error ? err.message : "Payment failed unexpectedly"
+      );
       setIsProcessing(false);
     }
+  }, [stripe, elements, onSuccess, onError]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements || !elementReady) return;
+    await handleConfirmPayment();
   };
 
   return (
     <form onSubmit={handleSubmit}>
-      <Card>
-        <CardHeader className="pb-3">
+      {/* Express Checkout ABOVE THE FOLD — Apple Pay, Google Pay, Link */}
+      <Card className="mb-4">
+        <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Lock size={16} /> Payment
+            <Lock size={16} /> Quick Checkout
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {/* Apple Pay / Google Pay */}
-          {canMakePayment && paymentRequest && (
-            <div className="mb-4">
-              <PaymentRequestButtonElement
-                options={{ paymentRequest }}
-              />
-              <div className="relative my-4">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="bg-card px-2 text-muted-foreground">or pay with card</span>
-                </div>
-              </div>
-            </div>
-          )}
-          {!elementReady && !elementError && (
-            <div className="flex items-center justify-center py-8 text-muted-foreground text-sm gap-2">
-              <Loader2 size={16} className="animate-spin" />
-              Loading payment form...
-            </div>
-          )}
-          {elementError && (
-            <p className="text-sm text-red-500 text-center py-4">
-              {elementError}
-            </p>
-          )}
-          <div className={elementReady ? "" : "sr-only"}>
-            <PaymentElement
-              onReady={() => setElementReady(true)}
-              onLoadError={(e) =>
-                setElementError(e.error?.message || "Failed to load payment form")
+          <ExpressCheckoutElement
+            onConfirm={async () => {
+              await handleConfirmPayment();
+            }}
+            options={{
+              buttonType: {
+                applePay: "buy",
+                googlePay: "buy",
+              },
+            }}
+            onReady={({ availablePaymentMethods }) => {
+              // If no express methods available, show card form directly
+              if (
+                !availablePaymentMethods?.applePay &&
+                !availablePaymentMethods?.googlePay &&
+                !availablePaymentMethods?.link
+              ) {
+                setShowCardForm(true);
               }
-            />
-          </div>
-          <Button
-            type="submit"
-            size="lg"
-            className="w-full mt-4"
-            disabled={!stripe || !elementReady || isProcessing}
-          >
-            {isProcessing ? "Processing..." : `Pay $${(amount / 100).toFixed(2)}`}
-          </Button>
+            }}
+          />
         </CardContent>
+      </Card>
+
+      {/* Manual card form — collapsed by default when Express is available */}
+      <Card>
+        <CardHeader className="pb-2">
+          {!showCardForm ? (
+            <button
+              type="button"
+              onClick={() => setShowCardForm((v) => !v)}
+              className="w-full text-left"
+            >
+              <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+                Or pay with card
+                <span className="ml-auto text-xs">
+                  {showCardForm ? "▲" : "▼"}
+                </span>
+              </CardTitle>
+            </button>
+          ) : (
+            <CardTitle className="text-base flex items-center gap-2">
+              <Lock size={16} /> Pay with card
+            </CardTitle>
+          )}
+        </CardHeader>
+        {showCardForm && (
+          <CardContent>
+            {!elementReady && !elementError && (
+              <div className="flex items-center justify-center py-8 text-muted-foreground text-sm gap-2">
+                <Loader2 size={16} className="animate-spin" />
+                Loading payment form...
+              </div>
+            )}
+            {elementError && (
+              <p className="text-sm text-red-500 text-center py-4">
+                {elementError}
+              </p>
+            )}
+            <div className={elementReady ? "" : "sr-only"}>
+              <PaymentElement
+                onReady={() => {
+                  setElementReady(true);
+                  setShowCardForm(true);
+                }}
+                onLoadError={(e) =>
+                  setElementError(
+                    e.error?.message || "Failed to load payment form"
+                  )
+                }
+              />
+            </div>
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full mt-4"
+              disabled={!stripe || !elementReady || isProcessing}
+            >
+              {isProcessing
+                ? "Processing..."
+                : `Pay $${(amount / 100).toFixed(2)}`}
+            </Button>
+          </CardContent>
+        )}
       </Card>
     </form>
   );

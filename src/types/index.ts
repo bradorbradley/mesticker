@@ -13,6 +13,7 @@ export interface Creation {
   generatedImage: string;
   stylePreset: string;
   ordered: boolean;
+  sessionId?: string;
 }
 
 export interface ShippingAddress {
@@ -45,4 +46,13 @@ export interface Order {
   totalAmount: number;
 }
 
-export type AppStep = "capture" | "style" | "order";
+export type AppStep = "capture" | "style" | "reveal" | "variations" | "order";
+
+export interface CartItem {
+  id: string;
+  generatedImage: string; // composed sheet image (Pack of variations OR Stack of one design)
+  originalImage: string;
+  stylePreset: string;
+  sheetVariant: "pack" | "stack";
+  tierId: string; // sheet-1 | sheet-2 | sheet-3
+}

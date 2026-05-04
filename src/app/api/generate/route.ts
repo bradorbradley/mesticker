@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateStickerImage } from "@/lib/openai";
+import { generatePreview } from "@/lib/generation";
 import { stylePresets, resolvePresetPrompt } from "@/lib/presets";
-import { auth } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { moderatePrompt } from "@/lib/moderation";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { recordGeneration, recordError, isThrottled } from "@/lib/spend-tracker";
 import { sendAlert } from "@/lib/alerts";
+import { getSessionIdFromCookie } from "@/lib/session";
 
-const FREE_GENERATION_LIMIT = 3;
-
-// Rate limits
-const RATE_LIMIT_PER_IP = 10; // max generations per IP per window
+// Rate limits — generous since we removed the per-user free cap.
+// Spend-tracker auto-throttle kicks in if daily cost spikes.
+const RATE_LIMIT_PER_IP = 30;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 export const maxDuration = 60;
@@ -19,7 +18,7 @@ export async function POST(request: NextRequest) {
   try {
     const clientIP = getClientIP(request);
 
-    // 1. Rate limit by IP — hard cap regardless of auth status
+    // 1. Rate limit by IP
     const rateCheck = checkRateLimit(
       `gen:${clientIP}`,
       RATE_LIMIT_PER_IP,
@@ -43,7 +42,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Check if auto-throttled due to daily spend
+    // 2. Check auto-throttle
     if (isThrottled()) {
       return NextResponse.json(
         {
@@ -54,56 +53,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { image, styleId } = await request.json();
+    const { image, styleId, customPrompt } = await request.json();
 
-    if (!image || !styleId) {
+    if (!image || (!styleId && !customPrompt)) {
       return NextResponse.json(
-        { error: "Missing image or styleId" },
+        { error: "Missing image or style" },
         { status: 400 }
       );
     }
 
-    const preset = stylePresets.find((p) => p.id === styleId);
-    if (!preset) {
-      return NextResponse.json(
-        { error: "Invalid style preset" },
-        { status: 400 }
-      );
-    }
+    // Handle custom prompt moderation
+    let prompt: string;
+    let resolvedStyleId: string;
 
-    // 3. Enforce generation limit for signed-in users (server-side)
-    if (process.env.DATABASE_URL) {
-      const session = await auth();
-      if (session?.user?.id) {
-        const sql = getDb();
-        const [countRow] = await sql`
-          SELECT COUNT(*)::int AS count FROM creations WHERE user_id = ${session.user.id}
-        `;
-        const [orderRow] = await sql`
-          SELECT COUNT(*)::int AS count FROM orders WHERE user_id = ${session.user.id}
-        `;
-        const creationCount = countRow?.count ?? 0;
-        const hasOrdered = (orderRow?.count ?? 0) > 0;
-
-        if (creationCount >= FREE_GENERATION_LIMIT && !hasOrdered) {
-          return NextResponse.json(
-            { error: "FREE_LIMIT_REACHED" },
-            { status: 403 }
-          );
-        }
+    if (customPrompt) {
+      const modResult = await moderatePrompt(customPrompt);
+      if (!modResult.allowed) {
+        return NextResponse.json(
+          { error: "PROMPT_REJECTED", reason: modResult.reason },
+          { status: 400 }
+        );
       }
+      prompt = `${customPrompt}. Sticker-ready with a clean outline edge and transparent background. Keep the person's face fully recognizable.`;
+      resolvedStyleId = "custom";
+    } else {
+      const preset = stylePresets.find((p) => p.id === styleId);
+      if (!preset && styleId !== "random" && styleId !== "custom") {
+        return NextResponse.json(
+          { error: "Invalid style preset" },
+          { status: 400 }
+        );
+      }
+      const resolved = resolvePresetPrompt(styleId);
+      prompt = resolved.prompt;
+      resolvedStyleId = resolved.resolvedId;
     }
 
-    // Resolve the prompt (handles "random" by picking a random real style)
-    const { prompt } = resolvePresetPrompt(styleId);
+    // Free generation is unlimited per user — abuse is controlled by:
+    //   - Per-IP rate limit above (10/hour)
+    //   - The spend-tracker auto-throttle when daily OpenAI cost spikes
+    // This trades a generation-cost ceiling for the higher-conversion funnel
+    // of letting people experiment freely until they fall in love with one.
 
-    // 4. Generate the image
-    const styledImage = await generateStickerImage(image, prompt);
+    // 4. Generate the image (preview tier — fast)
+    const styledImage = await generatePreview(image, prompt);
 
     // 5. Record generation + check spend alerts
-    const { alert, stats } = recordGeneration();
+    const { alert, stats } = recordGeneration("preview");
     if (alert) {
-      // Fire and forget — don't block the response
       sendAlert({
         level: alert.level as "info" | "warning" | "critical",
         title: `Daily Spend: $${stats.estimatedSpend.toFixed(2)}`,
@@ -116,15 +113,20 @@ export async function POST(request: NextRequest) {
       }).catch(() => {});
     }
 
+    // 6. Tag with session ID for anonymous persistence
+    const sessionId = getSessionIdFromCookie(
+      request.headers.get("cookie")
+    );
+
     return NextResponse.json({
       originalImage: image,
       generatedImage: styledImage,
-      stylePreset: styleId,
+      stylePreset: resolvedStyleId,
+      sessionId,
     });
   } catch (error) {
     console.error("Generate error:", error);
 
-    // Record error + alert if needed
     const errorMsg =
       error instanceof Error ? error.message : "Unknown generation error";
     const errorInfo = recordError(errorMsg);
