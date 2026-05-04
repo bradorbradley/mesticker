@@ -89,6 +89,19 @@ export async function generatePreview(
   return editImage(imageBase64, stylePrompt, { quality: "medium" });
 }
 
+/**
+ * Cheap variation preview — quality:low.
+ * Used for the 9-grid tiles. Cost: ~$0.011 per call vs $0.04 for medium.
+ * The webhook regenerates user-selected variations at quality:high before
+ * sending to Printful, so print quality is preserved.
+ */
+export async function generateVariationPreview(
+  imageBase64: string,
+  stylePrompt: string
+): Promise<string> {
+  return editImage(imageBase64, stylePrompt, { quality: "low" });
+}
+
 export async function generatePrint(
   imageBase64: string,
   stylePrompt: string

@@ -4,17 +4,61 @@ import {
   updatePaymentIntentMetadata,
   updatePaymentIntentAmount,
 } from "@/lib/stripe";
-import { uploadImage } from "@/lib/storage";
+import { uploadImage, uploadJson } from "@/lib/storage";
 import { auth } from "@/lib/auth";
 import { getSessionIdFromCookie } from "@/lib/session";
 import { ShippingAddress } from "@/types";
 import { getTier, getShipping } from "@/lib/pricing";
 
 interface CartItemInput {
-  generatedImage: string;
+  generatedImage: string;             // low-res composed sheet (preview / fallback)
   stylePreset: string;
-  sheetVariant: "pack" | "stack";
+  sheetVariant: "pack" | "stack" | "original";
   tierId: string;
+  sourceCartoon?: string;             // base64 of the original cartoon (for HQ regen)
+  prompts?: string[];                 // variation prompts; empty = no regen
+}
+
+/**
+ * Cart payload schema we drop into Vercel Blob, referenced by cartUrl in the
+ * Stripe PaymentIntent metadata. Lets us carry richer per-item data than
+ * the 500-char-per-value Stripe metadata limit allows.
+ */
+interface CartBlobItem {
+  composedImageUrl: string;           // low-res sheet (Printful fallback)
+  sourceCartoonUrl?: string;          // for HQ regen
+  prompts: string[];
+  quantity: number;
+  tierId: string;
+  sheetVariant: "pack" | "stack" | "original";
+}
+
+async function buildCartBlob(items: CartItemInput[]): Promise<{
+  cartUrl: string;
+  totalQty: number;
+  itemCount: number;
+}> {
+  const blobItems: CartBlobItem[] = await Promise.all(
+    items.map(async (item) => {
+      const composedImageUrl = await uploadImage(item.generatedImage);
+      const sourceCartoonUrl = item.sourceCartoon
+        ? await uploadImage(item.sourceCartoon)
+        : undefined;
+      const tier = getTier(item.tierId);
+      return {
+        composedImageUrl,
+        sourceCartoonUrl,
+        prompts: item.prompts || [],
+        quantity: tier.qty,
+        tierId: item.tierId,
+        sheetVariant: item.sheetVariant,
+      };
+    })
+  );
+
+  const cartUrl = await uploadJson({ items: blobItems });
+  const totalQty = blobItems.reduce((s, i) => s + i.quantity, 0);
+  return { cartUrl, totalQty, itemCount: blobItems.length };
 }
 
 export async function POST(request: NextRequest) {
@@ -31,7 +75,7 @@ export async function POST(request: NextRequest) {
       email?: string;
       items: CartItemInput[];
       address?: ShippingAddress;
-      totalCents?: number; // optional cart-level total override (multi-item carts use parent/child pricing)
+      totalCents?: number;
     } = await request.json();
 
     if (!items?.length) {
@@ -41,22 +85,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const uploadedItems = await Promise.all(
-      items.map(async (item) => {
-        const imageUrl = await uploadImage(item.generatedImage);
-        const tier = getTier(item.tierId);
-        return {
-          imageUrl,
-          stylePreset: item.stylePreset,
-          sheetVariant: item.sheetVariant,
-          tierId: item.tierId,
-          quantity: tier.qty,
-        };
-      })
-    );
+    const { cartUrl, totalQty, itemCount } = await buildCartBlob(items);
 
-    // If client passed an explicit cart total (multi-item with parent/child
-    // pricing), honor that. Otherwise fall back to per-item tier pricing.
     let subtotalCents: number;
     if (typeof totalCents === "number" && totalCents > 0) {
       subtotalCents = totalCents;
@@ -69,19 +99,10 @@ export async function POST(request: NextRequest) {
     const shippingCents = getShipping();
     const total = subtotalCents + shippingCents;
 
-    const totalQty = uploadedItems.reduce((sum, i) => sum + i.quantity, 0);
-
     const metadata: Record<string, string> = {
+      cartUrl,
       totalQty: String(totalQty),
-      itemCount: String(items.length),
-      cartItems: JSON.stringify(
-        uploadedItems.map((i) => ({
-          imageUrl: i.imageUrl,
-          quantity: i.quantity,
-          tierId: i.tierId,
-          sheetVariant: i.sheetVariant,
-        }))
-      ),
+      itemCount: String(itemCount),
       ...(session?.user?.id ? { userId: session.user.id } : {}),
       ...(sessionId ? { sessionId } : {}),
     };
@@ -115,13 +136,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-interface CartItemPatch {
-  generatedImage: string;
-  stylePreset: string;
-  sheetVariant: "pack" | "stack";
-  tierId: string;
-}
-
 export async function PATCH(request: NextRequest) {
   try {
     const {
@@ -135,7 +149,7 @@ export async function PATCH(request: NextRequest) {
       email?: string;
       address?: ShippingAddress;
       totalCents?: number;
-      items?: CartItemPatch[];
+      items?: CartItemInput[];
     } = await request.json();
 
     if (!paymentIntentId) {
@@ -157,27 +171,13 @@ export async function PATCH(request: NextRequest) {
       metadata.zip = address.zip;
     }
 
-    // Cart changed → re-upload images and refresh cartItems metadata.
-    // This keeps the webhook's Printful submission in sync with the cart.
     if (items && items.length > 0) {
-      const uploaded = await Promise.all(
-        items.map(async (item) => {
-          const imageUrl = await uploadImage(item.generatedImage);
-          const tier = getTier(item.tierId);
-          return {
-            imageUrl,
-            quantity: tier.qty,
-            tierId: item.tierId,
-            sheetVariant: item.sheetVariant,
-          };
-        })
-      );
-      metadata.totalQty = String(uploaded.reduce((s, i) => s + i.quantity, 0));
-      metadata.itemCount = String(items.length);
-      metadata.cartItems = JSON.stringify(uploaded);
+      const { cartUrl, totalQty, itemCount } = await buildCartBlob(items);
+      metadata.cartUrl = cartUrl;
+      metadata.totalQty = String(totalQty);
+      metadata.itemCount = String(itemCount);
     }
 
-    // Update amount + metadata together where possible
     if (typeof totalCents === "number" && totalCents > 0) {
       await updatePaymentIntentAmount(
         paymentIntentId,

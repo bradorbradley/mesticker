@@ -352,30 +352,38 @@ export default function Home() {
 
   const addPackToCart = useCallback(() => {
     if (!packSheet || !generatedImage) return;
+    // Take the prompts from the first 6 successful variations (matches what
+    // got composed into the sheet). Webhook will regen these at quality:high.
+    const successful = variations.filter((v) => v.image).slice(0, 6);
     cart.addItem({
       kind: "variations",
       composedImage: packSheet,
       thumbnail: generatedImage,
       label: "Variations Pack — 6 poses of you",
+      sourceCartoon: generatedImage,
+      prompts: successful.map((v) => v.variation),
     });
     trackProductTypeSelected("variations");
     hapticSuccess();
-  }, [cart, packSheet, generatedImage]);
+  }, [cart, packSheet, generatedImage, variations]);
 
   const addOriginalToCart = useCallback(() => {
     if (!originalSheet || !generatedImage) return;
+    // No prompts → webhook prints the original sheet as-is (already at
+    // medium quality from the initial generation, fine for print).
     cart.addItem({
-      kind: "single",
+      kind: "original",
       composedImage: originalSheet,
       thumbnail: generatedImage,
       label: "Sheet of your original sticker — 6 of this design",
     });
-    trackProductTypeSelected("single");
+    trackProductTypeSelected("original");
     hapticSuccess();
   }, [cart, originalSheet, generatedImage]);
 
   const addSingleTileToCart = useCallback(
     async (tileImage: string, idx: number) => {
+      const variationPrompt = variations[idx]?.variation;
       // Use pre-composed sheet if cached
       const cached = tileSheets[idx];
       if (cached) {
@@ -384,6 +392,8 @@ export default function Home() {
           composedImage: cached,
           thumbnail: tileImage,
           label: "Sheet of one design — 6 of this sticker",
+          sourceCartoon: generatedImage || undefined,
+          prompts: variationPrompt ? [variationPrompt] : [],
         });
         trackProductTypeSelected("single");
         hapticSuccess();
@@ -400,6 +410,8 @@ export default function Home() {
           composedImage: composed,
           thumbnail: tileImage,
           label: "Sheet of one design — 6 of this sticker",
+          sourceCartoon: generatedImage || undefined,
+          prompts: variationPrompt ? [variationPrompt] : [],
         });
         trackProductTypeSelected("single");
         hapticSuccess();
@@ -409,7 +421,7 @@ export default function Home() {
         setComposingTileIdx(null);
       }
     },
-    [cart, tileSheets]
+    [cart, tileSheets, variations, generatedImage]
   );
 
   // INLINE CHECKOUT: auto-create the PaymentIntent the first time the user
@@ -438,8 +450,10 @@ export default function Home() {
         items: cart.items.map((i) => ({
           generatedImage: i.composedImage,
           stylePreset: selectedStyle?.id || "unknown",
-          sheetVariant: i.kind === "variations" ? "pack" : "stack",
+          sheetVariant: i.kind === "variations" ? "pack" : i.kind === "original" ? "original" : "stack",
           tierId: "sheet-1",
+          sourceCartoon: i.sourceCartoon,
+          prompts: i.prompts || [],
         })),
         totalCents: cart.totalCents,
       }),
@@ -474,8 +488,10 @@ export default function Home() {
         items: cart.items.map((i) => ({
           generatedImage: i.composedImage,
           stylePreset: selectedStyle?.id || "unknown",
-          sheetVariant: i.kind === "variations" ? "pack" : "stack",
+          sheetVariant: i.kind === "variations" ? "pack" : i.kind === "original" ? "original" : "stack",
           tierId: "sheet-1",
+          sourceCartoon: i.sourceCartoon,
+          prompts: i.prompts || [],
         })),
       }),
       signal: controller.signal,

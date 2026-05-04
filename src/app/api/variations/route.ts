@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generatePreview } from "@/lib/generation";
+import { generateVariationPreview } from "@/lib/generation";
 import { buildVariationPrompt } from "@/lib/presets";
 import { generateVariationDescriptors } from "@/lib/vision";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       descriptors.map(async (variation, index) => {
         const prompt = buildVariationPrompt(variation);
         const startTime = Date.now();
-        const result = await generatePreview(image, prompt);
+        const result = await generateVariationPreview(image, prompt);
         recordGeneration("preview");
         return {
           index,

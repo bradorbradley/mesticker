@@ -22,14 +22,21 @@ import {
   type ReactNode,
 } from "react";
 
-export type CartItemKind = "variations" | "single";
+export type CartItemKind = "variations" | "single" | "original";
 
 export interface CartItem {
   id: string;
   kind: CartItemKind;
-  composedImage: string; // ready-to-print sheet PNG (transparent bg)
+  composedImage: string; // low-res sheet for preview / fallback only
   thumbnail: string;     // small representative image for cart display
   label: string;         // user-facing name
+
+  // For HQ regen at print time. The webhook regenerates each prompt at
+  // quality:high using sourceCartoon as input, recomposes the sheet, then
+  // sends THAT to Printful instead of the low-res composedImage.
+  // Empty prompts = no regen (use composedImage as-is, e.g. original sheet).
+  sourceCartoon?: string;
+  prompts?: string[];
 }
 
 interface CartCtx {
