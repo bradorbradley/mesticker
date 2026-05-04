@@ -10,6 +10,10 @@ import { getSessionIdFromCookie } from "@/lib/session";
 import { ShippingAddress } from "@/types";
 import { getTier, getShipping } from "@/lib/pricing";
 
+// Bumped from default 10s — image uploads + Stripe PI creation can occasionally
+// brush up against the limit on cold starts.
+export const maxDuration = 60;
+
 interface CartItemInput {
   generatedImage: string;             // low-res composed sheet (preview / fallback)
   stylePreset: string;

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadImage } from "@/lib/storage";
 
+export const maxDuration = 60;
+
 /**
  * Upload a base64 image to Vercel Blob and return the public URL.
  * Used to upload the generated cartoon ONCE post-generation so that

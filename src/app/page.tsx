@@ -391,13 +391,17 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [generatedImage, cartoonUrl]);
 
-  // Auto-add 1 original sheet to cart the moment the original sheet is ready
-  // and the user is on the reveal screen with an empty cart. Default state
-  // is "1 sheet ready to buy" — quantity stepper takes it from there.
+  // Auto-add 1 original sheet to cart the moment everything is ready:
+  //   - originalSheet composed (Canvas, instant)
+  //   - cartoonUrl uploaded (Blob, ~1s)
+  // Gating on cartoonUrl is critical: if we add to cart before the upload
+  // completes, the order POST below has to upload the base64 itself,
+  // which hits the Vercel function timeout and hangs "Setting up checkout".
   const autoAddedRef = useRef(false);
   useEffect(() => {
     if (step !== "reveal") return;
     if (!originalSheet || !generatedImage) return;
+    if (!cartoonUrl) return; // ← critical: wait for the upload
     if (cart.count > 0) return;
     if (autoAddedRef.current) return;
     if (paymentComplete) return;
@@ -408,7 +412,7 @@ export default function Home() {
       composedImage: originalSheet,
       thumbnail: generatedImage,
       label: "Sheet of your sticker — 6 of this design",
-      sourceCartoon: cartoonUrl || generatedImage,
+      sourceCartoon: cartoonUrl,
       prompts: [],
     });
   }, [step, originalSheet, generatedImage, cart, paymentComplete, cartoonUrl]);
@@ -498,14 +502,20 @@ export default function Home() {
   const cartTotalCentsKey = cart.totalCents;
   const cartCount = cart.count;
 
-  // Create PI on first add
+  // Create PI on first add. Aborts after 30s so the UI can show an error
+  // and a retry button instead of hanging "Setting up checkout..." forever.
+  const [orderAttempt, setOrderAttempt] = useState(0); // bump to force a retry
   useEffect(() => {
     if (cartCount === 0) return;
-    if (clientSecret || paymentIntentId) return; // already exists
+    if (clientSecret || paymentIntentId) return;
     if (isCreatingOrder) return;
 
     setIsCreatingOrder(true);
     setPaymentError(null);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
     fetch("/api/order", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -520,8 +530,15 @@ export default function Home() {
         })),
         totalCents: cart.totalCents,
       }),
+      signal: controller.signal,
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Order creation failed"))))
+      .then(async (r) => {
+        if (!r.ok) {
+          const txt = await r.text().catch(() => "");
+          throw new Error(`Server ${r.status}: ${txt.slice(0, 120) || "Order creation failed"}`);
+        }
+        return r.json();
+      })
       .then((data) => {
         setClientSecret(data.clientSecret);
         setPaymentIntentId(data.paymentIntentId);
@@ -530,12 +547,33 @@ export default function Home() {
         trackCheckoutStart();
       })
       .catch((err) => {
-        setPaymentError(err instanceof Error ? err.message : "Checkout setup failed");
+        const msg =
+          err.name === "AbortError"
+            ? "Checkout timed out. Tap to retry."
+            : err instanceof Error
+            ? err.message
+            : "Checkout setup failed";
+        console.error("[order POST] failed:", err);
+        setPaymentError(msg);
       })
-      .finally(() => setIsCreatingOrder(false));
-    // intentionally only depends on cartCount transition + clientSecret
+      .finally(() => {
+        clearTimeout(timeoutId);
+        setIsCreatingOrder(false);
+      });
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartCount, clientSecret, paymentIntentId, isCreatingOrder]);
+  }, [cartCount, clientSecret, paymentIntentId, orderAttempt]);
+
+  const retryCheckout = useCallback(() => {
+    setPaymentError(null);
+    setClientSecret(null);
+    setPaymentIntentId(null);
+    setOrderAttempt((n) => n + 1);
+  }, []);
 
   // PATCH PI when cart changes (after PI exists)
   useEffect(() => {
@@ -919,6 +957,23 @@ export default function Home() {
                         setStep("variations");
                       }}
                     />
+                  ) : paymentError && !clientSecret ? (
+                    <div className="w-full py-4 rounded-xl border-2 border-red-300 bg-red-50 flex flex-col gap-2 px-4">
+                      <p className="text-sm text-red-700 font-semibold text-center">
+                        {paymentError}
+                      </p>
+                      <motion.button
+                        whileTap={{ scale: 0.97 }}
+                        onClick={retryCheckout}
+                        className="w-full py-2.5 rounded-lg font-bold text-sm btn-gradient shadow-glow"
+                      >
+                        Retry checkout
+                      </motion.button>
+                    </div>
+                  ) : !cartoonUrl ? (
+                    <div className="w-full py-6 rounded-xl border border-border bg-card/50 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 size={16} className="animate-spin" /> Preparing your sticker…
+                    </div>
                   ) : isCreatingOrder && !clientSecret ? (
                     <div className="w-full py-6 rounded-xl border border-border bg-card/50 flex items-center justify-center gap-2 text-sm text-muted-foreground">
                       <Loader2 size={16} className="animate-spin" /> Setting up checkout…
