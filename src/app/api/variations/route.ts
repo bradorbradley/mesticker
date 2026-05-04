@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generatePreview } from "@/lib/generation";
 import { buildVariationPrompt } from "@/lib/presets";
-import { extractSubjectContext, tunedDescriptors } from "@/lib/vision";
+import { generateVariationDescriptors } from "@/lib/vision";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { recordGeneration, isThrottled } from "@/lib/spend-tracker";
 
@@ -26,8 +26,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // The image we receive is the FIRST cartoon (not the original photo).
-    // Optionally also receive the original photo for vision-aware tuning.
+    // The image we receive is the FIRST cartoon. The original photo (if
+    // provided) drives the creative vision pass that composes 9 unique
+    // sticker prompts tailored to this specific person.
     const { image, originalPhoto } = await request.json();
 
     if (!image) {
@@ -37,12 +38,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Vision pass on the original photo to tune variation descriptors.
-    // If no originalPhoto provided or vision fails, we fall back to defaults.
-    const ctx = originalPhoto ? await extractSubjectContext(originalPhoto) : null;
-    const descriptors = tunedDescriptors(ctx);
+    // World-class sticker designer composes 9 unique prompts for THIS person.
+    // Falls back to a randomized creative pool if the vision call fails.
+    const { descriptors, source } = await generateVariationDescriptors(
+      originalPhoto || image
+    );
 
-    // Generate 9 variations in parallel using the cartoon as source
     const results = await Promise.allSettled(
       descriptors.map(async (variation, index) => {
         const prompt = buildVariationPrompt(variation);
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ variations, context: ctx });
+    return NextResponse.json({ variations, descriptorSource: source });
   } catch (error) {
     console.error("Variations error:", error);
     return NextResponse.json(

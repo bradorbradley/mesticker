@@ -1,63 +1,126 @@
 /**
- * Vision pass: extract subject features from the captured photo so the
- * variations API can produce contextually-aware prompts (glasses,
- * beard, hat, age range, pet, accessories).
+ * Vision-driven creative variation generation.
  *
- * Uses OpenAI's gpt-4o-mini vision — cheap (~$0.001 per call), fast,
- * and runs once per generation. Result is cached on the variations
- * payload so we only ever pay for one vision call per session.
+ * Instead of a hardcoded template of "thumbs up wink / VIBES caption /
+ * watercolor twist," we let GPT-4o-mini act as a world-class sticker
+ * designer. It looks at the user's actual photo and composes nine
+ * unique sticker concepts on the fly — different every time, specific
+ * to what it sees, varied in genre.
+ *
+ * Cost: ~$0.002 per call (one-shot, ~500 in / ~400 out tokens).
  */
 
 import OpenAI from "openai";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY ?? "" });
 
-export interface SubjectContext {
-  subject: "person" | "child" | "pet-dog" | "pet-cat" | "group" | "other";
-  hairColor?: string;
-  hairStyle?: string;
-  facialHair?: string;
-  glasses?: boolean;
-  hat?: string;
-  notableAccessories?: string[];
-  notableClothing?: string;
-  vibe?: string; // free-form descriptor: "professional", "casual", "playful", etc.
+const SYSTEM_PROMPT = `You are the lead designer for the world's most premium iMessage sticker pack studio. Your packs are collected, traded, screenshotted, and gifted. People obsess over them.
+
+You're going to look at a photo of a real person and write nine wildly creative sticker prompts for a custom cartoon of them. The cartoon already exists — your prompts will direct a generative model to remix the SAME character into nine different sticker scenes.
+
+NON-NEGOTIABLES:
+1. ALL NINE MUST BE DIFFERENT FROM EACH OTHER — no two prompts repeat the same pose, scene, era, caption, prop, or vibe.
+2. EACH MUST FEEL SPECIFIC TO THIS PERSON. Use what you see — their hair, beard, glasses, hat, outfit, age range, vibe, accessories. The pack should feel like it could only be theirs.
+3. NEVER USE GENERIC CAPTIONS LIKE "HI!", "VIBES", "MOOD", "LOL". If a sticker has text, the words should sound like something this person would actually say. Original phrases. Insider energy.
+4. RANGE IS REQUIRED. Across the nine, mix several of these flavors — don't lean on just one:
+   - **Bold reaction stickers** (laughing crying, mind blown, in love, dead inside, screaming, kissing the air)
+   - **Pop culture parody** (Renaissance painting, 90s sitcom poster, anime opening shot, video game boss screen, noir detective scene, vintage trading card)
+   - **Situational scenes** (riding a tiny dragon, surfing a giant pizza slice, conducting an orchestra of cats, walking out of an explosion)
+   - **Era mashups** (1920s flapper, disco 70s, cyberpunk 2077, medieval knight, Ancient Greek statue)
+   - **Caption stickers** with ORIGINAL handwritten text reflecting this person's vibe
+   - **Action poses** (mid-leap, mid-spin, throwing confetti, breakdancing)
+   - **Style twists** (claymation, low-poly, pixel art, neon synthwave, oil painting, glitch art)
+5. EACH PROMPT IS ONE PUNCHY SENTENCE describing what's happening and any text that appears. The model will translate the sentence into the sticker. Be visual, specific, sensory.
+
+RETURN VALUE: JSON only. Schema:
+{ "variations": [string, string, string, string, string, string, string, string, string] }
+
+No commentary. No preamble. Just the JSON.`;
+
+const FALLBACK_POOL = [
+  "mid-laugh with eyes squeezed shut, confetti raining down",
+  "rolling on the floor crying-laughing, tears flying",
+  "mind-blown explosion behind the head, mouth wide open",
+  "in love floating with cartoon hearts orbiting",
+  "screaming with both hands on cheeks, Edvard Munch energy",
+  "sleeping with a halo of cartoon Z's and a tiny pillow",
+  "thumbs up with a confident wink and a sparkle on the tooth",
+  "fist pump mid-jump with motion lines",
+  "as a Renaissance oil painting in a gilded frame, dramatic chiaroscuro",
+  "as a 90s sitcom intro freeze-frame with a smile and finger-gun",
+  "as an anime opening title shot, wind-blown hair, sakura petals",
+  "as a Mortal Kombat character select screen with name in arcade font",
+  "as a noir detective in fedora and trench coat, cigarette smoke swirling",
+  "as a vintage 1950s baseball trading card, faded edges and stats banner",
+  "riding a tiny dragon through cotton candy clouds",
+  "surfing on a giant slice of pepperoni pizza",
+  "conducting an orchestra of tiny cats with a baton",
+  "walking out of an explosion in slow motion, sunglasses on",
+  "floating cross-legged in space surrounded by glowing planets",
+  "breakdancing on a cardboard mat with a boombox beside them",
+  "1920s flapper era with a sequined headband and martini glass",
+  "1970s disco scene with sparkling jumpsuit under a mirrorball",
+  "cyberpunk 2077 with neon hair, chrome implants, rainy alley behind",
+  "medieval knight in shining armor wielding a glowing sword",
+  "ancient Greek marble statue version, white stone, laurel wreath",
+  "in claymation style with visible thumbprints and stop-motion charm",
+  "in low-poly 3D with hard polygon faces and bright flat colors",
+  "in 8-bit pixel art style with a glittering coin floating overhead",
+  "in neon synthwave with magenta and cyan grid horizon behind",
+  "in oil painting style with thick visible brushstrokes",
+  "throwing handfuls of glitter into the air, glitter mid-fall",
+  "with a comic-book style 'POW!' burst behind the head",
+  "doing a peace sign with glittery rainbow energy lines",
+  "winking and shooting finger guns with sparkles",
+  "blowing a kiss with a cartoon heart floating away",
+  "shrugging with a 'whatever' caption in handwritten cursive",
+  "with the caption 'iconic' in bold drop-shadow lettering above",
+  "with the caption 'main character' in vintage marquee letters",
+  "with the caption 'log off' in retro pixel font",
+  "in Spy vs Spy black ink style with a single accent color",
+];
+
+export interface DescriptorResult {
+  descriptors: string[];
+  source: "vision" | "fallback";
 }
 
-const SYSTEM_PROMPT = `You analyze portrait photos to inform sticker generation. Return ONLY valid JSON matching this schema:
-
-{
-  "subject": "person" | "child" | "pet-dog" | "pet-cat" | "group" | "other",
-  "hairColor": string (optional),
-  "hairStyle": string (optional, e.g. "short curly", "long straight", "buzz cut"),
-  "facialHair": string (optional, e.g. "beard", "mustache", "goatee", "clean-shaven"),
-  "glasses": boolean (optional),
-  "hat": string (optional, e.g. "baseball cap", "beanie"),
-  "notableAccessories": string[] (optional, e.g. ["earbuds", "necklace"]),
-  "notableClothing": string (optional, e.g. "blue hoodie", "business suit"),
-  "vibe": string (optional, one word: "professional" | "casual" | "playful" | "rugged" | "elegant" | "athletic")
+function pickRandom(pool: string[], n: number): string[] {
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
 }
 
-Be specific but concise. Only include fields you're confident about. Skip anything ambiguous.`;
+/**
+ * Ask the vision model to compose nine unique sticker prompts for THIS
+ * person's photo. Falls back to a randomized pool of curated descriptors
+ * if the vision call fails or returns malformed output.
+ */
+export async function generateVariationDescriptors(
+  photoBase64: string
+): Promise<DescriptorResult> {
+  if (!photoBase64) {
+    return { descriptors: pickRandom(FALLBACK_POOL, 9), source: "fallback" };
+  }
 
-export async function extractSubjectContext(
-  imageBase64: string
-): Promise<SubjectContext | null> {
   try {
-    const dataUrl = imageBase64.startsWith("data:")
-      ? imageBase64
-      : `data:image/png;base64,${imageBase64}`;
+    const dataUrl = photoBase64.startsWith("data:")
+      ? photoBase64
+      : `data:image/png;base64,${photoBase64}`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      max_tokens: 250,
+      max_tokens: 800,
+      temperature: 1.1, // crank creativity
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
           role: "user",
           content: [
-            { type: "text", text: "Analyze this photo for sticker generation context." },
+            {
+              type: "text",
+              text: "Look closely at this person and write nine unique sticker prompts for them. Be specific to what you see. Each must be different. No generic captions.",
+            },
             { type: "image_url", image_url: { url: dataUrl, detail: "low" } },
           ],
         },
@@ -65,84 +128,33 @@ export async function extractSubjectContext(
     });
 
     const text = response.choices[0]?.message?.content;
-    if (!text) return null;
-    const parsed = JSON.parse(text) as SubjectContext;
-    return parsed;
+    if (!text) {
+      return { descriptors: pickRandom(FALLBACK_POOL, 9), source: "fallback" };
+    }
+
+    const parsed = JSON.parse(text) as { variations?: unknown };
+    const arr = Array.isArray(parsed.variations) ? parsed.variations : null;
+    if (!arr || arr.length < 9) {
+      return { descriptors: pickRandom(FALLBACK_POOL, 9), source: "fallback" };
+    }
+
+    const cleaned = arr
+      .filter((s): s is string => typeof s === "string" && s.length > 8)
+      .slice(0, 9);
+
+    if (cleaned.length < 9) {
+      // Pad with random fallback to guarantee 9 unique slots
+      const needed = 9 - cleaned.length;
+      const padding = pickRandom(
+        FALLBACK_POOL.filter((p) => !cleaned.includes(p)),
+        needed
+      );
+      return { descriptors: [...cleaned, ...padding], source: "vision" };
+    }
+
+    return { descriptors: cleaned, source: "vision" };
   } catch (err) {
-    console.error("[vision] extractSubjectContext failed:", err);
-    return null;
+    console.error("[vision] generateVariationDescriptors failed:", err);
+    return { descriptors: pickRandom(FALLBACK_POOL, 9), source: "fallback" };
   }
-}
-
-/**
- * Build context-aware variation descriptors. Takes the 9 base descriptors
- * and tweaks them based on what we see in the photo. The character itself
- * is locked from the cartoon — these prompts mostly add accessories,
- * caption text, or pose specifics that play to the user's actual features.
- */
-export function tunedDescriptors(ctx: SubjectContext | null): string[] {
-  // Default 9 — same buckets but a touch generic
-  const defaults: string[] = [
-    // A — Pose & Expression
-    "thumbs up with a confident wink",
-    "mid-laugh with eyes squeezed shut and one fist in the air",
-    "surprised face with both hands on cheeks, mouth open in a small 'o'",
-    // B — Caption Stickers
-    "with a bold pop-art speech bubble that says 'HI!' in chunky hand-drawn letters",
-    "with the word 'VIBES' arched above the head in bold sticker-style 3D text with a drop shadow",
-    "with a thought bubble above the head that says 'mood' in rounded lowercase letters",
-    // C — Style Twists
-    "rendered in soft watercolor wash inside the same hard sticker outline",
-    "rendered as a glossy 3D Pixar-style version with a rim-light highlight",
-    "rendered in retro 90s anime cel-shaded style with classic anime sparkle eyes",
-  ];
-
-  if (!ctx) return defaults;
-
-  const tuned = [...defaults];
-
-  // Subject-aware tweaks
-  if (ctx.subject === "pet-dog") {
-    tuned[0] = "tail wagging with a happy panting smile, tongue out";
-    tuned[1] = "head tilted to one side, looking adorably curious";
-    tuned[2] = "playful zoomies pose, ears flapping back";
-    tuned[3] = "with a speech bubble that says 'WOOF!'";
-    tuned[5] = "with a thought bubble that says 'treats?'";
-  } else if (ctx.subject === "pet-cat") {
-    tuned[0] = "regal sitting pose with tail curled, half-closed eyes";
-    tuned[1] = "playful pounce mid-air with paws extended";
-    tuned[2] = "loafing pose with paws tucked under, content";
-    tuned[3] = "with a speech bubble that says 'meow'";
-    tuned[5] = "with a thought bubble that says 'no.'";
-  } else if (ctx.subject === "child") {
-    tuned[0] = "huge grin with both arms raised in celebration";
-    tuned[3] = "with a speech bubble that says 'YAY!' in bouncy bubble letters";
-    tuned[5] = "with a thought bubble that says 'so cool'";
-  }
-
-  // Glasses → swap in #6 to add a fun accessory shift
-  if (ctx.glasses) {
-    tuned[6] = "wearing oversized heart-shaped sunglasses, lips in a small smirk, otherwise same character";
-  }
-
-  // Beard / facial hair → variation that plays it up
-  if (ctx.facialHair && /beard|mustache|goatee/i.test(ctx.facialHair)) {
-    tuned[7] = "with an exaggeratedly styled handlebar mustache and a single rose between the teeth, glossy 3D Pixar render";
-  }
-
-  // Hat → preserve and exaggerate
-  if (ctx.hat) {
-    tuned[2] = `tipping the ${ctx.hat} with a charming smile and a slight bow`;
-  }
-
-  // Vibe-aware caption tweak
-  if (ctx.vibe === "professional") {
-    tuned[4] = "with the word 'BOSS' arched above the head in bold sticker-style 3D text with a drop shadow";
-  } else if (ctx.vibe === "athletic") {
-    tuned[4] = "with the word 'LET'S GO' arched above the head in bold sticker-style 3D text with a motion-line drop shadow";
-  } else if (ctx.vibe === "playful") {
-    tuned[4] = "with the word 'SLAY' arched above the head in glittery rainbow sticker-style 3D text";
-  }
-
-  return tuned;
 }
