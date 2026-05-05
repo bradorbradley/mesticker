@@ -32,6 +32,7 @@ import OrderConfirmation from "@/components/order-confirmation";
 import Gallery from "@/components/gallery";
 import UserMenu from "@/components/user-menu";
 import IPhoneStickerPack from "@/components/iphone-sticker-pack";
+import ShareModal from "@/components/share-modal";
 import { useCreations } from "@/hooks/use-creations";
 import { hapticLight, hapticMedium, hapticSuccess } from "@/lib/haptics";
 import { getSessionId } from "@/lib/session";
@@ -138,6 +139,7 @@ export default function Home() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [showCart, setShowCart] = useState(false);
+  const [showShare, setShowShare] = useState(false);
 
   // Server-side purchase status (for returning-user detection)
   const [serverHasPurchased, setServerHasPurchased] = useState(false);
@@ -840,17 +842,7 @@ export default function Home() {
                     <motion.button
                       whileTap={{ scale: 0.95 }}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold glass-strong border border-border shadow-soft"
-                      onClick={async () => {
-                        trackImageShare();
-                        if (navigator.share) {
-                          try {
-                            const res = await fetch(generatedImage);
-                            const blob = await res.blob();
-                            const file = new File([blob], "mesticker.png", { type: "image/png" });
-                            await navigator.share({ title: "My MeSticker", text: "Check out my cartoon sticker from mesticker.fun!", files: [file] });
-                          } catch {}
-                        }
-                      }}
+                      onClick={() => setShowShare(true)}
                     >
                       <Share2 size={16} /> Share
                     </motion.button>
@@ -1305,6 +1297,15 @@ export default function Home() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Branded share modal — multi-platform with watermarked card */}
+        {generatedImage && (
+          <ShareModal
+            cartoonImage={generatedImage}
+            open={showShare}
+            onClose={() => setShowShare(false)}
+          />
+        )}
       </div>
     </main>
   );
