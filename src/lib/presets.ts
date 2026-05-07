@@ -55,15 +55,6 @@ export const stylePresets: StylePreset[] = [
       STICKER_SUFFIX,
   },
   {
-    id: "family-guy",
-    name: "Family Guy",
-    description: "Quahog cartoon style",
-    previewImage: "/presets/family-guy.webp",
-    prompt:
-      "Transform this photo into a character from Family Guy. Round/oval head shape, small simple white-circle eyes, prominent chin, flat colors. Seth MacFarlane animation style. Keep recognizable features like hairstyle and clothing." +
-      STICKER_SUFFIX,
-  },
-  {
     id: "random",
     name: "Random",
     description: "Surprise me!",
