@@ -12,6 +12,7 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Smartphone, X, Download, Check, Loader2 } from "lucide-react";
 import { trackEmailCapture } from "@/lib/analytics";
+import { saveImagesToPhotos } from "@/lib/save-to-photos";
 
 interface Variation {
   index: number;
@@ -70,18 +71,12 @@ export default function IPhoneStickerPack({ originalImage, variations }: Props) 
   );
 
   const handleSaveAll = useCallback(async () => {
-    for (let i = 0; i < allImages.length; i++) {
-      const img = allImages[i];
-      const link = document.createElement("a");
-      link.href = img;
-      link.download = `mesticker-${i === 0 ? "original" : `pose-${i}`}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      // small stagger so the browser doesn't choke
-      await new Promise((r) => setTimeout(r, 150));
-    }
-    setDownloadedAll(true);
+    const items = allImages.map((img, i) => ({
+      url: img,
+      filename: `mesticker-${i === 0 ? "original" : `pose-${i}`}.png`,
+    }));
+    const saved = await saveImagesToPhotos(items);
+    if (saved > 0) setDownloadedAll(true);
   }, [allImages]);
 
   return (
