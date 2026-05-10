@@ -1,11 +1,12 @@
 # /pets landing page assets
 
-Replace these two files via GitHub web UI (or git locally) and the page picks them up automatically:
+Replace these three files via GitHub web UI (or git locally) and the page picks them up automatically:
 
 | Filename | What it is | Recommended specs |
 | --- | --- | --- |
 | `photo.jpg` | Real photo of someone with their pet | 1080×1080 (square), JPG |
 | `cartoon.png` | Chibi-style cartoon (transparent PNG) | 1024×1024, transparent PNG |
+| `sheet.png` | Sticker sheet preview (6-up composed) | 1750×2480 (portrait), PNG |
 
 ## How to swap them in via GitHub web UI
 
