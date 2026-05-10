@@ -202,6 +202,14 @@ export default function Home() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+
+    // Dev / personal paywall override: ?unlock=1 unlocks unlimited gens forever
+    if (params.get("unlock") === "1") {
+      setLocalHasPurchased();
+      setServerHasPurchased(true);
+      setLimitReached(false);
+    }
+
     if (params.get("payment") === "success" || params.get("redirect_status") === "succeeded") {
       // Restore the last-purchase context so the confirmation actually shows
       // the user's sticker, the right qty, etc. Persisted right before
