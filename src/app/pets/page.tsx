@@ -16,6 +16,7 @@ export const metadata = {
 
 const PHOTO = "/landing/pets/photo.jpg";
 const CARTOON = "/landing/pets/cartoon.png";
+const SHEET = "/landing/pets/sheet.png";
 
 const FAQS = [
   {
@@ -107,7 +108,7 @@ export default function PetsPage() {
           <HowItWorks
             photoSrc={PHOTO}
             cartoonSrc={CARTOON}
-            sheetSrc={CARTOON}
+            sheetSrc={SHEET}
             label1="Snap photo"
             label2="Cartoon-ified"
             label3="Ships to you"
