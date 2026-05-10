@@ -33,6 +33,7 @@ import Gallery from "@/components/gallery";
 import UserMenu from "@/components/user-menu";
 import IPhoneStickerPack from "@/components/iphone-sticker-pack";
 import ShareModal from "@/components/share-modal";
+import { saveImageToPhotos } from "@/lib/save-to-photos";
 import { useCreations } from "@/hooks/use-creations";
 import { hapticLight, hapticMedium, hapticSuccess } from "@/lib/haptics";
 import { getSessionId } from "@/lib/session";
@@ -57,6 +58,14 @@ const HAS_PURCHASED_KEY = "mesticker-has-purchased";
 const SEEN_LANDING_KEY = "mesticker-seen-landing";
 const LAST_PURCHASE_KEY = "mesticker-last-purchase"; // for post-redirect confirmation
 
+// Free generations before requiring a purchase. Once they buy ANY sheet,
+// they're unlocked forever (HAS_PURCHASED_KEY).
+const FREE_GENERATION_LIMIT = 2;
+
+function getLocalGenCount() {
+  try { return parseInt(localStorage.getItem(GEN_COUNT_KEY) || "0", 10); }
+  catch { return 0; }
+}
 function incrementLocalGenCount() {
   try {
     const current = parseInt(localStorage.getItem(GEN_COUNT_KEY) || "0", 10);
@@ -143,6 +152,8 @@ export default function Home() {
 
   // Server-side purchase status (for returning-user detection)
   const [serverHasPurchased, setServerHasPurchased] = useState(false);
+  // Soft paywall flag — set when user hits the FREE_GENERATION_LIMIT
+  const [limitReached, setLimitReached] = useState(false);
 
   // Creations
   const { creations: localCreations, addCreation: addLocalCreation } = useCreations();
@@ -227,6 +238,15 @@ export default function Home() {
     async (preset: StylePreset, customPrompt?: string, imageOverride?: string) => {
       const imageToUse = imageOverride ?? capturedImage;
       if (!imageToUse) return;
+
+      // Soft paywall: after FREE_GENERATION_LIMIT, require any purchase to
+      // keep creating. Once purchased, unlimited (locally stored).
+      const purchased = getLocalHasPurchased() || serverHasPurchased;
+      const used = getLocalGenCount();
+      if (!purchased && used >= FREE_GENERATION_LIMIT) {
+        setLimitReached(true);
+        return;
+      }
 
       setSelectedStyle(preset);
       setIsGenerating(true);
@@ -791,7 +811,39 @@ export default function Home() {
                   <h2 className="font-display text-lg font-bold text-center">Tap a style to generate</h2>
                   {generateError && <p className="text-sm text-red-500 text-center">{generateError}</p>}
 
-                  <StyleGrid onSelect={handleStyleSelect} disabled={isGenerating} />
+                  {limitReached ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-5 text-center"
+                    >
+                      <Lock size={28} className="mx-auto mb-2 text-primary" />
+                      <p className="font-bold text-base">Order any sheet to keep creating</p>
+                      <p className="text-xs text-muted-foreground mt-2 mb-4">
+                        You&apos;ve made your free creations. Order a sticker sheet of any
+                        style you&apos;ve created and you&apos;ll unlock unlimited new styles
+                        and generations forever.
+                      </p>
+                      {generatedImage && capturedImage ? (
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => {
+                            setLimitReached(false);
+                            setStep("reveal");
+                          }}
+                          className="w-full py-3 rounded-xl font-bold text-sm btn-gradient shadow-glow flex items-center justify-center gap-2"
+                        >
+                          <ShoppingCart size={14} /> Go order your sticker
+                        </motion.button>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Take a photo first, then we&apos;ll get you started.
+                        </p>
+                      )}
+                    </motion.div>
+                  ) : (
+                    <StyleGrid onSelect={handleStyleSelect} disabled={isGenerating} />
+                  )}
                 </div>
               )}
             </motion.div>
@@ -829,11 +881,8 @@ export default function Home() {
                     <motion.button
                       whileTap={{ scale: 0.95 }}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold glass-strong border border-border shadow-soft"
-                      onClick={() => {
-                        const link = document.createElement("a");
-                        link.href = generatedImage;
-                        link.download = `mesticker-${Date.now()}.png`;
-                        link.click();
+                      onClick={async () => {
+                        await saveImageToPhotos(generatedImage, `mesticker-${Date.now()}.png`);
                         trackImageDownload();
                       }}
                     >
@@ -998,11 +1047,18 @@ export default function Home() {
                     </div>
                   )}
 
-                  <IPhoneStickerPack originalImage={generatedImage} variations={variationsForIPhone} />
+                  {/* Try another style — your photo is remembered, just pick
+                      a new style. Prominent so users keep creating. */}
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={handleTryAnotherStyle}
+                    className="w-full py-3 rounded-xl font-semibold text-sm glass-strong border-2 border-primary/30 shadow-soft flex items-center justify-center gap-2 text-primary"
+                  >
+                    <Palette size={14} />
+                    Try this photo in another style
+                  </motion.button>
 
-                  <button className="text-sm text-primary font-semibold text-center flex items-center justify-center gap-1.5 py-1" onClick={handleTryAnotherStyle}>
-                    <Palette size={14} /> Try Another Style
-                  </button>
+                  <IPhoneStickerPack originalImage={generatedImage} variations={variationsForIPhone} />
                 </div>
               </motion.div>
             );
