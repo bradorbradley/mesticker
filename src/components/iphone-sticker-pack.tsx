@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Smartphone, X, Download, Check, Loader2 } from "lucide-react";
 import { trackEmailCapture } from "@/lib/analytics";
 import { saveImagesToPhotos } from "@/lib/save-to-photos";
+import { useVisualViewport } from "@/hooks/use-visual-viewport";
 
 interface Variation {
   index: number;
@@ -39,6 +40,7 @@ export default function IPhoneStickerPack({ originalImage, variations }: Props) 
   const [emailInput, setEmailInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [downloadedAll, setDownloadedAll] = useState(false);
+  const viewport = useVisualViewport(open);
 
   useEffect(() => {
     if (isUnlocked()) setUnlockedState(true);
@@ -98,6 +100,7 @@ export default function IPhoneStickerPack({ originalImage, variations }: Props) 
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4"
+            style={viewport ? { top: viewport.top, height: viewport.height, bottom: "auto" } : undefined}
             onClick={() => setOpen(false)}
           >
             <motion.div
@@ -105,7 +108,7 @@ export default function IPhoneStickerPack({ originalImage, variations }: Props) 
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 40, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="w-full max-w-md bg-background rounded-t-3xl sm:rounded-3xl border border-border shadow-2xl p-5 max-h-[85dvh] overflow-y-auto"
+              className="w-full max-w-md bg-background rounded-t-3xl sm:rounded-3xl border border-border shadow-2xl p-5 max-h-full overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-3">
@@ -135,7 +138,7 @@ export default function IPhoneStickerPack({ originalImage, variations }: Props) 
                       placeholder="you@email.com"
                       value={emailInput}
                       onChange={(e) => setEmailInput(e.target.value)}
-                      className="flex-1 px-3 py-2.5 rounded-xl border border-border text-sm bg-background"
+                      className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-border text-base bg-background"
                       autoComplete="email"
                     />
                     <motion.button
