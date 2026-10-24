@@ -59,8 +59,11 @@ const SEEN_LANDING_KEY = "mesticker-seen-landing";
 const LAST_PURCHASE_KEY = "mesticker-last-purchase"; // for post-redirect confirmation
 
 // Free generations before requiring a purchase. Once they buy ANY sheet,
-// they're unlocked forever (HAS_PURCHASED_KEY).
-const FREE_GENERATION_LIMIT = 2;
+// they're unlocked forever (HAS_PURCHASED_KEY). Disabled (unlimited) unless
+// NEXT_PUBLIC_FREE_GENERATION_LIMIT is set to a positive number. Abuse is
+// still bounded server-side by the per-IP rate limit + spend throttle.
+const FREE_GENERATION_LIMIT =
+  parseInt(process.env.NEXT_PUBLIC_FREE_GENERATION_LIMIT || "0", 10) || Infinity;
 
 function getLocalGenCount() {
   try { return parseInt(localStorage.getItem(GEN_COUNT_KEY) || "0", 10); }
