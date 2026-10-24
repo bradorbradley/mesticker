@@ -19,16 +19,17 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? "",
 });
 
-// gpt-image-1 has been retired by OpenAI ("The model 'gpt-image-1' does not
-// exist"). We try the configured model first, then fall back through current
-// models so a stale OPENAI_IMAGE_MODEL env var can't take generation down.
+// gpt-image-1 was shut down 2026-10-23 ("The model 'gpt-image-1' does not
+// exist"); gpt-image-1.5 / 1-mini follow on 2026-12-01. We try the configured
+// model first, then fall back through current models so a stale
+// OPENAI_IMAGE_MODEL env var can't take generation down.
 const MODEL_CANDIDATES = Array.from(
   new Set(
     [
       process.env.OPENAI_IMAGE_MODEL,
+      "gpt-image-2.5-flare",
+      "gpt-image-2.5-sunburst",
       "gpt-image-2",
-      "gpt-image-1.5",
-      "gpt-image-1-mini",
     ].filter((m): m is string => !!m)
   )
 );
