@@ -30,3 +30,14 @@ Quick preview: `--res 0.35 --samples 12` renders all views in ~15 s on 4 CPU cor
 - Screen face tilted 17° back; 10.1" 16:10 portrait panel (`SCR_W`, `SCR_H`)
 - Front ledge tilted 7° toward the guest (spill run-off)
 - Exit slot at `SLOT_Z = 0.17`
+
+## Booth v0 (crude weekend build)
+
+Plywood box around a Lenovo Yoga (stand mode) + Liene PixCut S1 print-and-cut sticker printer.
+40 × 45 cm footprint, 44 cm tall, ½" plywood. `booth_v0.py` builds it (reuses the helpers and bar scene
+from `kiosk.py`); `booth_annotate.py` adds dimensions and callouts. Renders: `renders/booth_*.jpg`.
+
+```bash
+./bvenv/bin/python booth_v0.py out --samples 128
+python booth_annotate.py out renders
+```
