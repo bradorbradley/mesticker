@@ -45,8 +45,8 @@ def xray():
             lines = wrap(lab, f, pad - 80)
             lh = 37 * k
             y0 = ty - (len(lines) - 1) * lh / 2
-            for k, ln in enumerate(lines):
-                d.text((gx, y0 + k * lh), ln, font=f, fill=(240, 236, 255), anchor=anchor)
+            for li, ln in enumerate(lines):
+                d.text((gx, y0 + li * lh), ln, font=f, fill=(240, 236, 255), anchor=anchor)
 
     column(left, "L")
     column(right, "R")
