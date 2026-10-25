@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1632 1056" width="1632" height="1056"><rect width="1632" height="1056" fill="#fff"/><text x="32" y="50" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="26" font-weight="800" fill="#1F1B2E">F-06 · Panel drawings</text><text x="32" y="74" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="13" fill="#8A84A3">Flat panels as cut, viewed from outside. Cutouts dimensioned from the bottom-left corner of each panel</text><rect x="70.0" y="133.2" width="99.0" height="316.8" rx="0" fill="#FFFFFF" stroke="#1F1B2E" stroke-width="1.2" opacity="1"/>
+<rect x="74.5" y="157.9" width="89.9" height="158.6" rx="0" fill="#FFFFFF" stroke="#E8457E" stroke-width="1" opacity="1"/>
+<rect x="94.8" y="337.8" width="49.5" height="23.1" rx="0" fill="#FFFFFF" stroke="#E8457E" stroke-width="1" opacity="1"/>
+<text x="70.0" y="107.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="800" fill="#1F1B2E" text-anchor="start">M1 · Machine front</text>
+<text x="70.0" y="122.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="start">3 mm ACM, gloss white</text>
+<line x1="70.0" y1="453.0" x2="70.0" y2="474.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="169.0" y1="453.0" x2="169.0" y2="474.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="70.0" y1="468.0" x2="169.0" y2="468.0" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="169.0,468.0 162.6,465.1 162.6,470.9" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="70.0,468.0 76.4,470.9 76.4,465.1" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(119.5 468.0) rotate(0.0)"><rect x="-12.7" y="-7.5" width="25.4" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">600</text></g>
+<line x1="172.0" y1="450.0" x2="193.0" y2="450.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="172.0" y1="133.2" x2="193.0" y2="133.2" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="187.0" y1="450.0" x2="187.0" y2="133.2" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="187.0,133.2 184.1,139.6 189.9,139.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="187.0,450.0 189.9,443.6 184.1,443.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(187.0 291.6) rotate(-90.0)"><rect x="-15.6" y="-7.5" width="31.2" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">1920</text></g>
+<text x="119.5" y="151.3" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="9" font-weight="700" fill="#E8457E" text-anchor="middle">545×961 @ (27.5, 809.5)</text>
+<text x="119.5" y="331.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="9" font-weight="700" fill="#E8457E" text-anchor="middle">300×140 @ (150, 540)</text>
+<rect x="245.0" y="133.2" width="181.5" height="316.8" rx="0" fill="#E9E3F8" stroke="#1F1B2E" stroke-width="1.2" opacity="1"/>
+<rect x="294.5" y="190.9" width="82.5" height="231.0" rx="0" fill="#FFFFFF" stroke="#E8457E" stroke-width="1" opacity="1"/>
+<text x="245.0" y="107.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="800" fill="#1F1B2E" text-anchor="start">M2 · Machine end wall</text>
+<text x="245.0" y="122.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="start">3 mm ACM, gloss plum</text>
+<line x1="245.0" y1="453.0" x2="245.0" y2="474.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="426.5" y1="453.0" x2="426.5" y2="474.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="245.0" y1="468.0" x2="426.5" y2="468.0" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="426.5,468.0 420.1,465.1 420.1,470.9" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="245.0,468.0 251.4,470.9 251.4,465.1" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(335.8 468.0) rotate(0.0)"><rect x="-15.6" y="-7.5" width="31.2" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">1100</text></g>
+<line x1="429.5" y1="450.0" x2="450.5" y2="450.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="429.5" y1="133.2" x2="450.5" y2="133.2" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="444.5" y1="450.0" x2="444.5" y2="133.2" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="444.5,133.2 441.6,139.6 447.4,139.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="444.5,450.0 447.4,443.6 441.6,443.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(444.5 291.6) rotate(-90.0)"><rect x="-15.6" y="-7.5" width="31.2" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">1920</text></g>
+<text x="335.8" y="184.3" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="9" font-weight="700" fill="#E8457E" text-anchor="middle">500×1400 @ (300, 170)</text>
+<rect x="496.5" y="133.2" width="181.5" height="316.8" rx="0" fill="#FFFFFF" stroke="#1F1B2E" stroke-width="1.2" opacity="1"/>
+<rect x="558.7" y="220.1" width="57.1" height="100.2" rx="0" fill="#FFFFFF" stroke="#E8457E" stroke-width="1" opacity="1"/>
+<circle cx="587.2" cy="202.5" r="5.0" fill="#FFFFFF" stroke="#E8457E" stroke-width="1"/>
+<rect x="554.2" y="348.0" width="26.4" height="13.9" rx="0" fill="#FFFFFF" stroke="#E8457E" stroke-width="1" opacity="1"/>
+<rect x="521.2" y="260.2" width="6.6" height="3.3" rx="0" fill="#FFFFFF" stroke="#E8457E" stroke-width="1" opacity="1"/>
+<rect x="646.6" y="260.2" width="6.6" height="3.3" rx="0" fill="#FFFFFF" stroke="#E8457E" stroke-width="1" opacity="1"/>
+<rect x="609.5" y="321.3" width="5.0" height="3.3" rx="0" fill="#FFFFFF" stroke="#E8457E" stroke-width="1" opacity="1"/>
+<text x="496.5" y="107.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="800" fill="#1F1B2E" text-anchor="start">M4 · Camera wall</text>
+<text x="496.5" y="122.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="start">3 mm ACM, gloss white</text>
+<line x1="496.5" y1="453.0" x2="496.5" y2="474.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="678.0" y1="453.0" x2="678.0" y2="474.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="496.5" y1="468.0" x2="678.0" y2="468.0" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="678.0,468.0 671.6,465.1 671.6,470.9" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="496.5,468.0 502.9,470.9 502.9,465.1" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(587.2 468.0) rotate(0.0)"><rect x="-15.6" y="-7.5" width="31.2" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">1100</text></g>
+<line x1="681.0" y1="450.0" x2="702.0" y2="450.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="681.0" y1="133.2" x2="702.0" y2="133.2" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="696.0" y1="450.0" x2="696.0" y2="133.2" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="696.0,133.2 693.1,139.6 698.9,139.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="696.0,450.0 698.9,443.6 693.1,443.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(696.0 291.6) rotate(-90.0)"><rect x="-15.6" y="-7.5" width="31.2" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">1920</text></g>
+<text x="587.2" y="213.5" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="9" font-weight="700" fill="#E8457E" text-anchor="middle">346×607 @ (377, 786.5)</text>
+<text x="567.5" y="341.4" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="9" font-weight="700" fill="#E8457E" text-anchor="middle">160×84 @ (350, 534)</text>
+<rect x="748.0" y="265.2" width="100.7" height="184.8" rx="0" fill="#E9E3F8" stroke="#1F1B2E" stroke-width="1.2" opacity="1"/>
+<circle cx="799.1" cy="316.4" r="9.9" fill="#FFFFFF" stroke="#E8457E" stroke-width="1"/>
+<text x="748.0" y="239.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="800" fill="#1F1B2E" text-anchor="start">M5 · Machine roof</text>
+<text x="748.0" y="254.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="start">3 mm ACM, gloss plum</text>
+<line x1="748.0" y1="453.0" x2="748.0" y2="474.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="848.6" y1="453.0" x2="848.6" y2="474.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="748.0" y1="468.0" x2="848.6" y2="468.0" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="848.6,468.0 842.3,465.1 842.3,470.9" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="748.0,468.0 754.4,470.9 754.4,465.1" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(798.3 468.0) rotate(0.0)"><rect x="-12.7" y="-7.5" width="25.4" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">610</text></g>
+<line x1="851.6" y1="450.0" x2="872.6" y2="450.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="851.6" y1="265.2" x2="872.6" y2="265.2" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="866.6" y1="450.0" x2="866.6" y2="265.2" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="866.6,265.2 863.8,271.6 869.5,271.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="866.6,450.0 869.5,443.6 863.8,443.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(866.6 357.6) rotate(-90.0)"><rect x="-15.6" y="-7.5" width="31.2" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">1120</text></g>
+<text x="799.1" y="299.9" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="9" font-weight="700" fill="#E8457E" text-anchor="middle">120×120 @ (250, 750)</text>
+<rect x="923.0" y="133.2" width="198.0" height="316.8" rx="0" fill="#E9E3F8" stroke="#1F1B2E" stroke-width="1.2" opacity="1"/>
+<text x="923.0" y="107.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="800" fill="#1F1B2E" text-anchor="start">B1 · Bay back wall</text>
+<text x="923.0" y="122.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="start">3 mm ACM, gloss plum (wrapped)</text>
+<line x1="923.0" y1="453.0" x2="923.0" y2="474.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="1121.0" y1="453.0" x2="1121.0" y2="474.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="923.0" y1="468.0" x2="1121.0" y2="468.0" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="1121.0,468.0 1114.6,465.1 1114.6,470.9" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="923.0,468.0 929.4,470.9 929.4,465.1" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(1022.0 468.0) rotate(0.0)"><rect x="-15.6" y="-7.5" width="31.2" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">1200</text></g>
+<line x1="1124.0" y1="450.0" x2="1145.0" y2="450.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="1124.0" y1="133.2" x2="1145.0" y2="133.2" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="1139.0" y1="450.0" x2="1139.0" y2="133.2" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="1139.0,133.2 1136.1,139.6 1141.9,139.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="1139.0,450.0 1141.9,443.6 1136.1,443.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(1139.0 291.6) rotate(-90.0)"><rect x="-15.6" y="-7.5" width="31.2" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">1920</text></g>
+<rect x="1191.0" y="133.2" width="181.5" height="316.8" rx="0" fill="#E9E3F8" stroke="#1F1B2E" stroke-width="1.2" opacity="1"/>
+<text x="1191.0" y="107.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="800" fill="#1F1B2E" text-anchor="start">B2 · Bay end wall</text>
+<text x="1191.0" y="122.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="start">3 mm ACM, gloss plum (wrapped)</text>
+<line x1="1191.0" y1="453.0" x2="1191.0" y2="474.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="1372.5" y1="453.0" x2="1372.5" y2="474.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="1191.0" y1="468.0" x2="1372.5" y2="468.0" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="1372.5,468.0 1366.1,465.1 1366.1,470.9" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="1191.0,468.0 1197.4,470.9 1197.4,465.1" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(1281.8 468.0) rotate(0.0)"><rect x="-15.6" y="-7.5" width="31.2" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">1100</text></g>
+<line x1="1375.5" y1="450.0" x2="1396.5" y2="450.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="1375.5" y1="133.2" x2="1396.5" y2="133.2" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="1390.5" y1="450.0" x2="1390.5" y2="133.2" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="1390.5,133.2 1387.6,139.6 1393.4,139.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="1390.5,450.0 1393.4,443.6 1387.6,443.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(1390.5 291.6) rotate(-90.0)"><rect x="-15.6" y="-7.5" width="31.2" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">1920</text></g>
+<rect x="1442.5" y="133.2" width="29.7" height="316.8" rx="0" fill="#E9E3F8" stroke="#1F1B2E" stroke-width="1.2" opacity="1"/>
+<text x="1442.5" y="107.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="800" fill="#1F1B2E" text-anchor="start">B3 · Front pillar</text>
+<text x="1442.5" y="122.2" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="start">3 mm ACM, gloss plum</text>
+<line x1="1442.5" y1="453.0" x2="1442.5" y2="474.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="1472.2" y1="453.0" x2="1472.2" y2="474.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="1442.5" y1="468.0" x2="1472.2" y2="468.0" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="1472.2,468.0 1465.8,465.1 1465.8,470.9" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="1442.5,468.0 1448.9,470.9 1448.9,465.1" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(1457.3 468.0) rotate(0.0)"><rect x="-12.7" y="-7.5" width="25.4" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">180</text></g>
+<line x1="1475.2" y1="450.0" x2="1496.2" y2="450.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="1475.2" y1="133.2" x2="1496.2" y2="133.2" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="1490.2" y1="450.0" x2="1490.2" y2="133.2" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="1490.2,133.2 1487.3,139.6 1493.1,139.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="1490.2,450.0 1493.1,443.6 1487.3,443.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(1490.2 291.6) rotate(-90.0)"><rect x="-15.6" y="-7.5" width="31.2" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">1920</text></g>
+<rect x="70.0" y="692.0" width="199.7" height="184.8" rx="0" fill="#E9E3F8" stroke="#1F1B2E" stroke-width="1.2" opacity="1"/>
+<text x="70.0" y="666.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="800" fill="#1F1B2E" text-anchor="start">B5 · Bay roof</text>
+<text x="70.0" y="681.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="start">3 mm ACM, gloss plum</text>
+<line x1="70.0" y1="879.8" x2="70.0" y2="900.8" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="269.6" y1="879.8" x2="269.6" y2="900.8" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="70.0" y1="894.8" x2="269.6" y2="894.8" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="269.6,894.8 263.3,891.9 263.3,897.7" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="70.0,894.8 76.4,897.7 76.4,891.9" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(169.8 894.8) rotate(0.0)"><rect x="-15.6" y="-7.5" width="31.2" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">1210</text></g>
+<line x1="272.6" y1="876.8" x2="293.6" y2="876.8" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="272.6" y1="692.0" x2="293.6" y2="692.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="287.6" y1="876.8" x2="287.6" y2="692.0" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="287.6,692.0 284.8,698.4 290.5,698.4" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="287.6,876.8 290.5,870.4 284.8,870.4" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(287.6 784.4) rotate(-90.0)"><rect x="-15.6" y="-7.5" width="31.2" height="15.0" fill="#fff" rx="3"/><text x="0" y="3.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#5B3FD6" text-anchor="middle">1120</text></g>
+<text x="1320.0" y="600.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10.5" font-weight="700" fill="#8A84A3" text-anchor="start">PANEL NOTES</text>
+<text x="1320.0" y="618.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">• Cut on a CNC router with a V-groove</text>
+<text x="1332.0" y="634.7" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">bit if folded returns are wanted.</text>
+<text x="1332.0" y="651.3" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">DXF files of every panel are in the</text>
+<text x="1332.0" y="668.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">package.</text>
+<text x="1320.0" y="687.7" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">• Cutout sizes include 5 mm</text>
+<text x="1332.0" y="704.4" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">clearance. Displays overlap the</text>
+<text x="1332.0" y="721.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">panel face from behind.</text>
+<text x="1320.0" y="740.7" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">• Small slots on M4 are cable</text>
+<text x="1332.0" y="757.4" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">pass-throughs for the softboxes and</text>
+<text x="1332.0" y="774.1" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">the reader.</text>
+<text x="1320.0" y="793.7" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">• Orient the protective film so the</text>
+<text x="1332.0" y="810.4" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">gloss face is outside.</text><rect x="12" y="12" width="1608" height="1032" fill="none" stroke="#1F1B2E" stroke-width="1.6"/><line x1="12" y1="978" x2="1620" y2="978" stroke="#1F1B2E" stroke-width="1.2"/><text x="28" y="1006" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="800" fill="#1F1B2E">MeSticker Photo Booth</text><text x="28" y="1028" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" fill="#8A84A3">Fabrication drawing set · units mm · do not scale drawings, use dimensions · tolerance ±2 mm unless noted</text><line x1="992" y1="978" x2="992" y2="1044" stroke="#1F1B2E" stroke-width="1"/><text x="1002" y="1000" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#8A84A3">SHEET</text><text x="1002" y="1026" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="800" fill="#1F1B2E">F-06</text><line x1="1082" y1="978" x2="1082" y2="1044" stroke="#1F1B2E" stroke-width="1"/><text x="1092" y="1000" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#8A84A3">TITLE</text><text x="1092" y="1026" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="800" fill="#1F1B2E">Panel drawings</text><line x1="1412" y1="978" x2="1412" y2="1044" stroke="#1F1B2E" stroke-width="1"/><text x="1422" y="1000" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#8A84A3">REV</text><text x="1422" y="1026" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="800" fill="#1F1B2E">A</text><line x1="1482" y1="978" x2="1482" y2="1044" stroke="#1F1B2E" stroke-width="1"/><text x="1492" y="1000" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#8A84A3">DATE</text><text x="1492" y="1026" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="800" fill="#1F1B2E">2026-10-24</text></svg>

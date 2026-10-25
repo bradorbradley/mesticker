@@ -1,0 +1,18 @@
+code,panel,width_mm,height_mm,qty,material,cutouts,note
+M1,Machine front (aisle face),600,1920,1,"3 mm ACM, gloss white","rect 545x961 @ center (300,1290); rect 300x140 @ center (300,610)",Display bezel overlaps cutout by 15 mm each side
+M2,Machine end wall,1100,1920,1,"3 mm ACM, gloss plum","rect 500x1400 @ center (550,870)",Cut-out becomes the service door (M2D)
+M2D,Service door,530,1430,1,"3 mm ACM on 1"" tube sub-frame",,"Piano hinge one side, cam lock other side"
+M3,Machine back,600,1920,1,"3 mm ACM, gloss plum (wrapped)",,
+M4,Camera wall (inside),1100,1920,1,"3 mm ACM, gloss white","rect 346x607 @ center (550,1090); circle 60x60 @ center (550,1500); rect 160x84 @ center (430,576); rect 40x20 @ center (170,1140); rect 40x20 @ center (930,1140); rect 30x20 @ center (700,770)",Small slots are cable pass-throughs
+M5,Machine roof,610,1120,1,"3 mm ACM, gloss plum","circle 120x120 @ center (310,810)",
+B1,Bay back wall (outside),1200,1920,1,"3 mm ACM, gloss plum (wrapped)",,
+B2,Bay end wall (outside),1100,1920,1,"3 mm ACM, gloss plum (wrapped)",,
+B3,Front pillar,180,1920,1,"3 mm ACM, gloss plum",,
+B4,Front header,1020,100,1,"3 mm ACM, gloss plum",,
+B5,Bay roof,1210,1120,1,"3 mm ACM, gloss plum",,Ceiling softbox hangs below; feed cable at back corner
+B6,"Backdrop liner (end wall, inside)",1094,1890,1,"3 mm ACM, printed backdrop vinyl",,
+B7,Back wall liner (inside),1194,1890,1,9 mm acoustic felt panel,,
+B8,Bay floor deck,1161.9,1023.8,1,18 mm plywood + 3 mm rubber,,Sits on floor joists
+P1,"Plinth skirt, long",1740,70,2,"3 mm ACM, black",,
+P2,"Plinth skirt, short",1040,70,2,"3 mm ACM, black",,
+S1,Sign face,1720,280,1,"3 mm ACM, gloss black + printed logo","circle 22x22 @ center (40,35); circle 22x22 @ center (40,245); circle 22x22 @ center (105.6,35); circle 22x22 @ center (105.6,245); circle 22x22 @ center (171.2,35); circle 22x22 @ center (171.2,245); circle 22x22 @ center (236.8,35); circle 22x22 @ center (236.8,245); circle 22x22 @ center (302.4,35); circle 22x22 @ center (302.4,245); circle 22x22 @ center (368,35); circle 22x22 @ center (368,245); circle 22x22 @ center (433.6,35); circle 22x22 @ center (433.6,245); circle 22x22 @ center (499.2,35); circle 22x22 @ center (499.2,245); circle 22x22 @ center (564.8,35); circle 22x22 @ center (564.8,245); circle 22x22 @ center (630.4,35); circle 22x22 @ center (630.4,245); circle 22x22 @ center (696,35); circle 22x22 @ center (696,245); circle 22x22 @ center (761.6,35); circle 22x22 @ center (761.6,245); circle 22x22 @ center (827.2,35); circle 22x22 @ center (827.2,245); circle 22x22 @ center (892.8,35); circle 22x22 @ center (892.8,245); circle 22x22 @ center (958.4,35); circle 22x22 @ center (958.4,245); circle 22x22 @ center (1024,35); circle 22x22 @ center (1024,245); circle 22x22 @ center (1089.6,35); circle 22x22 @ center (1089.6,245); circle 22x22 @ center (1155.2,35); circle 22x22 @ center (1155.2,245); circle 22x22 @ center (1220.8,35); circle 22x22 @ center (1220.8,245); circle 22x22 @ center (1286.4,35); circle 22x22 @ center (1286.4,245); circle 22x22 @ center (1352,35); circle 22x22 @ center (1352,245); circle 22x22 @ center (1417.6,35); circle 22x22 @ center (1417.6,245); circle 22x22 @ center (1483.2,35); circle 22x22 @ center (1483.2,245); circle 22x22 @ center (1548.8,35); circle 22x22 @ center (1548.8,245); circle 22x22 @ center (1614.4,35); circle 22x22 @ center (1614.4,245); circle 22x22 @ center (1680,35); circle 22x22 @ center (1680,245)",
