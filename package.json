@@ -26,6 +26,7 @@
     "next-auth": "^5.0.0-beta.30",
     "openai": "^6.22.0",
     "posthog-js": "^1.364.7",
+    "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sharp": "^0.34.5",
@@ -34,6 +35,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.16.0",

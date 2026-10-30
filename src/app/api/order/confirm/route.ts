@@ -111,6 +111,11 @@ export async function POST(request: NextRequest) {
       const paymentIntent = event.data.object;
       const meta = paymentIntent.metadata;
 
+      // Booth sales print on-site; nothing to fulfill here.
+      if (meta?.source === "booth") {
+        return NextResponse.json({ received: true });
+      }
+
       if (!meta?.addressName) {
         console.warn(
           `[webhook] PaymentIntent ${paymentIntent.id} succeeded without addressName.`

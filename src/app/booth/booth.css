@@ -1,0 +1,59 @@
+/* MeSticker Booth theme — warm paper + coral, matching leaveby.xyz */
+.booth {
+  --paper: #fcfaf6;
+  --ground: #f3eee5;
+  --ink: #1f2030;
+  --ink-2: #62606f;
+  --ink-3: #9c99a6;
+  --line: rgba(31, 32, 48, 0.1);
+  --coral: #e36f58;
+  --coral-soft: #f2b3a5;
+  --coral-pale: #f8d9d0;
+  --mustard: #e1a52e;
+  --mustard-soft: #f4d48b;
+  --sage: #5e9271;
+  --sage-soft: #d6e4d7;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Instrument Sans", system-ui, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+  cursor: default;
+}
+.booth .display {
+  font-family: "Fraunces", Georgia, serif;
+  font-variation-settings: "SOFT" 60, "opsz" 144;
+  letter-spacing: -0.02em;
+}
+.booth .btn-primary {
+  background: var(--coral);
+  color: #fff;
+  border-radius: 999px;
+  font-weight: 600;
+  box-shadow: 0 10px 0 #c4553f, 0 18px 30px rgba(227, 111, 88, 0.35);
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.booth .btn-primary:active {
+  transform: translateY(6px);
+  box-shadow: 0 4px 0 #c4553f, 0 8px 16px rgba(227, 111, 88, 0.3);
+}
+.booth .btn-ghost {
+  background: #fff;
+  color: var(--ink);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  font-weight: 600;
+}
+.booth .btn-ghost:active {
+  background: var(--ground);
+}
+.booth .sticker-card {
+  background: #fff;
+  border-radius: 28px;
+  box-shadow: 0 2px 0 var(--line), 0 18px 40px rgba(31, 32, 48, 0.12);
+}
+.booth .grain {
+  background-image: radial-gradient(rgba(31, 32, 48, 0.035) 1px, transparent 1px);
+  background-size: 6px 6px;
+}
