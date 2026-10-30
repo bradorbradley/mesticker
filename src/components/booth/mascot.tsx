@@ -2,21 +2,21 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import SnapRig, { type Expression } from "./snap-rig";
 
 export type MascotMood = "idle" | "excited" | "working" | "thinking" | "sad";
 
-const loop = { repeat: Infinity, ease: "easeInOut" as const };
-const MOODS: Record<MascotMood, { animate: Record<string, number[] | number>; transition: Record<string, unknown> }> = {
-  idle: { animate: { y: [0, -10, 0], rotate: 0, scale: 1 }, transition: { duration: 3.2, ...loop } },
-  excited: { animate: { y: [0, -28, 0], rotate: [0, -4, 4, 0], scale: 1 }, transition: { duration: 0.7, repeat: Infinity, repeatDelay: 0.5 } },
-  working: { animate: { rotate: [-2, 2, -2], y: 0, scale: 1 }, transition: { duration: 1.2, ...loop } },
-  thinking: { animate: { rotate: [0, -7, -7, 0], y: [0, -4, -4, 0], scale: 1 }, transition: { duration: 1.6, ...loop } },
-  sad: { animate: { rotate: -9, y: 12, scale: 0.94 }, transition: { type: "spring", stiffness: 120, damping: 10 } },
+const FACE: Record<MascotMood, Expression> = {
+  idle: "smile",
+  excited: "happy",
+  working: "thinking",
+  thinking: "thinking",
+  sad: "sad",
 };
 
 /**
- * "Snap", the booth's press-photographer mascot.
- * `flash` fires the camera's flash bulb; `mood` picks the idle motion.
+ * "Snap", the booth's press-photographer mascot: the rigged character
+ * (blinks, looks around, pulls faces) plus his camera flash.
  */
 export default function Mascot({
   className,
@@ -29,17 +29,9 @@ export default function Mascot({
   mood?: MascotMood;
   flash?: boolean;
 }) {
-  const motionProps = MOODS[mood];
-
   return (
-    <motion.div className={cn("relative aspect-[571/900] select-none", className)} style={style} {...motionProps}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/booth/mascot.webp"
-        alt="Snap, the MeSticker mascot"
-        draggable={false}
-        className="h-full w-full object-contain drop-shadow-[0_18px_22px_rgba(91,63,214,0.25)]"
-      />
+    <div className={cn("relative aspect-[571/900] select-none", className)} style={style}>
+      <SnapRig className="h-full w-full" mood={mood} expression={flash ? "surprised" : FACE[mood]} />
       {/* Flash bulb sits at ~13% x / 29% y of the cutout */}
       <AnimatePresence>
         {flash && (
@@ -61,6 +53,6 @@ export default function Mascot({
           />
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }

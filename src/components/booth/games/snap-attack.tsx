@@ -5,13 +5,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import { u } from "../units";
+import SnapRig, { type Expression } from "../snap-rig";
+
+const POP_FACES: Expression[] = ["grin", "smile", "grin", "thinking"];
 
 /**
  * Snap Attack — Snap pops up in the photo frames; tap him to take his picture.
  * Gold Snap is worth 3. It speeds up as you score.
  */
 
-type Pop = { id: number; hole: number; gold: boolean; until: number };
+type Pop = { id: number; hole: number; gold: boolean; until: number; hit?: boolean; face: Expression; look: { x: number; y: number } };
 type Hit = { id: number; hole: number; text: string };
 
 const HOLES = 6;
@@ -48,7 +51,17 @@ export default function SnapAttack() {
         if (live.length >= (s > 15 ? 2 : 1)) return live;
         const free = Array.from({ length: HOLES }, (_, i) => i).filter((i) => !live.some((p) => p.hole === i));
         const hole = free[Math.floor(Math.random() * free.length)];
-        return [...live, { id: nextId.current++, hole, gold: Math.random() < 0.12, until: now + stay }];
+        return [
+          ...live,
+          {
+            id: nextId.current++,
+            hole,
+            gold: Math.random() < 0.12,
+            until: now + stay,
+            face: POP_FACES[Math.floor(Math.random() * POP_FACES.length)],
+            look: { x: Math.random() * 1.6 - 0.8, y: Math.random() * 0.6 - 0.2 },
+          },
+        ];
       });
       timer = setTimeout(spawn, Math.max(380, 800 - s * 14) + Math.random() * 300);
     };
@@ -65,7 +78,8 @@ export default function SnapAttack() {
       const now = Date.now();
       setPops((cur) => {
         const expired = cur.some((p) => p.until <= now);
-        if (expired) setCombo(0);
+        const missed = cur.some((p) => p.until <= now && !p.hit);
+        if (missed) setCombo(0);
         return expired ? cur.filter((p) => p.until > now) : cur;
       });
     }, 100);
@@ -75,7 +89,7 @@ export default function SnapAttack() {
   const tap = useCallback(
     (hole: number) => {
       sounds.unlock();
-      const pop = pops.find((p) => p.hole === hole && p.until > Date.now());
+      const pop = pops.find((p) => p.hole === hole && p.until > Date.now() && !p.hit);
       if (!pop) {
         setShake(hole);
         setCombo(0);
@@ -83,7 +97,8 @@ export default function SnapAttack() {
         return;
       }
       sounds.shutter();
-      setPops((cur) => cur.filter((p) => p.id !== pop.id));
+      // he gets caught on camera: surprised face, then spins away
+      setPops((cur) => cur.map((p) => (p.id === pop.id ? { ...p, hit: true, until: Date.now() + 420 } : p)));
       setFlashHole(hole);
       setTimeout(() => setFlashHole(null), 250);
       const nextCombo = combo + 1;
@@ -146,13 +161,17 @@ export default function SnapAttack() {
                     exit={{ y: "100%", transition: { duration: 0.18 } }}
                     transition={{ type: "spring", stiffness: 520, damping: 22 }}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src="/booth/mascot.webp"
-                      alt=""
-                      draggable={false}
-                      className={cn("h-full object-contain", pop.gold && "[filter:sepia(1)_saturate(4)_hue-rotate(-12deg)_brightness(1.15)_drop-shadow(0_0_12px_#feca57)]")}
-                    />
+                    <motion.div
+                      className="h-full"
+                      animate={pop.hit ? { rotate: [0, -12, 12, 0], scale: [1, 1.08, 1] } : { rotate: 0, scale: 1 }}
+                      transition={{ duration: 0.4 }}
+                    >
+                      <SnapRig
+                        className={cn("h-full", pop.gold && "[filter:sepia(1)_saturate(4)_hue-rotate(-12deg)_brightness(1.15)_drop-shadow(0_0_12px_#feca57)]")}
+                        expression={pop.hit ? "surprised" : pop.gold ? "happy" : pop.face}
+                        look={pop.hit ? { x: 0, y: 0 } : pop.look}
+                      />
+                    </motion.div>
                   </motion.div>
                 )}
               </AnimatePresence>
