@@ -37,13 +37,13 @@ export default function OperatorPanel({
   onReset: () => void;
   onClose: () => void;
 }) {
-  const row = "flex items-center justify-between gap-6 border-b border-[var(--line)] py-4";
-  const small = "btn-ghost px-5 py-2 text-lg";
+  const row = "flex items-center justify-between gap-6 border-b border-[#eee8ff] py-4";
+  const small = "btn btn-soft";
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(31,32,48,0.55)]" onClick={onClose}>
-      <div className="sticker-card w-[min(720px,92vw)] p-8" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(26,26,46,0.55)]" onClick={onClose}>
+      <div className="card max-h-[92vh] w-[min(720px,92vw)] overflow-auto p-6" onClick={(e) => e.stopPropagation()}>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="display text-4xl">Staff panel</h2>
+          <h2 className="t-h2">Staff panel</h2>
           <button className={small} onClick={onClose}>
             Close
           </button>
@@ -58,7 +58,7 @@ export default function OperatorPanel({
             <button className={small} onClick={() => update({ sheetsLeft: Math.max(0, settings.sheetsLeft - 1) })}>
               −
             </button>
-            <span className="display w-14 text-center text-4xl">{settings.sheetsLeft}</span>
+            <span className="font-fun w-14 text-center text-4xl font-bold">{settings.sheetsLeft}</span>
             <button className={small} onClick={() => update({ sheetsLeft: settings.sheetsLeft + 1 })}>
               +
             </button>
@@ -74,7 +74,7 @@ export default function OperatorPanel({
             <div className="text-[var(--ink-2)]">Skip payment (demos, private events)</div>
           </div>
           <button
-            className={settings.freeMode ? "btn-primary px-6 py-2 text-lg" : small}
+            className={settings.freeMode ? "btn btn-main" : small}
             onClick={() => update({ freeMode: !settings.freeMode })}
           >
             {settings.freeMode ? "On" : "Off"}
@@ -83,7 +83,7 @@ export default function OperatorPanel({
 
         <div className={row}>
           <div className="text-xl font-semibold">Prints today</div>
-          <span className="display text-4xl">{settings.salesToday}</span>
+          <span className="t-h2">{settings.salesToday}</span>
         </div>
 
         <div className={row}>

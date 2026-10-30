@@ -12,19 +12,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#fcfaf6",
+  themeColor: "#7C5CFC",
 };
 
+// Fonts (Fredoka + Nunito) come from the root layout.
 export default function BoothLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      {/* eslint-disable-next-line @next/next/no-page-custom-font -- booth-only fonts, hoisted by React */}
-      <link
-        rel="stylesheet"
-        precedence="default"
-        href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400..800,0..100;1,9..144,400..800,0..100&family=Instrument+Sans:wght@400..700&display=swap"
-      />
-      {children}
-    </>
-  );
+  return children;
 }

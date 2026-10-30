@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import Mascot from "./mascot";
 import BoothCamera from "./booth-camera";
 import OperatorPanel, { type BoothSettings, type GenStats } from "./operator-panel";
+import { u } from "./units";
 
 type Step = "attract" | "style" | "camera" | "generating" | "reveal" | "printing" | "done";
 
@@ -44,9 +45,21 @@ const LOADING_LINES = [
   "Developing your photo…",
   "Mixing the perfect colors…",
   "Drawing the outline…",
-  "Adding a little extra charm…",
+  "Adding extra sparkle…",
   "Almost peel-ready…",
 ];
+
+/** Two-panel screen: side by side in landscape, stacked in portrait. */
+function Split({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div
+      className={cn("flex h-full w-full items-center justify-center landscape:flex-row portrait:flex-col", className)}
+      style={{ gap: u(3), padding: `0 ${u(4)} ${u(2.5)}` }}
+    >
+      {children}
+    </div>
+  );
+}
 
 export default function BoothApp() {
   const [step, setStep] = useState<Step>("attract");
@@ -166,7 +179,7 @@ export default function BoothApp() {
   const freeMode = settings?.freeMode ?? BOOTH_FREE_MODE;
 
   return (
-    <div className="booth grain fixed inset-0 z-40 flex flex-col overflow-hidden">
+    <div className="booth fixed inset-0 z-40 flex flex-col overflow-hidden">
       <TopBar step={step} onSecret={() => setOperatorOpen(true)} onHome={step !== "attract" && step !== "printing" ? reset : undefined} />
 
       <main className="relative min-h-0 flex-1">
@@ -174,10 +187,10 @@ export default function BoothApp() {
           <motion.div
             key={step}
             className="absolute inset-0"
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.3 }}
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.02 }}
+            transition={{ duration: 0.25 }}
           >
             {step === "attract" && (
               <Attract
@@ -267,38 +280,40 @@ function TopBar({ step, onSecret, onHome }: { step: Step; onSecret: () => void; 
   const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
   const current = STEP_LABELS.findIndex((s) => s.steps.includes(step));
   return (
-    <header className="flex h-[88px] shrink-0 items-center justify-between px-10">
+    <header className="flex shrink-0 items-center justify-between" style={{ height: u(7), padding: `0 ${u(3)}`, gap: u(1.5) }}>
       <div
-        className="display cursor-default text-[34px] font-semibold"
+        className="font-fun shrink-0 font-bold"
+        style={{ fontSize: `max(20px, ${u(2.6)})` }}
         onPointerDown={() => (hold.current = setTimeout(onSecret, 2000))}
         onPointerUp={() => hold.current && clearTimeout(hold.current)}
         onPointerLeave={() => hold.current && clearTimeout(hold.current)}
         onContextMenu={(e) => e.preventDefault()}
       >
-        Me<em className="italic text-[var(--coral)]">Sticker</em>
+        Me<span className="pop">Sticker</span>
       </div>
 
       {current >= 0 && (
-        <ol className="flex items-center gap-2">
+        <ol className="flex min-w-0 items-center" style={{ gap: u(0.6) }}>
           {STEP_LABELS.map((s, i) => (
             <li
               key={s.label}
               className={cn(
-                "flex items-center gap-2 rounded-full px-4 py-2 text-lg font-semibold transition-colors",
-                i === current ? "bg-[var(--ink)] text-white" : i < current ? "bg-[var(--sage-soft)] text-[var(--sage)]" : "text-[var(--ink-3)]"
+                "chip flex items-center transition-colors",
+                i === current ? "bg-[var(--purple)] text-white" : i < current ? "bg-[#dcfce7] text-[#15803d]" : "bg-white/70 text-[var(--ink-2)]"
               )}
+              style={{ gap: u(0.5) }}
             >
-              <span className="text-base">{i < current ? "✓" : i + 1}</span>
-              {s.label}
+              <span>{i < current ? "✓" : i + 1}</span>
+              <span className={cn(i !== current && "max-[700px]:hidden")}>{s.label}</span>
             </li>
           ))}
         </ol>
       )}
 
-      <div className="w-[160px] text-right">
+      <div className="flex shrink-0 justify-end" style={{ minWidth: u(10) }}>
         {onHome && (
-          <button className="btn-ghost px-5 py-2 text-lg" onClick={onHome}>
-            Start over
+          <button className="btn btn-soft" onClick={onHome}>
+            ↺ <span className="max-[700px]:hidden">Start over</span>
           </button>
         )}
       </div>
@@ -308,116 +323,132 @@ function TopBar({ step, onSecret, onHome }: { step: Step; onSecret: () => void; 
 
 // ================================================================ attract
 
+const FLOATERS = ["⭐", "💖", "✨", "🌈", "💜", "⚡"];
+
 function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOfPaper: boolean; freeMode: boolean }) {
-  const examples = BOOTH_STYLES.filter((s) => s.id !== "random");
+  const examples = BOOTH_STYLES.filter((s) => s.id !== "random").slice(0, 4);
+  const spots = [
+    { left: "2%", top: "4%", rotate: -12 },
+    { right: "2%", top: "0%", rotate: 10 },
+    { left: "0%", bottom: "6%", rotate: 8 },
+    { right: "4%", bottom: "2%", rotate: -8 },
+  ];
   return (
-    <button
-      className="flex h-full w-full items-center gap-8 px-16 pb-10 text-left disabled:cursor-not-allowed"
-      onClick={onStart}
-      disabled={outOfPaper}
-    >
-      <div className="flex w-[52%] flex-col gap-7">
+    <button className="relative h-full w-full text-left" onClick={onStart} disabled={outOfPaper}>
+      {FLOATERS.map((e, i) => (
         <motion.span
-          className="w-fit rounded-full bg-[var(--mustard-soft)] px-5 py-2 text-xl font-semibold"
-          animate={{ rotate: [-2, 2, -2] }}
-          transition={{ duration: 3, repeat: Infinity }}
+          key={i}
+          className="pointer-events-none absolute"
+          style={{ fontSize: u(2.6), left: `${8 + i * 16}%`, top: `${i % 2 ? 78 : 10}%` }}
+          animate={{ y: [0, -14, 0], rotate: [0, 15, 0] }}
+          transition={{ duration: 3 + i * 0.3, repeat: Infinity, ease: "easeInOut" }}
         >
-          {freeMode ? "✨ Free today!" : `${BOOTH_PRICE_LABEL} · ${STICKERS_PER_SHEET} stickers · ready in 2 min`}
+          {e}
         </motion.span>
-        <h1 className="display text-[clamp(56px,6.4vw,112px)] leading-[0.95]">
-          Turn yourself into a <em className="italic text-[var(--coral)]">sticker.</em>
-        </h1>
-        <p className="max-w-[34ch] text-[clamp(20px,1.8vw,28px)] leading-snug text-[var(--ink-2)]">
-          Pick a cartoon style, snap a photo, and peel off real stickers printed right here.
-        </p>
+      ))}
 
-        {outOfPaper ? (
-          <div className="w-fit rounded-full bg-[var(--ground)] px-10 py-6 text-3xl font-semibold text-[var(--ink-2)]">
-            🧻 Out of stickers — back in a minute!
-          </div>
-        ) : (
-          <motion.div
-            className="btn-primary w-fit px-14 py-7 text-[clamp(26px,2.4vw,38px)]"
-            animate={{ scale: [1, 1.05, 1] }}
-            transition={{ duration: 1.6, repeat: Infinity }}
+      <Split>
+        <div className="flex flex-col landscape:w-[50%] portrait:items-center portrait:text-center" style={{ gap: u(2) }}>
+          <motion.span
+            className="chip w-fit bg-[var(--yellow)] text-[var(--ink)]"
+            animate={{ rotate: [-3, 3, -3] }}
+            transition={{ duration: 2.4, repeat: Infinity }}
           >
-            Tap to start ✨
-          </motion.div>
-        )}
+            {freeMode ? "🎉 Free today!" : `${BOOTH_PRICE_LABEL} · ${STICKERS_PER_SHEET} stickers · 2 min`}
+          </motion.span>
+          <h1 className="t-hero">
+            Turn yourself into a <span className="pop">sticker!</span>
+          </h1>
+          <p className="t-lead max-w-[30ch]">Pick a cartoon style, snap a pic, and peel off real stickers printed right here.</p>
 
-        <ol className="mt-2 flex gap-8 text-xl text-[var(--ink-2)]">
-          {["Pick a style", "Strike a pose", "Pay by phone", "Peel & stick"].map((t, i) => (
-            <li key={t} className="flex items-center gap-2">
-              <span className="display flex h-9 w-9 items-center justify-center rounded-full bg-white text-lg font-semibold text-[var(--ink)] shadow">
-                {i + 1}
-              </span>
-              {t}
-            </li>
-          ))}
-        </ol>
-      </div>
+          {outOfPaper ? (
+            <div className="t-h3 card w-fit" style={{ padding: `${u(1.2)} ${u(2.4)}` }}>
+              🧻 Out of stickers — back in a minute!
+            </div>
+          ) : (
+            <motion.div
+              className="btn btn-lg btn-main w-fit"
+              animate={{ scale: [1, 1.06, 1] }}
+              transition={{ duration: 1.4, repeat: Infinity }}
+            >
+              Tap to start ✨
+            </motion.div>
+          )}
 
-      <div className="relative flex h-full flex-1 items-center justify-center">
-        {examples.slice(0, 4).map((s, i) => {
-          const pos = [
-            { left: "0%", top: "8%", rotate: -10 },
-            { right: "0%", top: "4%", rotate: 8 },
-            { left: "4%", bottom: "10%", rotate: 7 },
-            { right: "2%", bottom: "14%", rotate: -6 },
-          ][i];
-          return (
+          <ol className="flex flex-wrap portrait:justify-center" style={{ gap: `${u(0.8)} ${u(1.6)}` }}>
+            {["Pick a style", "Strike a pose", "Pay by phone", "Peel & stick"].map((t, i) => (
+              <li key={t} className="t-body flex items-center" style={{ gap: u(0.6) }}>
+                <span
+                  className="font-fun flex items-center justify-center rounded-full bg-white font-bold text-[var(--purple)] shadow"
+                  style={{ width: `max(24px, ${u(2.4)})`, height: `max(24px, ${u(2.4)})` }}
+                >
+                  {i + 1}
+                </span>
+                {t}
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <div className="relative flex items-center justify-center landscape:h-full landscape:flex-1 portrait:w-full portrait:min-h-0 portrait:flex-1">
+          {examples.map((s, i) => (
             <motion.div
               key={s.id}
-              className="sticker-card absolute w-[26%] overflow-hidden p-2"
-              style={{ ...pos, rotate: pos.rotate }}
-              animate={{ y: [0, i % 2 ? 12 : -12, 0] }}
-              transition={{ duration: 3 + i * 0.4, repeat: Infinity, ease: "easeInOut" }}
+              className="card absolute overflow-hidden"
+              style={{ ...spots[i], width: u(11), rotate: spots[i].rotate, padding: u(0.4) }}
+              animate={{ y: [0, i % 2 ? 10 : -10, 0] }}
+              transition={{ duration: 2.8 + i * 0.4, repeat: Infinity, ease: "easeInOut" }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={s.previewImage} alt={s.name} className="aspect-square w-full rounded-[20px] object-cover" />
-              <div className="py-1 text-center text-lg font-semibold">{s.name}</div>
+              <img src={s.previewImage} alt={s.name} className="aspect-square w-full object-cover" style={{ borderRadius: u(1.4) }} />
             </motion.div>
-          );
-        })}
-        <Mascot className="relative z-10 h-[72%]" mood="idle" />
-      </div>
+          ))}
+          <Mascot className="relative z-10 h-[80%] max-h-full" mood="idle" />
+        </div>
+      </Split>
     </button>
   );
 }
 
 // ================================================================ style picker
 
+const CARD_TINTS = ["#ffe4ef", "#e6f9ff", "#fff3d1", "#efe9ff", "#dcfce7", "#ffe9d6"];
+
 function StylePicker({ selected, onPick }: { selected: string | null; onPick: (id: string) => void }) {
   return (
-    <div className="flex h-full flex-col px-12 pb-10">
-      <h2 className="display mb-6 text-[clamp(40px,4.4vw,72px)] leading-none">
-        Pick your <em className="italic text-[var(--coral)]">look.</em>
+    <div className="flex h-full flex-col" style={{ padding: `0 ${u(3)} ${u(2.5)}`, gap: u(1.6) }}>
+      <h2 className="t-h2 shrink-0">
+        Pick your <span className="pop">look!</span>
       </h2>
-      <div className="grid min-h-0 flex-1 grid-cols-3 grid-rows-2 gap-6">
+      <div className="grid min-h-0 flex-1 landscape:grid-cols-3 landscape:grid-rows-2 portrait:grid-cols-2 portrait:grid-rows-3" style={{ gap: u(1.6) }}>
         {BOOTH_STYLES.map((s, i) => (
           <motion.button
             key={s.id}
-            className={cn(
-              "sticker-card relative flex min-h-0 flex-col overflow-hidden p-3 text-left",
-              selected === s.id && "ring-[6px] ring-[var(--coral)]"
-            )}
-            initial={{ opacity: 0, y: 30, rotate: i % 2 ? 2 : -2 }}
-            animate={{ opacity: 1, y: 0, rotate: 0 }}
-            transition={{ delay: i * 0.05 }}
-            whileTap={{ scale: 0.95 }}
+            className={cn("card relative flex min-h-0 min-w-0 flex-col overflow-hidden text-left", selected === s.id && "outline outline-[6px] outline-[var(--purple)]")}
+            style={{ padding: u(0.6), rotate: i % 2 ? 1.2 : -1.2 }}
+            initial={{ opacity: 0, y: 30, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ delay: i * 0.05, type: "spring", stiffness: 260, damping: 20 }}
+            whileTap={{ scale: 0.94, rotate: 0 }}
             onClick={() => onPick(s.id)}
           >
-            <div className="relative min-h-0 flex-1 overflow-hidden rounded-[20px] bg-[var(--ground)]">
+            <div className="relative min-h-0 flex-1 overflow-hidden" style={{ borderRadius: u(1.5), background: CARD_TINTS[i % CARD_TINTS.length] }}>
               {s.id === "random" ? (
-                <div className="flex h-full items-center justify-center text-[10vh]">🎲</div>
+                <motion.div
+                  className="flex h-full items-center justify-center"
+                  style={{ fontSize: u(7) }}
+                  animate={{ rotate: [0, 12, -12, 0] }}
+                  transition={{ duration: 1.6, repeat: Infinity }}
+                >
+                  🎲
+                </motion.div>
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={s.previewImage} alt={s.name} className="h-full w-full object-cover object-[center_20%]" />
+                <img src={s.previewImage} alt={s.name} className="absolute inset-0 h-full w-full object-cover object-[center_25%]" />
               )}
             </div>
-            <div className="flex items-baseline justify-between px-2 pt-3">
-              <span className="display text-3xl font-semibold">{s.id === "random" ? "Surprise me" : s.name}</span>
-              <span className="text-lg text-[var(--ink-3)]">{s.description}</span>
+            <div className="t-h3 truncate text-center" style={{ padding: `${u(0.6)} ${u(0.4)} ${u(0.2)}` }}>
+              {s.id === "random" ? "Surprise me!" : s.name}
             </div>
           </motion.button>
         ))}
@@ -446,37 +477,38 @@ function Generating({ photo }: { photo: string | null }) {
   }, []);
 
   return (
-    <div className="flex h-full items-center justify-center gap-16 px-16 pb-10">
-      <Mascot className="h-[62vh]" mood="working" />
-      <div className="flex w-[44%] flex-col gap-8">
+    <Split>
+      <div className="relative flex items-center justify-center landscape:h-full landscape:w-[40%] portrait:w-full portrait:min-h-0 portrait:flex-1">
+        <Mascot className="h-[85%] max-h-full" mood="working" />
+      </div>
+      <div className="flex flex-col landscape:w-[46%] portrait:w-full portrait:items-center portrait:text-center" style={{ gap: u(2) }}>
         {photo && (
-          <div className="relative w-[46%] overflow-hidden rounded-[28px] border-8 border-white shadow-xl">
+          <motion.div
+            className="card relative overflow-hidden"
+            style={{ width: u(16), rotate: -4 }}
+            animate={{ rotate: [-4, 4, -4] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photo} alt="" className="aspect-square w-full object-cover" />
+            <img src={photo} alt="" className="aspect-square w-full object-cover" style={{ borderRadius: u(1.6) }} />
             <motion.div
-              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent"
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/70 to-transparent"
               animate={{ x: ["-100%", "100%"] }}
-              transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+              transition={{ duration: 1.3, repeat: Infinity, ease: "easeInOut" }}
             />
-          </div>
+          </motion.div>
         )}
         <AnimatePresence mode="wait">
-          <motion.h2
-            key={line}
-            className="display text-[clamp(36px,3.8vw,64px)] leading-tight"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-          >
+          <motion.h2 key={line} className="t-h2" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}>
             {LOADING_LINES[line]}
           </motion.h2>
         </AnimatePresence>
-        <div className="h-5 w-full overflow-hidden rounded-full bg-[var(--ground)]">
-          <motion.div className="h-full rounded-full bg-[var(--coral)]" animate={{ width: `${progress * 100}%` }} />
+        <div className="w-full overflow-hidden rounded-full bg-white shadow-inner" style={{ height: `max(12px, ${u(1.4)})` }}>
+          <motion.div className="h-full rounded-full bg-gradient-to-r from-[var(--purple)] to-[var(--pink)]" animate={{ width: `${progress * 100}%` }} />
         </div>
-        <p className="text-xl text-[var(--ink-2)]">Hang tight — this takes about 20 seconds.</p>
+        <p className="t-body">Hang tight — about 20 seconds.</p>
       </div>
-    </div>
+    </Split>
   );
 }
 
@@ -505,75 +537,77 @@ function Reveal({
 }) {
   if (error || !sticker) {
     return (
-      <div className="flex h-full items-center justify-center gap-16 px-16 pb-10">
-        <Mascot className="h-[55vh]" />
-        <div className="flex max-w-[40%] flex-col gap-6">
-          <h2 className="display text-6xl leading-tight">
-            Oops, that one <em className="italic text-[var(--coral)]">didn&apos;t develop.</em>
+      <Split>
+        <div className="flex items-center justify-center landscape:h-full landscape:w-[36%] portrait:w-full portrait:min-h-0 portrait:flex-1">
+          <Mascot className="h-[75%] max-h-full" />
+        </div>
+        <div className="flex flex-col landscape:w-[48%] portrait:items-center portrait:text-center" style={{ gap: u(2) }}>
+          <h2 className="t-h2">
+            Oops! That one <span className="pop">didn&apos;t develop.</span>
           </h2>
-          <p className="text-2xl text-[var(--ink-2)]">Let&apos;s give it another shot. You haven&apos;t been charged.</p>
-          <div className="flex gap-4">
+          <p className="t-lead">Let&apos;s try again. You haven&apos;t been charged.</p>
+          <div className="flex flex-wrap" style={{ gap: u(1.2) }}>
             {canRetry && (
-              <button className="btn-primary px-10 py-5 text-2xl" onClick={onRetry}>
+              <button className="btn btn-lg btn-main" onClick={onRetry}>
                 Try again
               </button>
             )}
-            <button className="btn-ghost px-8 py-5 text-2xl" onClick={onRetake}>
-              New photo
+            <button className="btn btn-soft" onClick={onRetake}>
+              📸 New photo
             </button>
           </div>
         </div>
-      </div>
+      </Split>
     );
   }
 
   return (
-    <div className="flex h-full items-center gap-12 px-14 pb-10">
-      <div className="relative flex h-full w-[50%] items-center justify-center">
+    <Split>
+      <div className="relative flex items-center justify-center landscape:h-full landscape:w-[46%] portrait:w-full portrait:min-h-0 portrait:flex-1">
         <motion.div
-          className="absolute h-[70vh] w-[70vh] rounded-full bg-[var(--coral-pale)]"
+          className="absolute aspect-square h-[88%] portrait:max-h-[86vw] rounded-full bg-gradient-to-br from-[#ffd6e7] via-[#efe9ff] to-[#d9f7ff]"
           initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: "spring", stiffness: 120, damping: 14 }}
+          animate={{ scale: 1, rotate: 360 }}
+          transition={{ scale: { type: "spring", stiffness: 120, damping: 14 }, rotate: { duration: 40, repeat: Infinity, ease: "linear" } }}
         />
         <motion.img
           src={sticker}
           alt="Your sticker"
-          className="relative h-[68vh] w-[68vh] object-contain [filter:drop-shadow(0_0_6px_#fff)_drop-shadow(0_0_6px_#fff)_drop-shadow(0_18px_24px_rgba(31,32,48,0.25))]"
+          className="die-cut relative h-[84%] max-h-full max-w-full object-contain"
           initial={{ scale: 0.3, rotate: -20, opacity: 0 }}
           animate={{ scale: 1, rotate: -3, opacity: 1 }}
           transition={{ type: "spring", stiffness: 160, damping: 12, delay: 0.1 }}
         />
       </div>
 
-      <div className="flex flex-1 flex-col gap-6">
-        <h2 className="display text-[clamp(44px,4.6vw,80px)] leading-[0.95]">
-          Ta-da! <em className="italic text-[var(--coral)]">Love it?</em>
+      <div className="flex flex-col landscape:w-[44%] portrait:items-center portrait:text-center" style={{ gap: u(1.8) }}>
+        <h2 className="t-h2">
+          Ta-da! <span className="pop">Love it?</span>
         </h2>
         {freeMode ? (
-          <button className="btn-primary w-fit px-14 py-6 text-3xl" onClick={onPaid}>
+          <button className="btn btn-lg btn-main w-fit" onClick={onPaid}>
             🖨️ Print my stickers
           </button>
         ) : (
           <PayWithQr styleId={styleId} onPaid={onPaid} />
         )}
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap portrait:justify-center" style={{ gap: u(1) }}>
           {canRetry && (
             <>
-              <button className="btn-ghost px-6 py-3 text-xl" onClick={onRetry}>
-                🔄 Redo this style
+              <button className="btn btn-soft" onClick={onRetry}>
+                🔄 Redo
               </button>
-              <button className="btn-ghost px-6 py-3 text-xl" onClick={onOtherStyle}>
-                🎨 Different style
+              <button className="btn btn-soft" onClick={onOtherStyle}>
+                🎨 New style
               </button>
             </>
           )}
-          <button className="btn-ghost px-6 py-3 text-xl" onClick={onRetake}>
+          <button className="btn btn-soft" onClick={onRetake}>
             📸 New photo
           </button>
         </div>
       </div>
-    </div>
+    </Split>
   );
 }
 
@@ -596,7 +630,7 @@ function PayWithQr({ styleId, onPaid }: { styleId: string | null; onPaid: () => 
         if (!alive) return;
         if (data.free) return setState("free");
         if (!res.ok || !data.url) throw new Error(data.error);
-        setQr(await QRCode.toDataURL(data.url, { width: 560, margin: 1, color: { dark: "#1f2030", light: "#ffffff" } }));
+        setQr(await QRCode.toDataURL(data.url, { width: 560, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } }));
         setState("waiting");
         poll = setInterval(async () => {
           try {
@@ -622,39 +656,35 @@ function PayWithQr({ styleId, onPaid }: { styleId: string | null; onPaid: () => 
 
   if (state === "free") {
     return (
-      <button className="btn-primary w-fit px-14 py-6 text-3xl" onClick={onPaid}>
+      <button className="btn btn-lg btn-main w-fit" onClick={onPaid}>
         🖨️ Print my stickers
       </button>
     );
   }
 
   return (
-    <div className="sticker-card flex w-fit items-center gap-8 p-6 pr-10">
-      <div className="flex h-[30vh] w-[30vh] items-center justify-center overflow-hidden rounded-2xl bg-white">
+    <div className="card flex w-fit items-center" style={{ gap: u(1.8), padding: `${u(1.2)} ${u(2)} ${u(1.2)} ${u(1.2)}` }}>
+      <div className="flex shrink-0 items-center justify-center overflow-hidden bg-white" style={{ width: `max(120px, ${u(15)})`, height: `max(120px, ${u(15)})` }}>
         {qr ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={qr} alt="Scan to pay" className="h-full w-full" />
         ) : state === "error" ? (
-          <span className="p-4 text-center text-xl text-[var(--coral)]">Payment is down — please ask staff</span>
+          <span className="t-body text-center text-[var(--pink)]">Payment is down — please ask staff</span>
         ) : (
-          <motion.span className="text-5xl" animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
+          <motion.span style={{ fontSize: u(4) }} animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
             ✨
           </motion.span>
         )}
       </div>
-      <div className="flex flex-col gap-3">
-        <div className="display text-6xl font-semibold">{BOOTH_PRICE_LABEL}</div>
-        <div className="text-2xl font-semibold">Scan with your phone camera to pay</div>
-        <div className="text-xl text-[var(--ink-2)]">
-          {STICKERS_PER_SHEET} stickers · Apple Pay, Google Pay or card
+      <div className="flex flex-col text-left" style={{ gap: u(0.5) }}>
+        <div className="font-fun font-bold" style={{ fontSize: u(4.2), lineHeight: 1 }}>
+          {BOOTH_PRICE_LABEL}
         </div>
+        <div className="t-h3">📱 Scan to pay</div>
+        <div className="t-body">{STICKERS_PER_SHEET} stickers · Apple Pay, Google Pay, card</div>
         {state === "waiting" && (
-          <motion.div
-            className="mt-2 text-lg text-[var(--sage)]"
-            animate={{ opacity: [0.4, 1, 0.4] }}
-            transition={{ duration: 1.6, repeat: Infinity }}
-          >
-            ● Waiting for payment — printing starts automatically
+          <motion.div className="t-body text-[#15803d]" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.6, repeat: Infinity }}>
+            ● Printing starts automatically
           </motion.div>
         )}
       </div>
@@ -675,46 +705,41 @@ function Printing({ sheet, onDone }: { sheet: string | null; onDone: () => void 
   }, [left, onDone]);
 
   return (
-    <div className="flex h-full items-center justify-center gap-16 px-16 pb-10">
-      <div className="flex w-[42%] flex-col gap-6">
-        <h2 className="display text-[clamp(44px,4.6vw,80px)] leading-[0.95]">
-          Printing your <em className="italic text-[var(--coral)]">stickers…</em>
+    <Split>
+      <div className="flex flex-col landscape:w-[46%] portrait:items-center portrait:text-center" style={{ gap: u(1.8) }}>
+        <h2 className="t-h2">
+          Printing your <span className="pop">stickers…</span>
         </h2>
-        <p className="text-2xl text-[var(--ink-2)]">
-          The printer prints, then cuts each sticker out. About {Math.max(0, Math.ceil(left / 10) * 10)} seconds.
-        </p>
-        <div className="h-5 w-full overflow-hidden rounded-full bg-[var(--ground)]">
+        <p className="t-lead">Printing, then cutting each one out. About {Math.max(10, Math.ceil(left / 10) * 10)} seconds.</p>
+        <div className="w-full overflow-hidden rounded-full bg-white shadow-inner" style={{ height: `max(12px, ${u(1.4)})` }}>
           <motion.div
-            className="h-full rounded-full bg-[var(--sage)]"
+            className="h-full rounded-full bg-gradient-to-r from-[var(--cyan)] to-[var(--green)]"
             animate={{ width: `${((PRINT_SECONDS - left) / PRINT_SECONDS) * 100}%` }}
           />
         </div>
-        <button className="btn-primary w-fit px-10 py-5 text-2xl" onClick={onDone}>
-          I&apos;ve got them! 🎉
+        <button className="btn btn-lg btn-main w-fit" onClick={onDone}>
+          Got them! 🎉
         </button>
       </div>
 
-      <div className="relative flex h-full w-[40%] flex-col items-center justify-center">
-        <Mascot className="z-10 h-[34vh]" mood="excited" />
-        {/* the printer slot + sheet sliding out */}
-        <div className="relative z-20 h-6 w-[70%] rounded-full bg-[var(--ink)] shadow-lg" />
-        <div className="relative h-[44vh] w-[60%] overflow-hidden">
-          <motion.div
-            className="absolute left-0 right-0 top-0 mx-auto w-full rounded-b-xl bg-white p-3 shadow-xl"
-            initial={{ y: "-100%" }}
-            animate={{ y: "0%" }}
-            transition={{ duration: 20, ease: "easeOut" }}
-          >
-            {sheet ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={sheet} alt="Your sticker sheet" className="w-full" />
-            ) : (
-              <div className="aspect-[3.9/6.7] w-full bg-[var(--ground)]" />
-            )}
-          </motion.div>
-        </div>
+      <div className="relative flex items-end justify-center landscape:h-full landscape:w-[40%] portrait:w-full portrait:min-h-0 portrait:flex-1" style={{ gap: u(1) }}>
+        <Mascot className="h-[70%] max-h-full" mood="excited" />
+        <motion.div
+          className="card shrink-0 overflow-hidden"
+          style={{ width: u(13), padding: u(0.5), marginBottom: u(3) }}
+          initial={{ y: 60, opacity: 0, rotate: 0 }}
+          animate={{ y: 0, opacity: 1, rotate: 6 }}
+          transition={{ duration: 1.2, delay: 0.4, type: "spring" }}
+        >
+          {sheet ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={sheet} alt="Your sticker sheet" className="w-full" />
+          ) : (
+            <div className="aspect-[3.9/6.7] w-full bg-[var(--lav)]" />
+          )}
+        </motion.div>
       </div>
-    </div>
+    </Split>
   );
 }
 
@@ -727,51 +752,53 @@ function Done({ sticker, digitalUrl, onFinish }: { sticker: string | null; digit
   }, [digitalUrl]);
 
   return (
-    <div className="relative flex h-full items-center justify-center gap-16 px-16 pb-10">
+    <div className="relative h-full w-full">
       <Confetti />
-      <div className="relative flex w-[36%] items-center justify-center">
-        {sticker && (
-          <motion.img
-            src={sticker}
-            alt=""
-            className="h-[56vh] object-contain [filter:drop-shadow(0_0_6px_#fff)_drop-shadow(0_0_6px_#fff)_drop-shadow(0_18px_24px_rgba(31,32,48,0.25))]"
-            animate={{ rotate: [-4, 4, -4] }}
-            transition={{ duration: 2.4, repeat: Infinity }}
-          />
-        )}
-      </div>
-      <div className="flex w-[44%] flex-col gap-6">
-        <h2 className="display text-[clamp(52px,5.4vw,96px)] leading-[0.92]">
-          Peel, stick, <em className="italic text-[var(--coral)]">show off.</em>
-        </h2>
-        <p className="text-2xl text-[var(--ink-2)]">Grab your sheet from the tray below. Thanks for stopping by! 💛</p>
-        {qr && (
-          <div className="sticker-card flex w-fit items-center gap-6 p-5 pr-8">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qr} alt="Scan for digital copy" className="h-[20vh] w-[20vh]" />
-            <div>
-              <div className="text-2xl font-semibold">Want the digital copy?</div>
-              <div className="text-xl text-[var(--ink-2)]">Scan to save it to your phone</div>
+      <Split>
+        <div className="relative flex items-center justify-center landscape:h-full landscape:w-[40%] portrait:w-full portrait:min-h-0 portrait:flex-1">
+          {sticker && (
+            <motion.img
+              src={sticker}
+              alt=""
+              className="die-cut h-[80%] max-h-full max-w-full object-contain"
+              animate={{ rotate: [-5, 5, -5], scale: [1, 1.04, 1] }}
+              transition={{ duration: 2.4, repeat: Infinity }}
+            />
+          )}
+        </div>
+        <div className="flex flex-col landscape:w-[46%] portrait:items-center portrait:text-center" style={{ gap: u(1.8) }}>
+          <h2 className="t-hero">
+            Peel, stick, <span className="pop">show off!</span>
+          </h2>
+          <p className="t-lead">Grab your sheet from the tray. Thanks for stopping by! 💜</p>
+          {qr && (
+            <div className="card flex w-fit items-center text-left" style={{ gap: u(1.4), padding: `${u(1)} ${u(1.8)} ${u(1)} ${u(1)}` }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qr} alt="Scan for digital copy" style={{ width: `max(96px, ${u(11)})`, height: `max(96px, ${u(11)})` }} />
+              <div>
+                <div className="t-h3">Want the digital copy?</div>
+                <div className="t-body">Scan to save it to your phone</div>
+              </div>
             </div>
-          </div>
-        )}
-        <button className="btn-ghost w-fit px-8 py-4 text-xl" onClick={onFinish}>
-          Done
-        </button>
-      </div>
+          )}
+          <button className="btn btn-soft w-fit" onClick={onFinish}>
+            Done
+          </button>
+        </div>
+      </Split>
     </div>
   );
 }
 
 function Confetti() {
-  const colors = ["#e36f58", "#e1a52e", "#5e9271", "#f2b3a5", "#f4d48b"];
+  const colors = ["#7c5cfc", "#ff6b9d", "#feca57", "#45e3ff", "#2ed573", "#ff9f43"];
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {Array.from({ length: 40 }).map((_, i) => (
+      {Array.from({ length: 48 }).map((_, i) => (
         <motion.div
           key={i}
-          className="absolute h-4 w-3 rounded-sm"
-          style={{ left: `${(i * 37) % 100}%`, background: colors[i % colors.length] }}
+          className="absolute rounded-sm"
+          style={{ left: `${(i * 37) % 100}%`, width: u(0.8), height: u(1.1), background: colors[i % colors.length] }}
           initial={{ y: -40, rotate: 0, opacity: 1 }}
           animate={{ y: "110vh", rotate: 360 * (i % 2 ? 1 : -1) }}
           transition={{ duration: 3 + (i % 5) * 0.5, delay: (i % 10) * 0.15, ease: "easeIn" }}

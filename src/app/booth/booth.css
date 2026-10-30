@@ -1,59 +1,115 @@
-/* MeSticker Booth theme — warm paper + coral, matching leaveby.xyz */
+/*
+ * MeSticker Booth theme — the MeSticker brand (purple → pink, Fredoka/Nunito)
+ * turned up for a kiosk: chunky sticker buttons, white die-cut outlines.
+ *
+ * Everything is sized in --u, a unit that scales with the screen so the same
+ * layout fits a 1080p booth display, a laptop, or a phone in either
+ * orientation. 1u ≈ 1% of a 16:9 frame's width.
+ */
 .booth {
-  --paper: #fcfaf6;
-  --ground: #f3eee5;
-  --ink: #1f2030;
-  --ink-2: #62606f;
-  --ink-3: #9c99a6;
-  --line: rgba(31, 32, 48, 0.1);
-  --coral: #e36f58;
-  --coral-soft: #f2b3a5;
-  --coral-pale: #f8d9d0;
-  --mustard: #e1a52e;
-  --mustard-soft: #f4d48b;
-  --sage: #5e9271;
-  --sage-soft: #d6e4d7;
-  background: var(--paper);
+  --u: min(1vw, 1.78vh);
+  --purple: #7c5cfc;
+  --purple-dark: #5b3fd6;
+  --pink: #ff6b9d;
+  --yellow: #feca57;
+  --orange: #ff9f43;
+  --cyan: #45e3ff;
+  --green: #2ed573;
+  --ink: #1a1a2e;
+  --ink-2: #5d5b72;
+  --lav: #f1ecff;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 107, 157, 0.18) 0, transparent 32%),
+    radial-gradient(circle at 88% 80%, rgba(69, 227, 255, 0.18) 0, transparent 34%),
+    radial-gradient(circle at 80% 10%, rgba(254, 202, 87, 0.22) 0, transparent 28%),
+    linear-gradient(160deg, #f5f1ff 0%, #fff6fa 100%);
   color: var(--ink);
-  font-family: "Instrument Sans", system-ui, sans-serif;
+  font-family: "Nunito", system-ui, sans-serif;
   -webkit-user-select: none;
   user-select: none;
   touch-action: manipulation;
-  cursor: default;
+  -webkit-tap-highlight-color: transparent;
 }
-.booth .display {
-  font-family: "Fraunces", Georgia, serif;
-  font-variation-settings: "SOFT" 60, "opsz" 144;
-  letter-spacing: -0.02em;
+@media (orientation: portrait) {
+  .booth {
+    --u: min(1.9vw, 1.05vh);
+  }
 }
-.booth .btn-primary {
-  background: var(--coral);
-  color: #fff;
-  border-radius: 999px;
+
+.booth .font-fun {
+  font-family: "Fredoka", system-ui, sans-serif;
+}
+
+/* type scale */
+.booth .t-hero { font-family: "Fredoka", sans-serif; font-weight: 700; font-size: calc(var(--u) * 5.6); line-height: 0.98; letter-spacing: -0.01em; }
+.booth .t-h2 { font-family: "Fredoka", sans-serif; font-weight: 700; font-size: calc(var(--u) * 3.8); line-height: 1.02; }
+.booth .t-h3 { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: max(15px, calc(var(--u) * 1.9)); line-height: 1.1; }
+.booth .t-lead { font-size: max(15px, calc(var(--u) * 1.55)); line-height: 1.35; color: var(--ink-2); font-weight: 600; }
+.booth .t-body { font-size: max(13px, calc(var(--u) * 1.2)); line-height: 1.35; color: var(--ink-2); font-weight: 600; }
+
+.booth .pop {
+  background: linear-gradient(135deg, var(--purple) 0%, var(--pink) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* chunky sticker buttons */
+.booth .btn {
+  font-family: "Fredoka", sans-serif;
   font-weight: 600;
-  box-shadow: 0 10px 0 #c4553f, 0 18px 30px rgba(227, 111, 88, 0.35);
+  border-radius: 999px;
+  white-space: nowrap;
   transition: transform 0.08s, box-shadow 0.08s;
+  font-size: max(15px, calc(var(--u) * 1.4));
+  padding: max(10px, calc(var(--u) * 0.8)) max(18px, calc(var(--u) * 1.9));
 }
-.booth .btn-primary:active {
-  transform: translateY(6px);
-  box-shadow: 0 4px 0 #c4553f, 0 8px 16px rgba(227, 111, 88, 0.3);
+.booth .btn-lg {
+  font-size: max(18px, calc(var(--u) * 2.4));
+  padding: max(12px, calc(var(--u) * 1.2)) max(24px, calc(var(--u) * 3.4));
 }
-.booth .btn-ghost {
-  background: #fff;
+.booth .btn-main {
+  color: #fff;
+  background: linear-gradient(135deg, var(--purple) 0%, var(--pink) 100%);
+  border: max(3px, calc(var(--u) * 0.3)) solid #fff;
+  box-shadow: 0 calc(var(--u) * 0.55) 0 var(--purple-dark), 0 calc(var(--u) * 1.2) calc(var(--u) * 2.4) rgba(124, 92, 252, 0.35);
+}
+.booth .btn-main:active {
+  transform: translateY(calc(var(--u) * 0.4));
+  box-shadow: 0 calc(var(--u) * 0.15) 0 var(--purple-dark), 0 calc(var(--u) * 0.5) calc(var(--u) * 1.2) rgba(124, 92, 252, 0.3);
+}
+.booth .btn-main:disabled {
+  opacity: 0.5;
+}
+.booth .btn-soft {
   color: var(--ink);
-  border: 2px solid var(--line);
-  border-radius: 999px;
-  font-weight: 600;
-}
-.booth .btn-ghost:active {
-  background: var(--ground);
-}
-.booth .sticker-card {
   background: #fff;
-  border-radius: 28px;
-  box-shadow: 0 2px 0 var(--line), 0 18px 40px rgba(31, 32, 48, 0.12);
+  border: max(2px, calc(var(--u) * 0.18)) solid #e4dcff;
+  box-shadow: 0 calc(var(--u) * 0.35) 0 #e4dcff;
 }
-.booth .grain {
-  background-image: radial-gradient(rgba(31, 32, 48, 0.035) 1px, transparent 1px);
-  background-size: 6px 6px;
+.booth .btn-soft:active {
+  transform: translateY(calc(var(--u) * 0.25));
+  box-shadow: none;
+}
+
+/* white die-cut sticker card */
+.booth .card {
+  background: #fff;
+  border-radius: calc(var(--u) * 2.2);
+  border: max(3px, calc(var(--u) * 0.4)) solid #fff;
+  box-shadow: 0 calc(var(--u) * 0.9) calc(var(--u) * 2.6) rgba(91, 63, 214, 0.16);
+}
+
+/* die-cut white outline around a transparent PNG */
+.booth .die-cut {
+  filter: drop-shadow(0 0 calc(var(--u) * 0.35) #fff) drop-shadow(0 0 calc(var(--u) * 0.35) #fff)
+    drop-shadow(0 0 1px #fff) drop-shadow(0 calc(var(--u) * 1) calc(var(--u) * 1.4) rgba(91, 63, 214, 0.25));
+}
+
+.booth .chip {
+  font-family: "Fredoka", sans-serif;
+  font-weight: 600;
+  border-radius: 999px;
+  font-size: max(13px, calc(var(--u) * 1.25));
+  padding: max(5px, calc(var(--u) * 0.45)) max(12px, calc(var(--u) * 1.2));
 }

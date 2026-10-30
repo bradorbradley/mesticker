@@ -11,8 +11,10 @@ export default function Mascot({
   className,
   mood = "idle",
   flash = false,
+  style,
 }: {
   className?: string;
+  style?: React.CSSProperties;
   mood?: "idle" | "excited" | "working";
   flash?: boolean;
 }) {
@@ -24,13 +26,13 @@ export default function Mascot({
         : { animate: { y: [0, -10, 0] }, transition: { duration: 3.2, repeat: Infinity, ease: "easeInOut" as const } };
 
   return (
-    <motion.div className={cn("relative select-none", className)} {...motionProps}>
+    <motion.div className={cn("relative aspect-[571/900] select-none", className)} style={style} {...motionProps}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/booth/mascot.webp"
         alt="Snap, the MeSticker mascot"
         draggable={false}
-        className="h-full w-full object-contain drop-shadow-[0_18px_22px_rgba(31,32,48,0.22)]"
+        className="h-full w-full object-contain drop-shadow-[0_18px_22px_rgba(91,63,214,0.25)]"
       />
       {/* Flash bulb sits at ~13% x / 29% y of the cutout */}
       <AnimatePresence>
