@@ -3,6 +3,17 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
+export type MascotMood = "idle" | "excited" | "working" | "thinking" | "sad";
+
+const loop = { repeat: Infinity, ease: "easeInOut" as const };
+const MOODS: Record<MascotMood, { animate: Record<string, number[] | number>; transition: Record<string, unknown> }> = {
+  idle: { animate: { y: [0, -10, 0], rotate: 0, scale: 1 }, transition: { duration: 3.2, ...loop } },
+  excited: { animate: { y: [0, -28, 0], rotate: [0, -4, 4, 0], scale: 1 }, transition: { duration: 0.7, repeat: Infinity, repeatDelay: 0.5 } },
+  working: { animate: { rotate: [-2, 2, -2], y: 0, scale: 1 }, transition: { duration: 1.2, ...loop } },
+  thinking: { animate: { rotate: [0, -7, -7, 0], y: [0, -4, -4, 0], scale: 1 }, transition: { duration: 1.6, ...loop } },
+  sad: { animate: { rotate: -9, y: 12, scale: 0.94 }, transition: { type: "spring", stiffness: 120, damping: 10 } },
+};
+
 /**
  * "Snap", the booth's press-photographer mascot.
  * `flash` fires the camera's flash bulb; `mood` picks the idle motion.
@@ -15,15 +26,10 @@ export default function Mascot({
 }: {
   className?: string;
   style?: React.CSSProperties;
-  mood?: "idle" | "excited" | "working";
+  mood?: MascotMood;
   flash?: boolean;
 }) {
-  const motionProps =
-    mood === "excited"
-      ? { animate: { y: [0, -28, 0], rotate: [0, -4, 4, 0] }, transition: { duration: 0.7, repeat: Infinity, repeatDelay: 0.5 } }
-      : mood === "working"
-        ? { animate: { rotate: [-2, 2, -2] }, transition: { duration: 1.2, repeat: Infinity, ease: "easeInOut" as const } }
-        : { animate: { y: [0, -10, 0] }, transition: { duration: 3.2, repeat: Infinity, ease: "easeInOut" as const } };
+  const motionProps = MOODS[mood];
 
   return (
     <motion.div className={cn("relative aspect-[571/900] select-none", className)} style={style} {...motionProps}>
