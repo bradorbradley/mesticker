@@ -180,7 +180,20 @@ export default function BoothApp() {
 
   return (
     <div className="booth fixed inset-0 z-40 flex flex-col overflow-hidden">
-      <TopBar step={step} onSecret={() => setOperatorOpen(true)} onHome={step !== "attract" && step !== "printing" ? reset : undefined} />
+      <TopBar
+        step={step}
+        canJump={(s) =>
+          step !== "generating" && step !== "printing" && step !== "done" && step !== s &&
+          (s === "style" || (s === "camera" && !!styleId) || (s === "reveal" && !!sticker))
+        }
+        onJump={(s) => {
+          sounds.tap();
+          if (s === "camera") setPhoto(null);
+          setStep(s);
+        }}
+        onSecret={() => setOperatorOpen(true)}
+        onHome={step !== "attract" && step !== "printing" ? reset : undefined}
+      />
 
       <main className="relative min-h-0 flex-1">
         <AnimatePresence mode="wait">
@@ -269,21 +282,33 @@ export default function BoothApp() {
 
 // ================================================================ top bar
 
-const STEP_LABELS: { label: string; steps: Step[] }[] = [
-  { label: "Style", steps: ["style"] },
-  { label: "Pose", steps: ["camera"] },
-  { label: "Pay", steps: ["generating", "reveal"] },
-  { label: "Print", steps: ["printing", "done"] },
+const STEP_LABELS: { label: string; target: Step; steps: Step[] }[] = [
+  { label: "Style", target: "style", steps: ["style"] },
+  { label: "Pose", target: "camera", steps: ["camera"] },
+  { label: "Pay", target: "reveal", steps: ["generating", "reveal"] },
+  { label: "Print", target: "printing", steps: ["printing", "done"] },
 ];
 
-function TopBar({ step, onSecret, onHome }: { step: Step; onSecret: () => void; onHome?: () => void }) {
+function TopBar({
+  step,
+  canJump,
+  onJump,
+  onSecret,
+  onHome,
+}: {
+  step: Step;
+  canJump: (s: Step) => boolean;
+  onJump: (s: Step) => void;
+  onSecret: () => void;
+  onHome?: () => void;
+}) {
   const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
   const current = STEP_LABELS.findIndex((s) => s.steps.includes(step));
   return (
-    <header className="flex shrink-0 items-center justify-between" style={{ height: u(7), padding: `0 ${u(3)}`, gap: u(1.5) }}>
+    <header className="flex shrink-0 items-center justify-between" style={{ height: `max(56px, ${u(6.5)})`, padding: `0 ${u(3)}`, gap: u(1.5) }}>
       <div
         className="font-fun shrink-0 font-bold"
-        style={{ fontSize: `max(20px, ${u(2.6)})` }}
+        style={{ fontSize: `max(17px, ${u(2.6)})` }}
         onPointerDown={() => (hold.current = setTimeout(onSecret, 2000))}
         onPointerUp={() => hold.current && clearTimeout(hold.current)}
         onPointerLeave={() => hold.current && clearTimeout(hold.current)}
@@ -294,19 +319,31 @@ function TopBar({ step, onSecret, onHome }: { step: Step; onSecret: () => void; 
 
       {current >= 0 && (
         <ol className="flex min-w-0 items-center" style={{ gap: u(0.6) }}>
-          {STEP_LABELS.map((s, i) => (
-            <li
-              key={s.label}
-              className={cn(
-                "chip flex items-center transition-colors",
-                i === current ? "bg-[var(--purple)] text-white" : i < current ? "bg-[#dcfce7] text-[#15803d]" : "bg-white/70 text-[var(--ink-2)]"
-              )}
-              style={{ gap: u(0.5) }}
-            >
-              <span>{i < current ? "✓" : i + 1}</span>
-              <span className={cn(i !== current && "max-[700px]:hidden")}>{s.label}</span>
-            </li>
-          ))}
+          {STEP_LABELS.map((s, i) => {
+            const jumpable = i !== current && canJump(s.target);
+            return (
+              <li key={s.label}>
+                <button
+                  disabled={!jumpable}
+                  onClick={() => onJump(s.target)}
+                  className={cn(
+                    "chip flex min-h-[36px] items-center transition-colors",
+                    i === current
+                      ? "bg-[var(--purple)] text-white"
+                      : jumpable
+                        ? "bg-[#dcfce7] text-[#15803d] active:scale-95"
+                        : i < current
+                          ? "bg-[#dcfce7] text-[#15803d]"
+                          : "bg-white/50 text-[#a8a4bd]"
+                  )}
+                  style={{ gap: u(0.5) }}
+                >
+                  <span>{i < current ? "✓" : i + 1}</span>
+                  <span className={cn(i !== current && "max-[700px]:hidden")}>{s.label}</span>
+                </button>
+              </li>
+            );
+          })}
         </ol>
       )}
 
@@ -323,7 +360,14 @@ function TopBar({ step, onSecret, onHome }: { step: Step; onSecret: () => void; 
 
 // ================================================================ attract
 
-const FLOATERS = ["⭐", "💖", "✨", "🌈", "💜", "⚡"];
+const FLOATERS = ["⭐", "💖", "🌈", "⚡"];
+// Corners and edges only, so they never sit on top of text.
+const FLOATER_SPOTS: React.CSSProperties[] = [
+  { left: "1%", top: "1%" },
+  { right: "1%", top: "1%" },
+  { left: "1%", bottom: "1%" },
+  { right: "1%", bottom: "1%" },
+];
 
 function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOfPaper: boolean; freeMode: boolean }) {
   const examples = BOOTH_STYLES.filter((s) => s.id !== "random").slice(0, 4);
@@ -338,8 +382,8 @@ function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOf
       {FLOATERS.map((e, i) => (
         <motion.span
           key={i}
-          className="pointer-events-none absolute"
-          style={{ fontSize: u(2.6), left: `${8 + i * 16}%`, top: `${i % 2 ? 78 : 10}%` }}
+          className="pointer-events-none absolute opacity-70"
+          style={{ fontSize: u(2.2), ...FLOATER_SPOTS[i] }}
           animate={{ y: [0, -14, 0], rotate: [0, 15, 0] }}
           transition={{ duration: 3 + i * 0.3, repeat: Infinity, ease: "easeInOut" }}
         >
@@ -375,7 +419,7 @@ function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOf
             </motion.div>
           )}
 
-          <ol className="flex flex-wrap portrait:justify-center" style={{ gap: `${u(0.8)} ${u(1.6)}` }}>
+          <ol className="flex flex-wrap short:hidden portrait:justify-center" style={{ gap: `${u(0.8)} ${u(1.6)}` }}>
             {["Pick a style", "Strike a pose", "Pay by phone", "Peel & stick"].map((t, i) => (
               <li key={t} className="t-body flex items-center" style={{ gap: u(0.6) }}>
                 <span
@@ -420,7 +464,7 @@ function StylePicker({ selected, onPick }: { selected: string | null; onPick: (i
       <h2 className="t-h2 shrink-0">
         Pick your <span className="pop">look!</span>
       </h2>
-      <div className="grid min-h-0 flex-1 landscape:grid-cols-3 landscape:grid-rows-2 portrait:grid-cols-2 portrait:grid-rows-3" style={{ gap: u(1.6) }}>
+      <div className="grid min-h-0 flex-1 landscape:grid-cols-3 landscape:grid-rows-2 short:!grid-cols-6 short:!grid-rows-1 portrait:grid-cols-2 portrait:grid-rows-3" style={{ gap: u(1.6) }}>
         {BOOTH_STYLES.map((s, i) => (
           <motion.button
             key={s.id}
@@ -434,14 +478,16 @@ function StylePicker({ selected, onPick }: { selected: string | null; onPick: (i
           >
             <div className="relative min-h-0 flex-1 overflow-hidden" style={{ borderRadius: u(1.5), background: CARD_TINTS[i % CARD_TINTS.length] }}>
               {s.id === "random" ? (
-                <motion.div
-                  className="flex h-full items-center justify-center"
-                  style={{ fontSize: u(7) }}
-                  animate={{ rotate: [0, 12, -12, 0] }}
-                  transition={{ duration: 1.6, repeat: Infinity }}
-                >
-                  🎲
-                </motion.div>
+                <div className="flex h-full items-center justify-center">
+                  <motion.span
+                    className="leading-none"
+                    style={{ fontSize: u(5) }}
+                    animate={{ rotate: [0, 12, -12, 0] }}
+                    transition={{ duration: 1.6, repeat: Infinity }}
+                  >
+                    🎲
+                  </motion.span>
+                </div>
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={s.previewImage} alt={s.name} className="absolute inset-0 h-full w-full object-cover object-[center_25%]" />
@@ -484,7 +530,7 @@ function Generating({ photo }: { photo: string | null }) {
       <div className="flex flex-col landscape:w-[46%] portrait:w-full portrait:items-center portrait:text-center" style={{ gap: u(2) }}>
         {photo && (
           <motion.div
-            className="card relative overflow-hidden"
+            className="card relative overflow-hidden short:hidden"
             style={{ width: u(16), rotate: -4 }}
             animate={{ rotate: [-4, 4, -4] }}
             transition={{ duration: 2, repeat: Infinity }}
@@ -565,7 +611,7 @@ function Reveal({
     <Split>
       <div className="relative flex items-center justify-center landscape:h-full landscape:w-[46%] portrait:w-full portrait:min-h-0 portrait:flex-1">
         <motion.div
-          className="absolute aspect-square h-[88%] portrait:max-h-[86vw] rounded-full bg-gradient-to-br from-[#ffd6e7] via-[#efe9ff] to-[#d9f7ff]"
+          className="absolute aspect-square h-[88%] max-h-[44vw] portrait:max-h-[86vw] rounded-full bg-gradient-to-br from-[#ffd6e7] via-[#efe9ff] to-[#d9f7ff]"
           initial={{ scale: 0 }}
           animate={{ scale: 1, rotate: 360 }}
           transition={{ scale: { type: "spring", stiffness: 120, damping: 14 }, rotate: { duration: 40, repeat: Infinity, ease: "linear" } }}
@@ -767,7 +813,7 @@ function Done({ sticker, digitalUrl, onFinish }: { sticker: string | null; digit
           )}
         </div>
         <div className="flex flex-col landscape:w-[46%] portrait:items-center portrait:text-center" style={{ gap: u(1.8) }}>
-          <h2 className="t-hero">
+          <h2 className="t-hero short:!text-[calc(var(--u)*3.3)]">
             Peel, stick, <span className="pop">show off!</span>
           </h2>
           <p className="t-lead">Grab your sheet from the tray. Thanks for stopping by! 💜</p>

@@ -113,3 +113,22 @@
   font-size: max(13px, calc(var(--u) * 1.25));
   padding: max(5px, calc(var(--u) * 0.45)) max(12px, calc(var(--u) * 1.2));
 }
+
+/* Phone held sideways: ~300px of height. Bigger unit, smaller headlines. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .booth {
+    --u: min(1.25vw, 2.45vh);
+  }
+  .booth .t-hero { font-size: calc(var(--u) * 4.4); }
+  .booth .t-h2 { font-size: calc(var(--u) * 3.3); }
+  .booth .t-lead { font-size: max(13px, calc(var(--u) * 1.5)); }
+  .booth .t-body { font-size: max(12px, calc(var(--u) * 1.25)); }
+  .booth .btn { font-size: max(13px, calc(var(--u) * 1.5)); padding: calc(var(--u) * 0.75) calc(var(--u) * 1.8); }
+  .booth .btn-lg { font-size: calc(var(--u) * 2.2); padding: calc(var(--u) * 1) calc(var(--u) * 2.8); }
+  .booth .chip { font-size: max(12px, calc(var(--u) * 1.3)); }
+}
+
+/* Notch / home-indicator safe areas when launched from the home screen */
+.booth {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}

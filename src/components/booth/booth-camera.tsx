@@ -102,23 +102,23 @@ export default function BoothCamera({
       style={{ gap: u(3), padding: `0 ${u(4)} ${u(2.5)}` }}
     >
       {/* tips + mascot */}
-      <div className="flex flex-col landscape:w-[30%] portrait:items-center portrait:text-center" style={{ gap: u(1.6) }}>
+      <div className="flex flex-col landscape:w-[30%] short:w-[22%] portrait:items-center portrait:text-center" style={{ gap: u(1.6) }}>
         <h2 className="t-h2">{shot ? <>Looking <span className="pop">good!</span></> : <>Strike a <span className="pop">pose!</span></>}</h2>
         {!shot && (
-          <ul className="t-lead portrait:hidden" style={{ display: "grid", gap: u(0.8) }}>
+          <ul className="t-lead short:hidden portrait:hidden" style={{ display: "grid", gap: u(0.8) }}>
             <li>⬆️ Look at the camera above the screen</li>
             <li>👯 Groups welcome — squeeze in!</li>
             <li>🤪 Big faces make the best stickers</li>
           </ul>
         )}
-        <Mascot className="self-start portrait:hidden" flash={flash} mood={count !== null ? "working" : "idle"} style={{ height: u(20) }} />
+        <Mascot className="self-start short:hidden portrait:hidden" flash={flash} mood={count !== null ? "working" : "idle"} style={{ height: u(20) }} />
       </div>
 
       {/* viewfinder */}
-      <div className="flex min-h-0 flex-col items-center justify-center landscape:h-full landscape:flex-1 portrait:w-full portrait:min-h-0 portrait:flex-1" style={{ gap: u(1.8) }}>
+      <div className="flex min-h-0 flex-col items-center justify-center short:flex-row landscape:h-full landscape:flex-1 portrait:w-full portrait:min-h-0 portrait:flex-1" style={{ gap: u(1.8) }}>
         <div
           className="card relative aspect-square min-h-0 overflow-hidden bg-[var(--lav)]"
-          style={{ height: "min(100%, 82vw)", maxHeight: u(38), borderWidth: u(0.7) }}
+          style={{ height: "min(100%, 82vw)", maxHeight: u(46), borderWidth: u(0.7) }}
         >
           {shot ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -147,7 +147,7 @@ export default function BoothCamera({
           </AnimatePresence>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center justify-center" style={{ gap: u(1.2) }}>
+        <div className="flex shrink-0 flex-wrap items-center justify-center short:flex-col-reverse short:flex-nowrap" style={{ gap: u(1.2) }}>
           {shot ? (
             <>
               <button className="btn btn-soft" onClick={retake}>

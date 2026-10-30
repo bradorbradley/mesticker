@@ -39,6 +39,13 @@ automatically.
 - Last generation model + seconds
 - Download print file again · Mark as paid (cash) · Fullscreen · Reset
 
+## Run it like an app (no browser bars)
+
+- **iPhone / iPad:** open `/booth` in Safari → Share → **Add to Home Screen**. Launch it from the icon.
+- **Android / Chrome:** menu → **Install app** (or Add to Home screen).
+- Works in any orientation; the booth itself is built for landscape.
+- Tap the step pills at the top to jump back to an earlier step.
+
 ## Laptop setup
 
 - Chrome kiosk mode: `chrome.exe --kiosk --autoplay-policy=no-user-gesture-required https://mesticker.fun/booth`
