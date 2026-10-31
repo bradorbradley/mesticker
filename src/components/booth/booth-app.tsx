@@ -12,6 +12,8 @@ import Mascot from "./mascot";
 import BoothCamera from "./booth-camera";
 import OperatorPanel, { type BoothSettings, type GenStats } from "./operator-panel";
 import { u } from "./units";
+import LoadingState from "@/components/loading-state";
+import BoothReveal from "./booth-reveal";
 import { WAIT_GAMES, ReadyTakeover, type WaitGameId } from "./games/wait-games";
 
 type Step = "attract" | "style" | "camera" | "generating" | "reveal" | "printing" | "done";
@@ -42,12 +44,13 @@ function loadSettings(): BoothSettings {
   }
 }
 
+// Same lines as the web app's loading screen
 const LOADING_LINES = [
-  "Developing your photo…",
-  "Mixing the perfect colors…",
-  "Drawing the outline…",
-  "Adding extra sparkle…",
-  "Almost peel-ready…",
+  "Analyzing your photo...",
+  "Teaching AI to draw you...",
+  "Adding cartoon energy...",
+  "Perfecting the details...",
+  "Making you sticker-ready...",
 ];
 
 /** Two-panel screen: side by side in landscape, stacked in portrait. */
@@ -305,6 +308,7 @@ export default function BoothApp() {
             {step === "generating" && <Generating photo={photo} ready={stickerReady} onReveal={showReveal} />}
             {step === "reveal" && (
               <Reveal
+                photo={photo}
                 sticker={sticker}
                 error={error}
                 freeMode={freeMode}
@@ -598,13 +602,48 @@ function Generating({ photo, ready, onReveal }: { photo: string | null; ready: b
   }, []);
   const Game = WAIT_GAMES.find((g) => g.id === game)!.Comp;
 
+  const tabs = (
+    <nav className="flex flex-wrap justify-center" style={{ gap: u(0.5) }}>
+      {WAIT_GAMES.map((g) => (
+        <button
+          key={g.id}
+          className={cn("chip min-h-[36px] whitespace-nowrap", g.id === game ? "bg-[var(--purple)] text-white" : "bg-[var(--lav)] text-[var(--ink)]")}
+          onClick={() => {
+            sounds.tap();
+            setGame(g.id);
+          }}
+        >
+          <span className="max-[700px]:hidden">{g.label}</span>
+          <span className="min-[701px]:hidden">{g.short}</span>
+        </button>
+      ))}
+    </nav>
+  );
+
   return (
-    <div className="relative flex h-full w-full flex-col" style={{ padding: `0 ${u(3)} ${u(1)}`, gap: u(0.6) }}>
-      {/* sticker progress + game picker */}
-      <div className="card flex shrink-0 flex-wrap items-center" style={{ gap: `${u(0.6)} ${u(1.2)}`, padding: `${u(0.5)} ${u(1)}` }}>
+    <div className="relative flex h-full w-full flex-col landscape:flex-row short:!flex-col" style={{ padding: `0 ${u(3)} ${u(1)}`, gap: u(1) }}>
+      {/* Laptop/booth: the web app's "generating" animation, with the game picker under it */}
+      <div className="card hidden shrink-0 flex-col items-center justify-center overflow-hidden landscape:flex landscape:w-[30%] short:!hidden" style={{ padding: u(1) }}>
+        <LoadingState photo={photo} className="!py-2" />
+        <div className="t-body" style={{ marginBottom: u(0.8) }}>
+          Play a game while you wait 👉
+        </div>
+        {tabs}
+      </div>
+
+      {/* Phones: compact strip with the spinning photo ring */}
+      <div className="card flex shrink-0 flex-wrap items-center landscape:hidden short:!flex" style={{ gap: `${u(0.6)} ${u(1.2)}`, padding: `${u(0.5)} ${u(1)}` }}>
         {photo && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={photo} alt="" className="shrink-0 object-cover" style={{ width: `max(36px, ${u(4)})`, height: `max(36px, ${u(4)})`, borderRadius: u(1) }} />
+          <div className="relative shrink-0" style={{ width: `max(40px, ${u(4.4)})`, height: `max(40px, ${u(4.4)})` }}>
+            <motion.div
+              className="absolute inset-0 rounded-full"
+              style={{ background: "conic-gradient(from 0deg, #7C5CFC, #FF6B9D, #FF9F43, #7C5CFC)" }}
+              animate={{ rotate: 360 }}
+              transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photo} alt="" className="absolute inset-[3px] h-[calc(100%-6px)] w-[calc(100%-6px)] rounded-full object-cover" />
+          </div>
         )}
         <div className="flex min-w-[160px] flex-1 items-center" style={{ gap: u(1) }}>
           <span className="t-body shrink-0 font-bold text-[var(--ink)]">{ready ? "🎉 Ready!" : LOADING_LINES[line]}</span>
@@ -612,21 +651,7 @@ function Generating({ photo, ready, onReveal }: { photo: string | null; ready: b
             <motion.div className="h-full rounded-full bg-gradient-to-r from-[var(--purple)] to-[var(--pink)]" animate={{ width: `${(ready ? 1 : progress) * 100}%` }} />
           </div>
         </div>
-        <nav className="flex flex-wrap" style={{ gap: u(0.5) }}>
-          {WAIT_GAMES.map((g) => (
-            <button
-              key={g.id}
-              className={cn("chip min-h-[36px] whitespace-nowrap", g.id === game ? "bg-[var(--purple)] text-white" : "bg-[var(--lav)] text-[var(--ink)]")}
-              onClick={() => {
-                sounds.tap();
-                setGame(g.id);
-              }}
-            >
-              <span className="max-[700px]:hidden">{g.label}</span>
-              <span className="min-[701px]:hidden">{g.short}</span>
-            </button>
-          ))}
-        </nav>
+        {tabs}
       </div>
 
       {/* play while you wait */}
@@ -646,6 +671,7 @@ function Generating({ photo, ready, onReveal }: { photo: string | null; ready: b
 // ================================================================ reveal + pay
 
 function Reveal({
+  photo,
   sticker,
   error,
   freeMode,
@@ -659,6 +685,7 @@ function Reveal({
   onProduct,
   onPaid,
 }: {
+  photo: string | null;
   sticker: string | null;
   error: string | null;
   freeMode: boolean;
@@ -701,20 +728,7 @@ function Reveal({
   return (
     <Split>
       <div className="relative flex items-center justify-center landscape:h-full landscape:w-[46%] portrait:w-full portrait:min-h-0 portrait:flex-1">
-        <motion.div
-          className="absolute aspect-square h-[88%] max-h-[44vw] portrait:max-h-[86vw] rounded-full bg-gradient-to-br from-[#ffd6e7] via-[#efe9ff] to-[#d9f7ff]"
-          initial={{ scale: 0 }}
-          animate={{ scale: 1, rotate: 360 }}
-          transition={{ scale: { type: "spring", stiffness: 120, damping: 14 }, rotate: { duration: 40, repeat: Infinity, ease: "linear" } }}
-        />
-        <motion.img
-          src={sticker}
-          alt="Your sticker"
-          className="die-cut relative h-[84%] max-h-full max-w-full object-contain"
-          initial={{ scale: 0.3, rotate: -20, opacity: 0 }}
-          animate={{ scale: 1, rotate: -3, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 160, damping: 12, delay: 0.1 }}
-        />
+        <BoothReveal photo={photo} sticker={sticker} />
       </div>
 
       <div className="flex flex-col landscape:w-[44%] portrait:items-center portrait:text-center" style={{ gap: u(1.8) }}>

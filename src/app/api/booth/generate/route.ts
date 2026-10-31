@@ -9,9 +9,6 @@ import { recordGeneration, recordError, isThrottled } from "@/lib/spend-tracker"
 const RATE_LIMIT_PER_IP = 240;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 
-const GROUP_HINT =
-  " If there are several people in the photo, include every one of them together in a single sticker.";
-
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
@@ -38,7 +35,8 @@ export async function POST(request: NextRequest) {
     }
 
     const { prompt, resolvedId } = resolvePresetPrompt(styleId);
-    const result = await generateSticker(image, prompt + GROUP_HINT, tier);
+    // Same prompt as the web app's /api/generate, so the look is identical.
+    const result = await generateSticker(image, prompt, tier);
     recordGeneration(tier);
 
     return NextResponse.json({
