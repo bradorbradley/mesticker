@@ -97,6 +97,7 @@ export default function BoothApp() {
     setDigitalUrl(null);
     setPaid(false);
     setOperatorOpen(false);
+    printCopy.current = null;
   }, []);
 
   // ---- idle reset
@@ -117,7 +118,22 @@ export default function BoothApp() {
   }, [step, operatorOpen, reset]);
 
   // ---- generation
+  // The guest waits only for a fast preview; a sharper print copy is made in
+  // the background while they look and pay, and printing uses it if ready.
+  const printCopy = useRef<Promise<string | null> | null>(null);
+  const startPrintCopy = (image: string, resolvedStyle: string) => {
+    printCopy.current = fetch("/api/booth/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image, styleId: resolvedStyle, tier: "print" }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => (d?.generatedImage as string | undefined) ?? null)
+      .catch(() => null);
+  };
+
   const generate = useCallback(async (image: string, style: string) => {
+    printCopy.current = null;
     setStep("generating");
     setError(null);
     setSticker(null);
@@ -133,6 +149,7 @@ export default function BoothApp() {
       if (!res.ok) throw new Error(data.error || "Something went wrong");
       setSticker(data.generatedImage);
       setLastGen({ provider: data.provider, model: data.model, ms: data.ms });
+      startPrintCopy(image, data.stylePreset);
       try {
         localStorage.setItem("mesticker-booth-gen-ms", String(data.ms));
       } catch {}
@@ -150,7 +167,10 @@ export default function BoothApp() {
     setPaid(true);
     setStep("printing");
     try {
-      const bordered = await addStickerBorder(sticker);
+      // Prefer the sharper print copy; don't hold the printer more than 30s for it.
+      const pending = printCopy.current;
+      const hq = pending ? await Promise.race([pending, new Promise<null>((r) => setTimeout(() => r(null), 30000))]) : null;
+      const bordered = await addStickerBorder(hq || sticker);
       const sheet = await composePrintSheet(bordered);
       setPrintFile(sheet);
       downloadDataUrl(sheet, `mesticker-print-${Date.now()}.png`);

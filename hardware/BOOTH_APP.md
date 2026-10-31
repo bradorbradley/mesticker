@@ -62,6 +62,8 @@ automatically.
 | `NEXT_PUBLIC_BOOTH_FREE_MODE` | `1` = no payment (demos) |
 | `BOOTH_IMAGE_PROVIDER` | `openai` (default), `gemini` (Nano Banana 2) or `fal` (FLUX Kontext) |
 | `GEMINI_API_KEY` / `FAL_KEY` | Keys for the alternative models |
+| `BOOTH_PREVIEW_QUALITY` | OpenAI quality guests wait for: `low` (default, fastest) |
+| `BOOTH_PRINT_QUALITY` | Sharper copy made in the background for printing: `medium` (default) |
 | `STRIPE_SECRET_KEY` | Already set for the web app; without it the booth runs free |
 
 To compare speed: switch `BOOTH_IMAGE_PROVIDER`, make a sticker, and read the seconds in the staff panel.

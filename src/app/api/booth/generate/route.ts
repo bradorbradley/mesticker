@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolvePresetPrompt, stylePresets } from "@/lib/presets";
-import { generateSticker } from "@/lib/image-providers";
+import { generateSticker, hasPrintTier } from "@/lib/image-providers";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { recordGeneration, recordError, isThrottled } from "@/lib/spend-tracker";
 
@@ -24,7 +24,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { image, styleId } = await request.json();
+    const { image, styleId, tier: rawTier } = await request.json();
+    const tier = rawTier === "print" ? "print" : "preview";
+    // The print copy only differs from the preview where the model has a quality setting.
+    if (tier === "print" && !hasPrintTier()) {
+      return NextResponse.json({ sameAsPreview: true });
+    }
     if (!image || !styleId) {
       return NextResponse.json({ error: "Missing image or style" }, { status: 400 });
     }
@@ -33,8 +38,8 @@ export async function POST(request: NextRequest) {
     }
 
     const { prompt, resolvedId } = resolvePresetPrompt(styleId);
-    const result = await generateSticker(image, prompt + GROUP_HINT);
-    recordGeneration("preview");
+    const result = await generateSticker(image, prompt + GROUP_HINT, tier);
+    recordGeneration(tier);
 
     return NextResponse.json({
       generatedImage: result.image,

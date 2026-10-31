@@ -11,7 +11,7 @@
  * otherwise our own flood-fill cutout).
  */
 
-import { generatePreview } from "@/lib/generation";
+import { generateAtQuality } from "@/lib/generation";
 import { removeBackground } from "@/lib/removebg";
 import { cutoutWhiteBackground } from "@/lib/cutout";
 
@@ -129,12 +129,29 @@ async function generateFal(image: string, prompt: string) {
   return { image: await cleanBackground(`data:image/png;base64,${buf.toString("base64")}`), model };
 }
 
-export async function generateSticker(image: string, prompt: string): Promise<ProviderResult> {
+type Quality = "low" | "medium" | "high";
+const quality = (v: string | undefined, fallback: Quality): Quality =>
+  v === "low" || v === "medium" || v === "high" ? v : fallback;
+
+/**
+ * Booth tiers. OpenAI's quality setting is the big speed lever:
+ *   preview — what the guest waits for: "low" (~2-3x faster than medium)
+ *   print   — made in the background while they decide/pay: "medium"
+ * Gemini / FLUX have no quality knob, so the preview is already the print.
+ */
+export function hasPrintTier() {
+  return activeProvider() === "openai";
+}
+
+export async function generateSticker(image: string, prompt: string, tier: "preview" | "print" = "preview"): Promise<ProviderResult> {
   const provider = activeProvider();
   const t0 = Date.now();
   let out: { image: string; model: string };
   if (provider === "gemini") out = await generateGemini(image, prompt);
   else if (provider === "fal") out = await generateFal(image, prompt);
-  else out = { image: await generatePreview(image, prompt), model: process.env.OPENAI_IMAGE_MODEL || "gpt-image" };
+  else {
+    const q = tier === "print" ? quality(process.env.BOOTH_PRINT_QUALITY, "medium") : quality(process.env.BOOTH_PREVIEW_QUALITY, "low");
+    out = { image: await generateAtQuality(image, prompt, q), model: `${process.env.OPENAI_IMAGE_MODEL || "gpt-image"} (${q})` };
+  }
   return { ...out, provider, ms: Date.now() - t0 };
 }

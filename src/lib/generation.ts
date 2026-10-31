@@ -156,6 +156,15 @@ export async function generateVariationPreview(
   return editImage(imageBase64, stylePrompt, { quality: "low" });
 }
 
+/** Explicit quality, for callers (the booth) that pick their own speed/quality trade-off. */
+export async function generateAtQuality(
+  imageBase64: string,
+  stylePrompt: string,
+  quality: "low" | "medium" | "high"
+): Promise<string> {
+  return editImage(imageBase64, stylePrompt, { quality });
+}
+
 export async function generatePrint(
   imageBase64: string,
   stylePrompt: string
