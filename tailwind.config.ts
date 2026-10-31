@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
 
 const config: Config = {
   darkMode: ["class"],
@@ -99,6 +100,12 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // `short:` — phone held sideways (with browser bars): very little height.
+    // A variant, not a screen, so the max-* breakpoint variants keep working.
+    plugin(({ addVariant }) => {
+      addVariant("short", "@media (orientation: landscape) and (max-height: 540px)");
+    }),
+  ],
 };
 export default config;

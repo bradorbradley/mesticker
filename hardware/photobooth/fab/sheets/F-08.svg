@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1632 1056" width="1632" height="1056"><rect width="1632" height="1056" fill="#fff"/><text x="32" y="50" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="26" font-weight="800" fill="#1F1B2E">F-08 · Electrical + data</text><text x="32" y="74" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="13" fill="#8A84A3">One 120 V / 15 A outlet. Everything is fed from the UPS in the machine module</text><rect x="40.0" y="430.0" width="140.0" height="56.0" rx="8" fill="#FFF1F0" stroke="#D9423B" stroke-width="1.4" opacity="1"/>
+<text x="110.0" y="456.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">Wall outlet</text>
+<text x="110.0" y="472.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">120 V · 15 A</text>
+<rect x="250.0" y="430.0" width="160.0" height="56.0" rx="8" fill="#FFF1F0" stroke="#D9423B" stroke-width="1.4" opacity="1"/>
+<text x="330.0" y="456.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">UPS 1500 VA</text>
+<text x="330.0" y="472.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">surge + 10 min ride-through</text>
+<rect x="470.0" y="430.0" width="150.0" height="56.0" rx="8" fill="#FFF1F0" stroke="#D9423B" stroke-width="1.4" opacity="1"/>
+<text x="545.0" y="456.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">Power strip / PDU</text>
+<text x="545.0" y="472.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">8 outlets, switched</text>
+<path d="M180.0,458.0 C215.0,458.0 215.0,458.0 250.0,458.0" fill="none" stroke="#D9423B" stroke-width="2"/>
+<text x="215.0" y="453.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="9.5" font-weight="700" fill="#D9423B" text-anchor="middle">power cord, 3 m</text>
+<path d="M410.0,458.0 C440.0,458.0 440.0,458.0 470.0,458.0" fill="none" stroke="#D9423B" stroke-width="2"/>
+<rect x="700.0" y="110.0" width="210.0" height="48.0" rx="8" fill="#FFFFFF" stroke="#D9423B" stroke-width="1.4" opacity="1"/>
+<text x="805.0" y="132.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">Primera LX610</text>
+<text x="805.0" y="148.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">check nameplate</text>
+<path d="M620.0,458.0 C660.0,458.0 660.0,134.0 700.0,134.0" fill="none" stroke="#D9423B" stroke-width="2"/>
+<rect x="700.0" y="172.0" width="210.0" height="48.0" rx="8" fill="#FFFFFF" stroke="#D9423B" stroke-width="1.4" opacity="1"/>
+<text x="805.0" y="194.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">Mini PC</text>
+<text x="805.0" y="210.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">~65 W</text>
+<path d="M620.0,458.0 C660.0,458.0 660.0,196.0 700.0,196.0" fill="none" stroke="#D9423B" stroke-width="2"/>
+<rect x="700.0" y="234.0" width="210.0" height="48.0" rx="8" fill="#FFFFFF" stroke="#D9423B" stroke-width="1.4" opacity="1"/>
+<text x="805.0" y="256.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">43&quot; attract display</text>
+<text x="805.0" y="272.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">~100 W</text>
+<path d="M620.0,458.0 C660.0,458.0 660.0,258.0 700.0,258.0" fill="none" stroke="#D9423B" stroke-width="2"/>
+<rect x="700.0" y="296.0" width="210.0" height="48.0" rx="8" fill="#FFFFFF" stroke="#D9423B" stroke-width="1.4" opacity="1"/>
+<text x="805.0" y="318.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">27&quot; touchscreen</text>
+<text x="805.0" y="334.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">~40 W</text>
+<path d="M620.0,458.0 C660.0,458.0 660.0,320.0 700.0,320.0" fill="none" stroke="#D9423B" stroke-width="2"/>
+<rect x="700.0" y="358.0" width="210.0" height="48.0" rx="8" fill="#FFFFFF" stroke="#D9423B" stroke-width="1.4" opacity="1"/>
+<text x="805.0" y="380.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">24 V LED PSU</text>
+<text x="805.0" y="396.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">softboxes, ring, ceiling ~150 W</text>
+<path d="M620.0,458.0 C660.0,458.0 660.0,382.0 700.0,382.0" fill="none" stroke="#D9423B" stroke-width="2"/>
+<rect x="700.0" y="420.0" width="210.0" height="48.0" rx="8" fill="#FFFFFF" stroke="#D9423B" stroke-width="1.4" opacity="1"/>
+<text x="805.0" y="442.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">12 V LED PSU</text>
+<text x="805.0" y="458.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">marquee + RGB plinth ~80 W</text>
+<path d="M620.0,458.0 C660.0,458.0 660.0,444.0 700.0,444.0" fill="none" stroke="#D9423B" stroke-width="2"/>
+<rect x="700.0" y="482.0" width="210.0" height="48.0" rx="8" fill="#FFFFFF" stroke="#D9423B" stroke-width="1.4" opacity="1"/>
+<text x="805.0" y="504.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">Exhaust fan + amp</text>
+<text x="805.0" y="520.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">~30 W</text>
+<path d="M620.0,458.0 C660.0,458.0 660.0,506.0 700.0,506.0" fill="none" stroke="#D9423B" stroke-width="2"/>
+<rect x="700.0" y="544.0" width="210.0" height="48.0" rx="8" fill="#FFFFFF" stroke="#D9423B" stroke-width="1.4" opacity="1"/>
+<text x="805.0" y="566.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">Router / LTE</text>
+<text x="805.0" y="582.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">~15 W</text>
+<path d="M620.0,458.0 C660.0,458.0 660.0,568.0 700.0,568.0" fill="none" stroke="#D9423B" stroke-width="2"/>
+<rect x="1010.0" y="150.0" width="220.0" height="70.0" rx="8" fill="#F0F4FF" stroke="#3A6FF2" stroke-width="1.4" opacity="1"/>
+<text x="1120.0" y="183.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">Mini PC</text>
+<text x="1120.0" y="199.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">booth app: kiosk browser + print agent</text>
+<rect x="1340.0" y="92.0" width="230.0" height="46.0" rx="8" fill="#F0F4FF" stroke="#3A6FF2" stroke-width="1.4" opacity="1"/>
+<text x="1455.0" y="113.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">Primera LX610</text>
+<text x="1455.0" y="129.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">USB</text>
+<path d="M1230.0,185.0 C1285.0,185.0 1285.0,115.0 1340.0,115.0" fill="none" stroke="#3A6FF2" stroke-width="2"/>
+<rect x="1340.0" y="150.0" width="230.0" height="46.0" rx="8" fill="#F0F4FF" stroke="#3A6FF2" stroke-width="1.4" opacity="1"/>
+<text x="1455.0" y="171.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">27&quot; touchscreen</text>
+<text x="1455.0" y="187.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">HDMI + USB touch</text>
+<path d="M1230.0,185.0 C1285.0,185.0 1285.0,173.0 1340.0,173.0" fill="none" stroke="#3A6FF2" stroke-width="2"/>
+<rect x="1340.0" y="208.0" width="230.0" height="46.0" rx="8" fill="#F0F4FF" stroke="#3A6FF2" stroke-width="1.4" opacity="1"/>
+<text x="1455.0" y="229.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">43&quot; attract display</text>
+<text x="1455.0" y="245.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">HDMI</text>
+<path d="M1230.0,185.0 C1285.0,185.0 1285.0,231.0 1340.0,231.0" fill="none" stroke="#3A6FF2" stroke-width="2"/>
+<rect x="1340.0" y="266.0" width="230.0" height="46.0" rx="8" fill="#F0F4FF" stroke="#3A6FF2" stroke-width="1.4" opacity="1"/>
+<text x="1455.0" y="287.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">Camera</text>
+<text x="1455.0" y="303.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">USB 3</text>
+<path d="M1230.0,185.0 C1285.0,185.0 1285.0,289.0 1340.0,289.0" fill="none" stroke="#3A6FF2" stroke-width="2"/>
+<rect x="1340.0" y="324.0" width="230.0" height="46.0" rx="8" fill="#F0F4FF" stroke="#3A6FF2" stroke-width="1.4" opacity="1"/>
+<text x="1455.0" y="345.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">LED controller</text>
+<text x="1455.0" y="361.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">USB → relays / PWM</text>
+<path d="M1230.0,185.0 C1285.0,185.0 1285.0,347.0 1340.0,347.0" fill="none" stroke="#3A6FF2" stroke-width="2"/>
+<rect x="1010.0" y="420.0" width="220.0" height="56.0" rx="8" fill="#EEF9F2" stroke="#2E9E5B" stroke-width="1.4" opacity="1"/>
+<text x="1120.0" y="446.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">Router</text>
+<text x="1120.0" y="462.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">venue Wi-Fi or LTE backup</text>
+<rect x="1340.0" y="420.0" width="230.0" height="56.0" rx="8" fill="#EEF9F2" stroke="#2E9E5B" stroke-width="1.4" opacity="1"/>
+<text x="1455.0" y="446.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">Internet</text>
+<text x="1455.0" y="462.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">MeSticker app · Stripe · AI models</text>
+<rect x="1340.0" y="520.0" width="230.0" height="56.0" rx="8" fill="#EEF9F2" stroke="#2E9E5B" stroke-width="1.4" opacity="1"/>
+<text x="1455.0" y="546.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="800" fill="#1F1B2E" text-anchor="middle">Stripe Reader S710</text>
+<text x="1455.0" y="562.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="600" fill="#8A84A3" text-anchor="middle">own USB-C power, talks to Stripe</text>
+<path d="M1120.0,220.0 C1120.0,320.0 1120.0,320.0 1120.0,420.0" fill="none" stroke="#2E9E5B" stroke-width="2"/>
+<text x="1120.0" y="315.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="9.5" font-weight="700" fill="#2E9E5B" text-anchor="middle">Ethernet</text>
+<path d="M1230.0,448.0 C1285.0,448.0 1285.0,448.0 1340.0,448.0" fill="none" stroke="#2E9E5B" stroke-width="2"/>
+<text x="1285.0" y="443.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="9.5" font-weight="700" fill="#2E9E5B" text-anchor="middle">WAN</text>
+<path d="M1230.0,448.0 C1285.0,448.0 1285.0,548.0 1340.0,548.0" fill="none" stroke="#2E9E5B" stroke-width="2" stroke-dasharray="5 4"/>
+<text x="1285.0" y="493.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="9.5" font-weight="700" fill="#2E9E5B" text-anchor="middle">Wi-Fi</text>
+<text x="1120.0" y="120.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10.5" font-weight="700" fill="#8A84A3" text-anchor="middle">DATA</text>
+<text x="810.0" y="92.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10.5" font-weight="700" fill="#8A84A3" text-anchor="middle">POWER</text>
+<rect x="40.0" y="640.0" width="420.0" height="22.0" rx="0" fill="#EFEBFA" stroke="none" stroke-width="1.4" opacity="1"/>
+<text x="46.0" y="657.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#8A84A3" text-anchor="start">CIRCUIT</text>
+<text x="266.0" y="657.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#8A84A3" text-anchor="start">EST. LOAD</text>
+<text x="46.0" y="679.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="600" fill="#1F1B2E" text-anchor="start">Electronics</text>
+<text x="266.0" y="679.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="500" fill="#1F1B2E" text-anchor="start">~350 W</text>
+<rect x="40.0" y="684.0" width="420.0" height="22.0" rx="0" fill="#FAF9FD" stroke="none" stroke-width="1.4" opacity="1"/>
+<text x="46.0" y="701.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="600" fill="#1F1B2E" text-anchor="start">Lighting</text>
+<text x="266.0" y="701.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="500" fill="#1F1B2E" text-anchor="start">~230 W</text>
+<text x="46.0" y="723.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="600" fill="#1F1B2E" text-anchor="start">Printer</text>
+<text x="266.0" y="723.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="500" fill="#1F1B2E" text-anchor="start">nameplate</text>
+<rect x="40.0" y="728.0" width="420.0" height="22.0" rx="0" fill="#FAF9FD" stroke="none" stroke-width="1.4" opacity="1"/>
+<text x="46.0" y="745.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="600" fill="#1F1B2E" text-anchor="start">Total (est.)</text>
+<text x="266.0" y="745.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="500" fill="#1F1B2E" text-anchor="start">≈ 650–750 W ≈ 6 A</text>
+<rect x="40.0" y="640.0" width="420.0" height="110.0" rx="0" fill="none" stroke="#D9D4E8" stroke-width="0.8" opacity="1"/>
+<text x="500.0" y="660.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10.5" font-weight="700" fill="#8A84A3" text-anchor="start">WIRING NOTES</text>
+<text x="500.0" y="678.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">• All mains wiring inside the machine module, on the PDU. Use UL-listed power supplies only, and</text>
+<text x="512.0" y="694.7" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">strain-relieve the main cord where it exits.</text>
+<text x="500.0" y="714.3" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">• The low-voltage LED runs (24 V and 12 V) go through the frame tubes to the softboxes, ceiling</text>
+<text x="512.0" y="731.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">panel, sign and plinth. The sign uses a quick-disconnect plug.</text>
+<text x="500.0" y="750.7" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">• The S710 reader talks to Stripe directly over Wi-Fi or Ethernet (server-driven integration). It</text>
+<text x="512.0" y="767.4" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">needs no USB connection to the PC.</text>
+<text x="500.0" y="787.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">• Fit an LTE router as a backup for bad venue Wi-Fi. The booth should stop taking payment when it&#x27;s</text>
+<text x="512.0" y="803.7" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">offline.</text>
+<text x="500.0" y="823.4" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="500" fill="#1F1B2E" text-anchor="start">• Leave a service loop on every cable so the printer shelf can slide out.</text>
+<text x="40.0" y="110.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10.5" font-weight="700" fill="#8A84A3" text-anchor="start">LEGEND</text>
+<line x1="40.0" y1="130.0" x2="80.0" y2="130.0" stroke="#D9423B" stroke-width="2.5"/>
+<text x="90.0" y="134.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="600" fill="#1F1B2E" text-anchor="start">mains power</text>
+<line x1="40.0" y1="150.0" x2="80.0" y2="150.0" stroke="#3A6FF2" stroke-width="2.5"/>
+<text x="90.0" y="154.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="600" fill="#1F1B2E" text-anchor="start">USB / HDMI data</text>
+<line x1="40.0" y1="170.0" x2="80.0" y2="170.0" stroke="#2E9E5B" stroke-width="2.5"/>
+<text x="90.0" y="174.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="600" fill="#1F1B2E" text-anchor="start">network</text><rect x="12" y="12" width="1608" height="1032" fill="none" stroke="#1F1B2E" stroke-width="1.6"/><line x1="12" y1="978" x2="1620" y2="978" stroke="#1F1B2E" stroke-width="1.2"/><text x="28" y="1006" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="800" fill="#1F1B2E">MeSticker Photo Booth</text><text x="28" y="1028" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" fill="#8A84A3">Fabrication drawing set · units mm · do not scale drawings, use dimensions · tolerance ±2 mm unless noted</text><line x1="992" y1="978" x2="992" y2="1044" stroke="#1F1B2E" stroke-width="1"/><text x="1002" y="1000" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#8A84A3">SHEET</text><text x="1002" y="1026" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="800" fill="#1F1B2E">F-08</text><line x1="1082" y1="978" x2="1082" y2="1044" stroke="#1F1B2E" stroke-width="1"/><text x="1092" y="1000" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#8A84A3">TITLE</text><text x="1092" y="1026" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="800" fill="#1F1B2E">Electrical + data</text><line x1="1412" y1="978" x2="1412" y2="1044" stroke="#1F1B2E" stroke-width="1"/><text x="1422" y="1000" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#8A84A3">REV</text><text x="1422" y="1026" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="800" fill="#1F1B2E">A</text><line x1="1482" y1="978" x2="1482" y2="1044" stroke="#1F1B2E" stroke-width="1"/><text x="1492" y="1000" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#8A84A3">DATE</text><text x="1492" y="1026" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="800" fill="#1F1B2E">2026-10-24</text></svg>

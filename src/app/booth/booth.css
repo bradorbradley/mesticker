@@ -1,0 +1,134 @@
+/*
+ * MeSticker Booth theme — the MeSticker brand (purple → pink, Fredoka/Nunito)
+ * turned up for a kiosk: chunky sticker buttons, white die-cut outlines.
+ *
+ * Everything is sized in --u, a unit that scales with the screen so the same
+ * layout fits a 1080p booth display, a laptop, or a phone in either
+ * orientation. 1u ≈ 1% of a 16:9 frame's width.
+ */
+.booth {
+  --u: min(1vw, 1.78vh);
+  --purple: #7c5cfc;
+  --purple-dark: #5b3fd6;
+  --pink: #ff6b9d;
+  --yellow: #feca57;
+  --orange: #ff9f43;
+  --cyan: #45e3ff;
+  --green: #2ed573;
+  --ink: #1a1a2e;
+  --ink-2: #5d5b72;
+  --lav: #f1ecff;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 107, 157, 0.18) 0, transparent 32%),
+    radial-gradient(circle at 88% 80%, rgba(69, 227, 255, 0.18) 0, transparent 34%),
+    radial-gradient(circle at 80% 10%, rgba(254, 202, 87, 0.22) 0, transparent 28%),
+    linear-gradient(160deg, #f5f1ff 0%, #fff6fa 100%);
+  color: var(--ink);
+  font-family: "Nunito", system-ui, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (orientation: portrait) {
+  .booth {
+    --u: min(1.9vw, 1.05vh);
+  }
+}
+
+.booth .font-fun {
+  font-family: "Fredoka", system-ui, sans-serif;
+}
+
+/* type scale */
+.booth .t-hero { font-family: "Fredoka", sans-serif; font-weight: 700; font-size: calc(var(--u) * 5.6); line-height: 0.98; letter-spacing: -0.01em; }
+.booth .t-h2 { font-family: "Fredoka", sans-serif; font-weight: 700; font-size: calc(var(--u) * 3.8); line-height: 1.02; }
+.booth .t-h3 { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: max(15px, calc(var(--u) * 1.9)); line-height: 1.1; }
+.booth .t-lead { font-size: max(15px, calc(var(--u) * 1.55)); line-height: 1.35; color: var(--ink-2); font-weight: 600; }
+.booth .t-body { font-size: max(13px, calc(var(--u) * 1.2)); line-height: 1.35; color: var(--ink-2); font-weight: 600; }
+
+.booth .pop {
+  background: linear-gradient(135deg, var(--purple) 0%, var(--pink) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* chunky sticker buttons */
+.booth .btn {
+  font-family: "Fredoka", sans-serif;
+  font-weight: 600;
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: transform 0.08s, box-shadow 0.08s;
+  font-size: max(15px, calc(var(--u) * 1.4));
+  padding: max(10px, calc(var(--u) * 0.8)) max(18px, calc(var(--u) * 1.9));
+}
+.booth .btn-lg {
+  font-size: max(18px, calc(var(--u) * 2.4));
+  padding: max(12px, calc(var(--u) * 1.2)) max(24px, calc(var(--u) * 3.4));
+}
+.booth .btn-main {
+  color: #fff;
+  background: linear-gradient(135deg, var(--purple) 0%, var(--pink) 100%);
+  border: max(3px, calc(var(--u) * 0.3)) solid #fff;
+  box-shadow: 0 calc(var(--u) * 0.55) 0 var(--purple-dark), 0 calc(var(--u) * 1.2) calc(var(--u) * 2.4) rgba(124, 92, 252, 0.35);
+}
+.booth .btn-main:active {
+  transform: translateY(calc(var(--u) * 0.4));
+  box-shadow: 0 calc(var(--u) * 0.15) 0 var(--purple-dark), 0 calc(var(--u) * 0.5) calc(var(--u) * 1.2) rgba(124, 92, 252, 0.3);
+}
+.booth .btn-main:disabled {
+  opacity: 0.5;
+}
+.booth .btn-soft {
+  color: var(--ink);
+  background: #fff;
+  border: max(2px, calc(var(--u) * 0.18)) solid #e4dcff;
+  box-shadow: 0 calc(var(--u) * 0.35) 0 #e4dcff;
+}
+.booth .btn-soft:active {
+  transform: translateY(calc(var(--u) * 0.25));
+  box-shadow: none;
+}
+
+/* white die-cut sticker card */
+.booth .card {
+  background: #fff;
+  border-radius: calc(var(--u) * 2.2);
+  border: max(3px, calc(var(--u) * 0.4)) solid #fff;
+  box-shadow: 0 calc(var(--u) * 0.9) calc(var(--u) * 2.6) rgba(91, 63, 214, 0.16);
+}
+
+/* die-cut white outline around a transparent PNG */
+.booth .die-cut {
+  filter: drop-shadow(0 0 calc(var(--u) * 0.35) #fff) drop-shadow(0 0 calc(var(--u) * 0.35) #fff)
+    drop-shadow(0 0 1px #fff) drop-shadow(0 calc(var(--u) * 1) calc(var(--u) * 1.4) rgba(91, 63, 214, 0.25));
+}
+
+.booth .chip {
+  font-family: "Fredoka", sans-serif;
+  font-weight: 600;
+  border-radius: 999px;
+  font-size: max(13px, calc(var(--u) * 1.25));
+  padding: max(5px, calc(var(--u) * 0.45)) max(12px, calc(var(--u) * 1.2));
+}
+
+/* Phone held sideways: ~300px of height. Bigger unit, smaller headlines. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .booth {
+    --u: min(1.25vw, 2.45vh);
+  }
+  .booth .t-hero { font-size: calc(var(--u) * 4.4); }
+  .booth .t-h2 { font-size: calc(var(--u) * 3.3); }
+  .booth .t-lead { font-size: max(13px, calc(var(--u) * 1.5)); }
+  .booth .t-body { font-size: max(12px, calc(var(--u) * 1.25)); }
+  .booth .btn { font-size: max(13px, calc(var(--u) * 1.5)); padding: calc(var(--u) * 0.75) calc(var(--u) * 1.8); }
+  .booth .btn-lg { font-size: calc(var(--u) * 2.2); padding: calc(var(--u) * 1) calc(var(--u) * 2.8); }
+  .booth .chip { font-size: max(12px, calc(var(--u) * 1.3)); }
+}
+
+/* Notch / home-indicator safe areas when launched from the home screen */
+.booth {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
