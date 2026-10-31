@@ -2,7 +2,7 @@
  * Image generation — uses OpenAI image-edit API.
  *
  * Model is configurable via OPENAI_IMAGE_MODEL env var.
- * Defaults to gpt-image-1 (known stable). Set to gpt-image-2 for the newer model.
+ * Falls back through current models if the configured one is unavailable.
  *
  * Two tiers:
  *   - generatePreview: low quality, fast, for the interactive flow
@@ -19,30 +19,57 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? "",
 });
 
-const MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
+// gpt-image-1 was shut down 2026-10-23 ("The model 'gpt-image-1' does not
+// exist"); gpt-image-1.5 / 1-mini follow on 2026-12-01. We try the configured
+// model first, then fall back through current models so a stale
+// OPENAI_IMAGE_MODEL env var can't take generation down.
+const MODEL_CANDIDATES = Array.from(
+  new Set(
+    [
+      process.env.OPENAI_IMAGE_MODEL,
+      "gpt-image-2.5-flare",
+      "gpt-image-2.5-sunburst",
+      "gpt-image-2",
+    ].filter((m): m is string => !!m)
+  )
+);
+
+// Remember the first model that worked so later requests skip dead ones.
+let workingModel: string | null = null;
 
 export const COST_PREVIEW = 0.011;
 export const COST_PRINT = 0.08;
 
 async function prepareImageFile(imageBase64: string) {
-  const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+  const match = imageBase64.match(/^data:(image\/[\w+.-]+);base64,/);
+  const mime = match?.[1] ?? "image/png";
+  const ext = mime.split("/")[1].replace("jpeg", "jpg").replace(/\W.*/, "");
+  const base64Data = imageBase64.replace(/^data:image\/[\w+.-]+;base64,/, "");
   const buffer = Buffer.from(base64Data, "base64");
-  return toFile(buffer, "photo.png", { type: "image/png" });
+  return toFile(buffer, `photo.${ext}`, { type: mime });
 }
 
 interface EditOpts {
   quality: "low" | "medium" | "high";
 }
 
-async function editImage(
+function isModelUnavailable(err: unknown): boolean {
+  const e = err as { param?: string; code?: string; message?: string };
+  if (e?.param === "model" || e?.code === "model_not_found") return true;
+  return /model .*(does not exist|not found|not available|access)/i.test(
+    e?.message ?? ""
+  );
+}
+
+async function editWithModel(
+  model: string,
   imageBase64: string,
   prompt: string,
   opts: EditOpts
-): Promise<string> {
-  let response;
+) {
   try {
-    response = await openai.images.edit({
-      model: MODEL,
+    return await openai.images.edit({
+      model,
       image: await prepareImageFile(imageBase64),
       prompt,
       quality: opts.quality,
@@ -50,19 +77,46 @@ async function editImage(
       background: "transparent",
     });
   } catch (err) {
+    if (isModelUnavailable(err)) throw err;
     const msg = err instanceof Error ? err.message : "";
+    // Some models don't support transparent backgrounds — retry without it
+    // (remove.bg below cleans up the background when configured).
     if (/background|param|unsupported|unknown/i.test(msg)) {
-      response = await openai.images.edit({
-        model: MODEL,
+      return await openai.images.edit({
+        model,
         image: await prepareImageFile(imageBase64),
         prompt,
         quality: opts.quality,
         size: "1024x1024",
       });
-    } else {
-      throw err;
+    }
+    throw err;
+  }
+}
+
+async function editImage(
+  imageBase64: string,
+  prompt: string,
+  opts: EditOpts
+): Promise<string> {
+  const models = workingModel
+    ? [workingModel, ...MODEL_CANDIDATES.filter((m) => m !== workingModel)]
+    : MODEL_CANDIDATES;
+
+  let response;
+  let lastErr: unknown;
+  for (const model of models) {
+    try {
+      response = await editWithModel(model, imageBase64, prompt, opts);
+      workingModel = model;
+      break;
+    } catch (err) {
+      if (!isModelUnavailable(err)) throw err;
+      console.warn(`Image model "${model}" unavailable, trying next`);
+      lastErr = err;
     }
   }
+  if (!response) throw lastErr ?? new Error("No image model available");
 
   const outputBase64 = response.data?.[0]?.b64_json;
   if (!outputBase64) {
@@ -100,6 +154,15 @@ export async function generateVariationPreview(
   stylePrompt: string
 ): Promise<string> {
   return editImage(imageBase64, stylePrompt, { quality: "low" });
+}
+
+/** Explicit quality, for callers (the booth) that pick their own speed/quality trade-off. */
+export async function generateAtQuality(
+  imageBase64: string,
+  stylePrompt: string,
+  quality: "low" | "medium" | "high"
+): Promise<string> {
+  return editImage(imageBase64, stylePrompt, { quality });
 }
 
 export async function generatePrint(

@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1632 1056" width="1632" height="1056"><rect width="1632" height="1056" fill="#fff"/><text x="32" y="50" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="26" font-weight="800" fill="#1F1B2E">F-04 · Inside elevations</text><text x="32" y="74" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="13" fill="#8A84A3">A: camera wall seen from the bench.  B: section through the machine module, looking at the end wall</text><rect x="170.0" y="140.0" width="407.0" height="710.4" rx="0" fill="#FFFFFF" stroke="#1F1B2E" stroke-width="1.4" opacity="1"/>
+<rect x="170.0" y="850.4" width="407.0" height="29.6" rx="0" fill="#3A3646" stroke="#1F1B2E" stroke-width="1.4" opacity="1"/>
+<rect x="210.7" y="234.4" width="44.4" height="388.5" rx="4" fill="#FFF3EA" stroke="#D9A54A" stroke-width="1.4" opacity="1"/>
+<rect x="491.9" y="234.4" width="44.4" height="388.5" rx="4" fill="#FFF3EA" stroke="#D9A54A" stroke-width="1.4" opacity="1"/>
+<rect x="305.1" y="328.7" width="136.9" height="236.8" rx="0" fill="#2B2B33" stroke="#1F1B2E" stroke-width="1.4" opacity="1"/>
+<rect x="311.3" y="336.7" width="124.3" height="220.9" rx="0" fill="#D7ECFF" stroke="none" stroke-width="1.4" opacity="1"/>
+<text x="373.5" y="447.1" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="700" fill="#1F1B2E" text-anchor="middle">27&quot; touch</text>
+<circle cx="373.5" cy="295.4" r="25.9" fill="#FFF8EE" stroke="#D9A54A" stroke-width="1.6"/>
+<circle cx="373.5" cy="295.4" r="11.1" fill="#2B2B33" stroke="#1F1B2E" stroke-width="1.0"/>
+<rect x="281.0" y="583.3" width="185.0" height="8.9" rx="0" fill="#EDE9F5" stroke="#1F1B2E" stroke-width="1.4" opacity="1"/>
+<rect x="414.2" y="569.2" width="29.6" height="14.1" rx="6" fill="#2B2D3A" stroke="#1F1B2E" stroke-width="1.4" opacity="1"/>
+<rect x="299.5" y="621.7" width="59.2" height="31.1" rx="0" fill="#BDB8CC" stroke="#1F1B2E" stroke-width="1.4" opacity="1"/>
+<circle cx="399.4" cy="295.4" r="2.6" fill="#E8457E" stroke="#E8457E" stroke-width="1.0"/>
+<line x1="399.4" y1="295.4" x2="621.4" y2="251.0" stroke="#E8457E" stroke-width="0.9"/>
+<text x="625.4" y="255.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="600" fill="#1F1B2E" text-anchor="start">camera + ring light</text>
+<circle cx="536.3" cy="325.0" r="2.6" fill="#E8457E" stroke="#E8457E" stroke-width="1.0"/>
+<line x1="536.3" y1="325.0" x2="621.4" y2="325.0" stroke="#E8457E" stroke-width="0.9"/>
+<text x="625.4" y="329.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="600" fill="#1F1B2E" text-anchor="start">softbox LED bar (×2)</text>
+<circle cx="441.9" cy="447.1" r="2.6" fill="#E8457E" stroke="#E8457E" stroke-width="1.0"/>
+<line x1="441.9" y1="447.1" x2="621.4" y2="447.1" stroke="#E8457E" stroke-width="0.9"/>
+<text x="625.4" y="451.1" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="600" fill="#1F1B2E" text-anchor="start">27&quot; touchscreen, VESA to stiles</text>
+<circle cx="443.8" cy="576.6" r="2.6" fill="#E8457E" stroke="#E8457E" stroke-width="1.0"/>
+<line x1="443.8" y1="576.6" x2="621.4" y2="554.4" stroke="#E8457E" stroke-width="0.9"/>
+<text x="625.4" y="558.4" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="600" fill="#1F1B2E" text-anchor="start">Stripe S710 tap reader (tilted 35° on shelf)</text>
+<circle cx="329.1" cy="648.4" r="2.6" fill="#E8457E" stroke="#E8457E" stroke-width="1.0"/>
+<line x1="329.1" y1="648.4" x2="621.4" y2="658.0" stroke="#E8457E" stroke-width="0.9"/>
+<text x="625.4" y="662.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="600" fill="#1F1B2E" text-anchor="start">speaker grille</text>
+<circle cx="299.5" cy="587.7" r="2.6" fill="#E8457E" stroke="#E8457E" stroke-width="1.0"/>
+<line x1="299.5" y1="587.7" x2="621.4" y2="713.5" stroke="#E8457E" stroke-width="0.9"/>
+<text x="625.4" y="717.5" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="600" fill="#1F1B2E" text-anchor="start">pay shelf, 130 deep</text>
+<line x1="167.0" y1="880.0" x2="120.0" y2="880.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="167.0" y1="295.4" x2="120.0" y2="295.4" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="126.0" y1="880.0" x2="126.0" y2="295.4" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="126.0,295.4 123.1,301.8 128.9,301.8" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="126.0,880.0 128.9,873.6 123.1,873.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(126.0 587.7) rotate(-90.0)"><rect x="-17.9" y="-9.0" width="35.8" height="18.0" fill="#fff" rx="3"/><text x="0" y="4.3" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="600" fill="#5B3FD6" text-anchor="middle">1580</text></g>
+<line x1="167.0" y1="880.0" x2="80.0" y2="880.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="167.0" y1="447.1" x2="80.0" y2="447.1" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="86.0" y1="880.0" x2="86.0" y2="447.1" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="86.0,447.1 83.1,453.5 88.9,453.5" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="86.0,880.0 88.9,873.6 83.1,873.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(86.0 663.5) rotate(-90.0)"><rect x="-17.9" y="-9.0" width="35.8" height="18.0" fill="#fff" rx="3"/><text x="0" y="4.3" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="600" fill="#5B3FD6" text-anchor="middle">1170</text></g>
+<line x1="167.0" y1="880.0" x2="40.0" y2="880.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="167.0" y1="587.7" x2="40.0" y2="587.7" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="46.0" y1="880.0" x2="46.0" y2="587.7" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="46.0,587.7 43.1,594.1 48.9,594.1" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="46.0,880.0 48.9,873.6 43.1,873.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(46.0 733.9) rotate(-90.0)"><rect x="-14.4" y="-9.0" width="28.9" height="18.0" fill="#fff" rx="3"/><text x="0" y="4.3" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="600" fill="#5B3FD6" text-anchor="middle">790</text></g>
+<line x1="170.0" y1="883.0" x2="170.0" y2="916.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="577.0" y1="883.0" x2="577.0" y2="916.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="170.0" y1="910.0" x2="577.0" y2="910.0" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="577.0,910.0 570.6,907.1 570.6,912.9" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="170.0,910.0 176.4,912.9 176.4,907.1" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(373.5 910.0) rotate(0.0)"><rect x="-17.9" y="-9.0" width="35.8" height="18.0" fill="#fff" rx="3"/><text x="0" y="4.3" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="600" fill="#5B3FD6" text-anchor="middle">1100</text></g>
+<line x1="305.1" y1="325.7" x2="305.1" y2="308.7" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="441.9" y1="325.7" x2="441.9" y2="308.7" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="305.1" y1="314.7" x2="441.9" y2="314.7" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="441.9,314.7 435.6,311.8 435.6,317.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="305.1,314.7 311.4,317.6 311.4,311.8" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(373.5 314.7) rotate(0.0)"><rect x="-14.4" y="-9.0" width="28.9" height="18.0" fill="#fff" rx="3"/><text x="0" y="4.3" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="600" fill="#5B3FD6" text-anchor="middle">370</text></g>
+<line x1="232.9" y1="883.0" x2="232.9" y2="946.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="514.1" y1="883.0" x2="514.1" y2="946.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="232.9" y1="940.0" x2="514.1" y2="940.0" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="514.1,940.0 507.7,937.1 507.7,942.9" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="232.9,940.0 239.3,942.9 239.3,937.1" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(373.5 940.0) rotate(0.0)"><rect x="-56.2" y="-9.0" width="112.4" height="18.0" fill="#fff" rx="3"/><text x="0" y="4.3" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="600" fill="#5B3FD6" text-anchor="middle">760 bar centers</text></g>
+<text x="373.5" y="959.5" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="800" fill="#1F1B2E" text-anchor="middle">A · CAMERA WALL (from the bench)</text>
+<rect x="1010.0" y="850.4" width="407.0" height="29.6" rx="0" fill="#3A3646" stroke="#1F1B2E" stroke-width="1.4" opacity="1"/>
+<rect x="1010.0" y="140.0" width="407.0" height="710.4" rx="0" fill="#FBFAFE" stroke="#1F1B2E" stroke-width="1.4" opacity="1"/>
+<rect x="1010.0" y="140.0" width="14.1" height="710.4" rx="0" fill="#C9CBD6" stroke="#8A84A3" stroke-width="0.8" opacity="1"/>
+<rect x="1402.9" y="140.0" width="14.1" height="710.4" rx="0" fill="#C9CBD6" stroke="#8A84A3" stroke-width="0.8" opacity="1"/>
+<rect x="1010.0" y="836.3" width="407.0" height="14.1" rx="0" fill="#C9CBD6" stroke="#8A84A3" stroke-width="0.8" opacity="1"/>
+<rect x="1010.0" y="720.2" width="407.0" height="14.1" rx="0" fill="#C9CBD6" stroke="#8A84A3" stroke-width="0.8" opacity="1"/>
+<rect x="1010.0" y="495.9" width="407.0" height="14.1" rx="0" fill="#C9CBD6" stroke="#8A84A3" stroke-width="0.8" opacity="1"/>
+<rect x="1010.0" y="140.0" width="407.0" height="14.1" rx="0" fill="#C9CBD6" stroke="#8A84A3" stroke-width="0.8" opacity="1"/>
+<rect x="1010.0" y="189.0" width="25.9" height="368.1" rx="0" fill="#2B2B33" stroke="#1F1B2E" stroke-width="1.4" opacity="1"/>
+<circle cx="1023.0" cy="251.0" r="2.6" fill="#E8457E" stroke="#E8457E" stroke-width="1.0"/>
+<line x1="1023.0" y1="251.0" x2="976.7" y2="206.6" stroke="#E8457E" stroke-width="0.9"/>
+<text x="972.7" y="210.6" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="600" fill="#1F1B2E" text-anchor="end">43&quot; display (front)</text>
+<rect x="1028.5" y="624.0" width="159.8" height="89.5" rx="0" fill="#FFF1D6" stroke="#1F1B2E" stroke-width="1" opacity="1"/>
+<rect x="1017.0" y="718.3" width="392.9" height="1.9" rx="0" fill="#C9CBD6" stroke="#1F1B2E" stroke-width="1" opacity="1"/>
+<rect x="1176.5" y="824.5" width="74.0" height="22.2" rx="0" fill="#FFF1D6" stroke="#1F1B2E" stroke-width="1" opacity="1"/>
+<rect x="1269.0" y="765.3" width="129.5" height="81.4" rx="0" fill="#FFF1D6" stroke="#1F1B2E" stroke-width="1" opacity="1"/>
+<rect x="1084.0" y="791.2" width="74.0" height="55.5" rx="0" fill="#FFF1D6" stroke="#1F1B2E" stroke-width="1" opacity="1"/>
+<rect x="1183.9" y="802.3" width="44.4" height="14.8" rx="0" fill="#FFF1D6" stroke="#1F1B2E" stroke-width="1" opacity="1"/>
+<polygon points="1013.7,598.8 1054.4,598.8 1032.2,672.8 1032.2,680.2 1054.4,650.6 1013.7,650.6" fill="#2B2B33" stroke="#1F1B2E" stroke-width="1.0" stroke-linejoin="round" opacity="1"/>
+<circle cx="1032.2" cy="635.8" r="2.6" fill="#E8457E" stroke="#E8457E" stroke-width="1.0"/>
+<line x1="1032.2" y1="635.8" x2="961.9" y2="672.8" stroke="#E8457E" stroke-width="0.9"/>
+<text x="957.9" y="676.8" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="600" fill="#1F1B2E" text-anchor="end">pickup tray + chute</text>
+<circle cx="1102.5" cy="639.5" r="2.6" fill="#E8457E" stroke="#E8457E" stroke-width="1.0"/>
+<line x1="1102.5" y1="639.5" x2="1457.7" y2="547.0" stroke="#E8457E" stroke-width="0.9"/>
+<text x="1461.7" y="551.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="600" fill="#1F1B2E" text-anchor="start">Primera LX610 (output faces front)</text>
+<circle cx="1213.5" cy="835.6" r="2.6" fill="#E8457E" stroke="#E8457E" stroke-width="1.0"/>
+<line x1="1213.5" y1="835.6" x2="1457.7" y2="757.9" stroke="#E8457E" stroke-width="0.9"/>
+<text x="1461.7" y="761.9" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="600" fill="#1F1B2E" text-anchor="start">mini PC</text>
+<circle cx="1380.0" cy="791.2" r="2.6" fill="#E8457E" stroke="#E8457E" stroke-width="1.0"/>
+<line x1="1380.0" y1="791.2" x2="1457.7" y2="794.9" stroke="#E8457E" stroke-width="0.9"/>
+<text x="1461.7" y="798.9" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="600" fill="#1F1B2E" text-anchor="start">UPS + power distribution</text>
+<circle cx="1121.0" cy="819.0" r="2.6" fill="#E8457E" stroke="#E8457E" stroke-width="1.0"/>
+<line x1="1121.0" y1="819.0" x2="961.9" y2="757.9" stroke="#E8457E" stroke-width="0.9"/>
+<text x="957.9" y="761.9" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="600" fill="#1F1B2E" text-anchor="end">spare rolls</text>
+<rect x="1283.8" y="140.0" width="44.4" height="14.8" rx="0" fill="#2B2B33" stroke="#1F1B2E" stroke-width="1.4" opacity="1"/>
+<circle cx="1306.0" cy="147.4" r="2.6" fill="#E8457E" stroke="#E8457E" stroke-width="1.0"/>
+<line x1="1306.0" y1="147.4" x2="1457.7" y2="184.4" stroke="#E8457E" stroke-width="0.9"/>
+<text x="1461.7" y="188.4" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="600" fill="#1F1B2E" text-anchor="start">exhaust fan (roof)</text>
+<line x1="1065.5" y1="828.2" x2="1109.9" y2="739.4" stroke="#3AA0FF" stroke-width="1.4" stroke-dasharray="5 4"/>
+<line x1="1176.5" y1="828.2" x2="1220.9" y2="739.4" stroke="#3AA0FF" stroke-width="1.4" stroke-dasharray="5 4"/>
+<line x1="1287.5" y1="828.2" x2="1331.9" y2="739.4" stroke="#3AA0FF" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="1121.0" y="325.0" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="700" fill="#3AA0FF" text-anchor="middle">warm air rises → roof fan</text>
+<text x="1121.0" y="343.5" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="700" fill="#3AA0FF" text-anchor="middle">intake: plinth vents</text>
+<line x1="1007.0" y1="880.0" x2="964.0" y2="880.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="1007.0" y1="720.2" x2="964.0" y2="720.2" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="970.0" y1="880.0" x2="970.0" y2="720.2" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="970.0,720.2 967.1,726.6 972.9,726.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="970.0,880.0 972.9,873.6 967.1,873.6" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(970.0 800.1) rotate(-90.0)"><rect x="-35.3" y="-9.0" width="70.6" height="18.0" fill="#fff" rx="3"/><text x="0" y="4.3" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="600" fill="#5B3FD6" text-anchor="middle">432 shelf</text></g>
+<line x1="1010.0" y1="883.0" x2="1010.0" y2="916.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="1417.0" y1="883.0" x2="1417.0" y2="916.0" stroke="#8A84A3" stroke-width="0.8"/>
+<line x1="1010.0" y1="910.0" x2="1417.0" y2="910.0" stroke="#5B3FD6" stroke-width="1.0"/>
+<polygon points="1417.0,910.0 1410.6,907.1 1410.6,912.9" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<polygon points="1010.0,910.0 1016.4,912.9 1016.4,907.1" fill="#5B3FD6" stroke="#5B3FD6" stroke-width="0.5" stroke-linejoin="round" opacity="1"/>
+<g transform="translate(1213.5 910.0) rotate(0.0)"><rect x="-17.9" y="-9.0" width="35.8" height="18.0" fill="#fff" rx="3"/><text x="0" y="4.3" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="600" fill="#5B3FD6" text-anchor="middle">1100</text></g>
+<text x="1213.5" y="959.5" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="800" fill="#1F1B2E" text-anchor="middle">B · MACHINE SECTION (looking at the end wall)</text><rect x="12" y="12" width="1608" height="1032" fill="none" stroke="#1F1B2E" stroke-width="1.6"/><line x1="12" y1="978" x2="1620" y2="978" stroke="#1F1B2E" stroke-width="1.2"/><text x="28" y="1006" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="800" fill="#1F1B2E">MeSticker Photo Booth</text><text x="28" y="1028" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="12" fill="#8A84A3">Fabrication drawing set · units mm · do not scale drawings, use dimensions · tolerance ±2 mm unless noted</text><line x1="992" y1="978" x2="992" y2="1044" stroke="#1F1B2E" stroke-width="1"/><text x="1002" y="1000" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#8A84A3">SHEET</text><text x="1002" y="1026" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="800" fill="#1F1B2E">F-04</text><line x1="1082" y1="978" x2="1082" y2="1044" stroke="#1F1B2E" stroke-width="1"/><text x="1092" y="1000" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#8A84A3">TITLE</text><text x="1092" y="1026" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="800" fill="#1F1B2E">Inside elevations</text><line x1="1412" y1="978" x2="1412" y2="1044" stroke="#1F1B2E" stroke-width="1"/><text x="1422" y="1000" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#8A84A3">REV</text><text x="1422" y="1026" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="800" fill="#1F1B2E">A</text><line x1="1482" y1="978" x2="1482" y2="1044" stroke="#1F1B2E" stroke-width="1"/><text x="1492" y="1000" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#8A84A3">DATE</text><text x="1492" y="1026" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="800" fill="#1F1B2E">2026-10-24</text></svg>

@@ -1,0 +1,5 @@
+<!doctype html><html><head><meta charset="utf-8"><style>*{margin:0}body{width:2048px;height:2048px;overflow:hidden;background:linear-gradient(135deg,#FFE3F0 0%,#EDE4FF 50%,#DDF3FF 100%);position:relative}
+i{position:absolute;border-radius:50%;opacity:.85}</style></head><body><script>
+const c=['#7C5CFC','#FF6B9D','#FF9F43','#45E3FF','#FFD84D'];let s=7;const r=()=>(s=(s*16807)%2147483647)/2147483647;
+for(let k=0;k<160;k++){const e=document.createElement(r()<.5?'i':'b');const z=20+r()*90;e.style.cssText=`position:absolute;left:${r()*2048}px;top:${r()*2048}px;width:${z}px;height:${z*(r()<.5?1:.35)}px;background:${c[Math.floor(r()*5)]};border-radius:${r()<.6?'50%':'14px'};transform:rotate(${r()*180}deg);opacity:.8`;document.body.appendChild(e)}
+</script></body></html>
