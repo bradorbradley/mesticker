@@ -12,6 +12,7 @@ import Mascot from "./mascot";
 import BoothCamera from "./booth-camera";
 import OperatorPanel, { type BoothSettings, type GenStats } from "./operator-panel";
 import { u } from "./units";
+import { WAIT_GAMES, ReadyTakeover, type WaitGameId } from "./games/wait-games";
 
 type Step = "attract" | "style" | "camera" | "generating" | "reveal" | "printing" | "done";
 
@@ -74,6 +75,9 @@ export default function BoothApp() {
   const [settings, setSettings] = useState<BoothSettings | null>(null);
   const [operatorOpen, setOperatorOpen] = useState(false);
   const [paid, setPaid] = useState(false);
+  // Sticker is done but the guest is mid-game: the "It's ready!" takeover plays first.
+  const [stickerReady, setStickerReady] = useState(false);
+  const showReveal = useCallback(() => setStep("reveal"), []);
 
   useEffect(() => setSettings(loadSettings()), []);
   const updateSettings = useCallback((patch: Partial<BoothSettings>) => {
@@ -96,6 +100,7 @@ export default function BoothApp() {
     setPrintFile(null);
     setDigitalUrl(null);
     setPaid(false);
+    setStickerReady(false);
     setOperatorOpen(false);
     printCopy.current = null;
   }, []);
@@ -134,6 +139,7 @@ export default function BoothApp() {
 
   const generate = useCallback(async (image: string, style: string) => {
     printCopy.current = null;
+    setStickerReady(false);
     setStep("generating");
     setError(null);
     setSticker(null);
@@ -153,8 +159,7 @@ export default function BoothApp() {
       try {
         localStorage.setItem("mesticker-booth-gen-ms", String(data.ms));
       } catch {}
-      sounds.success();
-      setStep("reveal");
+      setStickerReady(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
       setStep("reveal");
@@ -257,7 +262,7 @@ export default function BoothApp() {
                 }}
               />
             )}
-            {step === "generating" && <Generating photo={photo} />}
+            {step === "generating" && <Generating photo={photo} ready={stickerReady} onReveal={showReveal} />}
             {step === "reveal" && (
               <Reveal
                 sticker={sticker}
@@ -525,7 +530,8 @@ function StylePicker({ selected, onPick }: { selected: string | null; onPick: (i
 
 // ================================================================ generating
 
-function Generating({ photo }: { photo: string | null }) {
+function Generating({ photo, ready, onReveal }: { photo: string | null; ready: boolean; onReveal: () => void }) {
+  const [game, setGame] = useState<WaitGameId>(() => WAIT_GAMES[Math.floor(Math.random() * WAIT_GAMES.length)].id);
   const [line, setLine] = useState(0);
   const [progress, setProgress] = useState(0);
   useEffect(() => {
@@ -541,40 +547,50 @@ function Generating({ photo }: { photo: string | null }) {
     }, 200);
     return () => clearInterval(id);
   }, []);
+  const Game = WAIT_GAMES.find((g) => g.id === game)!.Comp;
 
   return (
-    <Split>
-      <div className="relative flex items-center justify-center landscape:h-full landscape:w-[40%] portrait:w-full portrait:min-h-0 portrait:flex-1">
-        <Mascot className="h-[85%] max-h-full" mood="working" />
-      </div>
-      <div className="flex flex-col landscape:w-[46%] portrait:w-full portrait:items-center portrait:text-center" style={{ gap: u(2) }}>
+    <div className="relative flex h-full w-full flex-col" style={{ padding: `0 ${u(3)} ${u(1)}`, gap: u(0.6) }}>
+      {/* sticker progress + game picker */}
+      <div className="card flex shrink-0 flex-wrap items-center" style={{ gap: `${u(0.6)} ${u(1.2)}`, padding: `${u(0.5)} ${u(1)}` }}>
         {photo && (
-          <motion.div
-            className="card relative overflow-hidden short:hidden"
-            style={{ width: u(16), rotate: -4 }}
-            animate={{ rotate: [-4, 4, -4] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photo} alt="" className="aspect-square w-full object-cover" style={{ borderRadius: u(1.6) }} />
-            <motion.div
-              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/70 to-transparent"
-              animate={{ x: ["-100%", "100%"] }}
-              transition={{ duration: 1.3, repeat: Infinity, ease: "easeInOut" }}
-            />
-          </motion.div>
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photo} alt="" className="shrink-0 object-cover" style={{ width: `max(36px, ${u(4)})`, height: `max(36px, ${u(4)})`, borderRadius: u(1) }} />
         )}
-        <AnimatePresence mode="wait">
-          <motion.h2 key={line} className="t-h2" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}>
-            {LOADING_LINES[line]}
-          </motion.h2>
-        </AnimatePresence>
-        <div className="w-full overflow-hidden rounded-full bg-white shadow-inner" style={{ height: `max(12px, ${u(1.4)})` }}>
-          <motion.div className="h-full rounded-full bg-gradient-to-r from-[var(--purple)] to-[var(--pink)]" animate={{ width: `${progress * 100}%` }} />
+        <div className="flex min-w-[160px] flex-1 items-center" style={{ gap: u(1) }}>
+          <span className="t-body shrink-0 font-bold text-[var(--ink)]">{ready ? "🎉 Ready!" : LOADING_LINES[line]}</span>
+          <div className="h-3 flex-1 overflow-hidden rounded-full bg-[var(--lav)]">
+            <motion.div className="h-full rounded-full bg-gradient-to-r from-[var(--purple)] to-[var(--pink)]" animate={{ width: `${(ready ? 1 : progress) * 100}%` }} />
+          </div>
         </div>
-        <p className="t-body">Hang tight — about 20 seconds.</p>
+        <nav className="flex flex-wrap" style={{ gap: u(0.5) }}>
+          {WAIT_GAMES.map((g) => (
+            <button
+              key={g.id}
+              className={cn("chip min-h-[36px] whitespace-nowrap", g.id === game ? "bg-[var(--purple)] text-white" : "bg-[var(--lav)] text-[var(--ink)]")}
+              onClick={() => {
+                sounds.tap();
+                setGame(g.id);
+              }}
+            >
+              <span className="max-[700px]:hidden">{g.label}</span>
+              <span className="min-[701px]:hidden">{g.short}</span>
+            </button>
+          ))}
+        </nav>
       </div>
-    </Split>
+
+      {/* play while you wait */}
+      <div className="relative min-h-0 flex-1">
+        <AnimatePresence mode="wait">
+          <motion.div key={game} className="absolute inset-0" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            <Game />
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      <AnimatePresence>{ready && <ReadyTakeover onGo={onReveal} />}</AnimatePresence>
+    </div>
   );
 }
 
