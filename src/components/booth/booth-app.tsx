@@ -493,7 +493,7 @@ function StylePicker({ selected, onPick }: { selected: string | null; onPick: (i
         {BOOTH_STYLES.map((s, i) => (
           <motion.button
             key={s.id}
-            className={cn("card relative flex min-h-0 min-w-0 flex-col overflow-hidden text-left", selected === s.id && "outline outline-[6px] outline-[var(--purple)]")}
+            className={cn("card relative block min-h-0 min-w-0 overflow-hidden text-left", selected === s.id && "outline outline-[6px] outline-[var(--purple)]")}
             style={{ padding: u(0.6), rotate: i % 2 ? 1.2 : -1.2 }}
             initial={{ opacity: 0, y: 30, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -501,7 +501,9 @@ function StylePicker({ selected, onPick }: { selected: string | null; onPick: (i
             whileTap={{ scale: 0.94, rotate: 0 }}
             onClick={() => onPick(s.id)}
           >
-            <div className="relative min-h-0 flex-1 overflow-hidden" style={{ borderRadius: u(1.5), background: CARD_TINTS[i % CARD_TINTS.length] }}>
+            {/* inner wrapper: some older browsers won't lay out a <button> as a flex box */}
+            <div className="flex h-full w-full flex-col">
+            <div className="relative min-h-0 w-full flex-1 overflow-hidden" style={{ borderRadius: u(1.5), background: CARD_TINTS[i % CARD_TINTS.length] }}>
               {s.id === "random" ? (
                 <div className="flex h-full items-center justify-center">
                   <motion.span
@@ -515,11 +517,12 @@ function StylePicker({ selected, onPick }: { selected: string | null; onPick: (i
                 </div>
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={s.previewImage} alt={s.name} className="absolute inset-0 h-full w-full object-cover object-[center_25%]" />
+                <img src={s.previewImage} alt={s.name} className="absolute left-0 top-0 h-full w-full object-cover object-[center_25%]" />
               )}
             </div>
-            <div className="t-h3 truncate text-center" style={{ padding: `${u(0.6)} ${u(0.4)} ${u(0.2)}` }}>
+            <div className="t-h3 w-full truncate text-center" style={{ padding: `${u(0.6)} ${u(0.4)} ${u(0.2)}` }}>
               {s.id === "random" ? "Surprise me!" : s.name}
+            </div>
             </div>
           </motion.button>
         ))}

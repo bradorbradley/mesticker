@@ -25,24 +25,71 @@ export default function BoothCamera({
   const [flash, setFlash] = useState(false);
   const [shot, setShot] = useState<string | null>(null);
 
+  const [attempt, setAttempt] = useState(0);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Start the camera; explain clearly when it can't, and give up waiting after 10s.
   useEffect(() => {
     let cancelled = false;
-    navigator.mediaDevices
-      ?.getUserMedia({ video: { facingMode: "user", width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false })
-      .then((stream) => {
-        if (cancelled) return stream.getTracks().forEach((t) => t.stop());
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => {});
-        }
-      })
-      .catch(() => setError("Camera isn't available. Ask staff to check the camera permission."));
+    setError(null);
+    setReady(false);
+    const md = navigator.mediaDevices;
+    if (!md?.getUserMedia) {
+      setError("This browser can't use the camera. Open the booth in the latest Google Chrome.");
+      return;
+    }
+    const attach = (stream: MediaStream) => {
+      if (cancelled) return stream.getTracks().forEach((t) => t.stop());
+      streamRef.current = stream;
+      const v = videoRef.current;
+      if (v) {
+        v.srcObject = stream;
+        v.play().catch(() => {});
+      }
+    };
+    md.getUserMedia({ video: { facingMode: "user", width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false })
+      // older webcams/browsers can reject the HD request; plain video always works
+      .catch((e: DOMException) => (e?.name === "NotAllowedError" ? Promise.reject(e) : md.getUserMedia({ video: true, audio: false })))
+      .then(attach)
+      .catch((e: DOMException) => {
+        if (cancelled) return;
+        const name = e?.name;
+        setError(
+          name === "NotAllowedError" || name === "SecurityError"
+            ? "Camera is blocked. Click the camera icon in the address bar, choose Allow, then tap Try again."
+            : name === "NotFoundError" || name === "OverconstrainedError"
+              ? "No camera found. Check the camera is plugged in or switched on."
+              : name === "NotReadableError" || name === "AbortError"
+                ? "The camera is busy or switched off. Close Zoom/Teams/Camera apps, check the laptop's camera shutter or camera key (often F8), then tap Try again."
+                : `Camera didn't start (${name || "unknown error"}). Tap Try again.`
+        );
+      });
+    const timeout = setTimeout(() => {
+      if (!cancelled && !videoRef.current?.videoWidth) {
+        setError((cur) => cur ?? "The camera is taking too long. Check for an Allow prompt in the address bar, the laptop's camera shutter, or other apps using the camera.");
+      }
+    }, 10000);
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
     };
-  }, []);
+  }, [attempt]);
+
+  /** Fallback: use a photo file (also handy for testing without a camera). */
+  const loadPhotoFile = (file: File) => {
+    const img = new Image();
+    img.onload = () => {
+      const size = Math.min(img.width, img.height);
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = Math.min(size, 1024);
+      canvas.getContext("2d")!.drawImage(img, (img.width - size) / 2, (img.height - size) / 2, size, size, 0, 0, canvas.width, canvas.height);
+      setShot(canvas.toDataURL("image/jpeg", 0.9));
+      URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(file);
+  };
 
   const capture = useCallback(() => {
     const video = videoRef.current;
@@ -124,12 +171,36 @@ export default function BoothCamera({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={shot} alt="Your photo" className="h-full w-full object-cover" />
           ) : (
-            <video ref={videoRef} playsInline muted onLoadedData={() => setReady(true)} className="h-full w-full scale-x-[-1] object-cover" />
+            <video ref={videoRef} playsInline muted autoPlay onLoadedData={() => setReady(true)} onPlaying={() => setReady(true)} className="h-full w-full scale-x-[-1] object-cover" />
           )}
           {!ready && !shot && !error && (
             <div className="t-lead absolute inset-0 flex items-center justify-center">Warming up the camera…</div>
           )}
-          {error && <div className="t-lead absolute inset-0 flex items-center justify-center p-6 text-center text-[var(--pink)]">{error}</div>}
+          {error && !shot && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--lav)] p-6 text-center" style={{ gap: u(1.2) }}>
+              <div style={{ fontSize: u(4) }}>📷</div>
+              <div className="t-lead text-[var(--ink)]">{error}</div>
+              <div className="flex flex-wrap justify-center" style={{ gap: u(1) }}>
+                <button className="btn btn-main" onClick={() => setAttempt((a) => a + 1)}>
+                  Try again
+                </button>
+                <button className="btn btn-soft" onClick={() => fileRef.current?.click()}>
+                  Use a photo instead
+                </button>
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) loadPhotoFile(f);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+          )}
           <AnimatePresence>
             {count !== null && (
               <motion.div
