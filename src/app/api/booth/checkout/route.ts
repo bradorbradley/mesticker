@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
-import { BOOTH_PRICE_CENTS } from "@/lib/booth-config";
+import { DEFAULT_PRODUCT_ID, getProduct } from "@/lib/booth-config";
 
 /**
  * QR-code payment for the booth.
@@ -26,7 +26,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ free: true });
   }
   try {
-    const { styleId } = await request.json().catch(() => ({ styleId: "" }));
+    const { styleId, productId } = await request.json().catch(() => ({ styleId: "", productId: "" }));
+    // Price always comes from the server-side menu, never from the client.
+    const product = getProduct(productId) ?? getProduct(DEFAULT_PRODUCT_ID)!;
     const origin = appOrigin(request);
     const boothId = process.env.BOOTH_ID || "booth-1";
     const session = await getStripe().checkout.sessions.create({
@@ -36,15 +38,15 @@ export async function POST(request: NextRequest) {
           quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: BOOTH_PRICE_CENTS,
+            unit_amount: product.priceCents,
             product_data: {
-              name: "MeSticker sticker sheet",
-              description: "Printed right now at the booth",
+              name: `MeSticker ${product.name}`,
+              description: `${product.blurb}, printed right now at the booth`,
             },
           },
         },
       ],
-      metadata: { source: "booth", boothId, styleId: String(styleId || "") },
+      metadata: { source: "booth", boothId, styleId: String(styleId || ""), productId: product.id },
       payment_intent_data: { metadata: { source: "booth", boothId } },
       success_url: `${origin}/booth/paid`,
       cancel_url: `${origin}/booth/paid?canceled=1`,

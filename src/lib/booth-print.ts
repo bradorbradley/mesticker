@@ -4,8 +4,9 @@
  *   addStickerBorder → the sticker with a thick white die-cut border plus a
  *                      faint grey hairline, so the printer's auto-contour has
  *                      a visible edge to cut along on white paper.
- *   composePrintSheet → portrait 1170×2010 px (300 DPI): one big sticker on
- *                      top, four small ones below.
+ *   composePrintSheet → portrait 1170×2010 px (300 DPI): "sheet" = one big
+ *                      sticker on top, four small ones below; "big" = one
+ *                      3.7" sticker.
  *
  * Runs in the browser via Canvas, like compose-sheet-client.ts.
  */
@@ -69,12 +70,19 @@ function drawContained(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: 
   ctx.drawImage(img, x + (size - w) / 2, y + (size - h) / 2, w, h);
 }
 
-export async function composePrintSheet(borderedSrc: string): Promise<string> {
+export async function composePrintSheet(borderedSrc: string, layout: "big" | "sheet" = "sheet"): Promise<string> {
   const img = await loadImage(borderedSrc);
   const c = document.createElement("canvas");
   c.width = SHEET_W;
   c.height = SHEET_H;
   const ctx = c.getContext("2d")!;
+
+  if (layout === "big") {
+    // one sticker, as big as the sheet's width allows (~3.7")
+    const size = SHEET_W - 60;
+    drawContained(ctx, img, (SHEET_W - size) / 2, (SHEET_H - size) / 2, size);
+    return c.toDataURL("image/png");
+  }
 
   const margin = 30;
   const gap = 24;
