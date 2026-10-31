@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "qrcode";
 import { stylePresets } from "@/lib/presets";
-import { BOOTH_FREE_MODE, BOOTH_PRICE_LABEL, SHEETS_PER_CASSETTE, STICKERS_PER_SHEET } from "@/lib/booth-config";
+import { BOOTH_FREE_MODE, BOOTH_FROM_LABEL, BOOTH_PRODUCTS, DEFAULT_PRODUCT_ID, SHEETS_PER_CASSETTE, getProduct, priceLabel, type BoothProduct } from "@/lib/booth-config";
 import { addStickerBorder, composePrintSheet, downloadDataUrl } from "@/lib/booth-print";
 import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
@@ -25,7 +25,7 @@ const IDLE_SECONDS: Partial<Record<Step, number>> = {
   style: 60,
   camera: 75,
   reveal: 180,
-  done: 30,
+  done: 60,
 };
 
 const SETTINGS_KEY = "mesticker-booth-settings";
@@ -77,6 +77,15 @@ export default function BoothApp() {
   const [paid, setPaid] = useState(false);
   // Sticker is done but the guest is mid-game: the "It's ready!" takeover plays first.
   const [stickerReady, setStickerReady] = useState(false);
+  const [productId, setProductId] = useState<BoothProduct["id"]>(DEFAULT_PRODUCT_ID);
+  const [emailOn, setEmailOn] = useState(false);
+  const [autoEmailedTo, setAutoEmailedTo] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/booth/send")
+      .then((r) => r.json())
+      .then((d) => setEmailOn(!!d.email))
+      .catch(() => {});
+  }, []);
   const showReveal = useCallback(() => setStep("reveal"), []);
 
   useEffect(() => setSettings(loadSettings()), []);
@@ -101,6 +110,8 @@ export default function BoothApp() {
     setDigitalUrl(null);
     setPaid(false);
     setStickerReady(false);
+    setProductId(DEFAULT_PRODUCT_ID);
+    setAutoEmailedTo(null);
     setOperatorOpen(false);
     printCopy.current = null;
   }, []);
@@ -137,6 +148,23 @@ export default function BoothApp() {
       .catch(() => null);
   };
 
+  /** Bordered sticker → public URL for the guest's phone (QR / email). */
+  const uploadDigital = (img: string) =>
+    addStickerBorder(img)
+      .then((bordered) =>
+        fetch("/api/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: bordered }),
+        })
+      )
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.url) setDigitalUrl(d.url);
+        return (d.url as string | undefined) ?? null;
+      })
+      .catch(() => null);
+
   const generate = useCallback(async (image: string, style: string) => {
     printCopy.current = null;
     setStickerReady(false);
@@ -160,45 +188,57 @@ export default function BoothApp() {
         localStorage.setItem("mesticker-booth-gen-ms", String(data.ms));
       } catch {}
       setStickerReady(true);
+      uploadDigital(data.generatedImage);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
       setStep("reveal");
     }
   }, []);
 
-  // ---- printing: build file, hand it to the printer workflow, upload digital copy
-  const startPrint = useCallback(async () => {
-    if (!sticker) return;
-    setPaid(true);
-    setStep("printing");
-    try {
-      // Prefer the sharper print copy; don't hold the printer more than 30s for it.
-      const pending = printCopy.current;
-      const hq = pending ? await Promise.race([pending, new Promise<null>((r) => setTimeout(() => r(null), 30000))]) : null;
-      const bordered = await addStickerBorder(hq || sticker);
-      const sheet = await composePrintSheet(bordered);
-      setPrintFile(sheet);
-      downloadDataUrl(sheet, `mesticker-print-${Date.now()}.png`);
-      setSettings((s) => {
-        if (!s) return s;
-        const next = { ...s, sheetsLeft: Math.max(0, s.sheetsLeft - 1), salesToday: s.salesToday + 1 };
-        try {
-          localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
-        } catch {}
-        return next;
-      });
-      fetch("/api/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: bordered }),
-      })
-        .then((r) => r.json())
-        .then((d) => d.url && setDigitalUrl(d.url))
-        .catch(() => {});
-    } catch (e) {
-      console.error("print file failed", e);
-    }
-  }, [sticker]);
+  // ---- printing: build file(s), hand them to the printer workflow, send the digital copy
+  const startPrint = useCallback(
+    async (checkoutId?: string) => {
+      if (!sticker) return;
+      const product = getProduct(productId) ?? BOOTH_PRODUCTS[0];
+      setPaid(true);
+      setStep("printing");
+      try {
+        // Prefer the sharper print copy; don't hold the printer more than 30s for it.
+        const pending = printCopy.current;
+        const hq = pending ? await Promise.race([pending, new Promise<null>((r) => setTimeout(() => r(null), 30000))]) : null;
+        const bordered = await addStickerBorder(hq || sticker);
+        const sheet = await composePrintSheet(bordered, product.layout);
+        setPrintFile(sheet);
+        const stamp = Date.now();
+        for (let i = 1; i <= product.sheets; i++) {
+          downloadDataUrl(sheet, `mesticker-print-${stamp}${product.sheets > 1 ? `-${i}of${product.sheets}` : ""}.png`);
+        }
+        setSettings((s) => {
+          if (!s) return s;
+          const next = { ...s, sheetsLeft: Math.max(0, s.sheetsLeft - product.sheets), salesToday: s.salesToday + 1 };
+          try {
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+          } catch {}
+          return next;
+        });
+        // the sharp copy replaces the preview for the phone QR, then email it to whoever paid
+        const url = await uploadDigital(hq || sticker);
+        if (url && checkoutId && emailOn) {
+          fetch("/api/booth/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageUrl: url, sessionId: checkoutId }),
+          })
+            .then((r) => r.json())
+            .then((d) => d.sent && setAutoEmailedTo(d.to))
+            .catch(() => {});
+        }
+      } catch (e) {
+        console.error("print file failed", e);
+      }
+    },
+    [sticker, productId, emailOn]
+  );
 
   const outOfPaper = settings !== null && settings.sheetsLeft <= 0;
   const freeMode = settings?.freeMode ?? BOOTH_FREE_MODE;
@@ -276,11 +316,17 @@ export default function BoothApp() {
                   setPhoto(null);
                   setStep("camera");
                 }}
+                product={getProduct(productId) ?? BOOTH_PRODUCTS[0]}
+                sheetsLeft={settings?.sheetsLeft ?? SHEETS_PER_CASSETTE}
+                onProduct={(id) => {
+                  sounds.tap();
+                  setProductId(id);
+                }}
                 onPaid={startPrint}
               />
             )}
-            {step === "printing" && <Printing sheet={printFile} onDone={() => setStep("done")} />}
-            {step === "done" && <Done sticker={sticker} digitalUrl={digitalUrl} onFinish={reset} />}
+            {step === "printing" && <Printing sheet={printFile} sheets={(getProduct(productId) ?? BOOTH_PRODUCTS[0]).sheets} onDone={() => setStep("done")} />}
+            {step === "done" && <Done sticker={sticker} digitalUrl={digitalUrl} emailOn={emailOn} autoEmailedTo={autoEmailedTo} onFinish={reset} />}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -423,7 +469,7 @@ function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOf
             animate={{ rotate: [-3, 3, -3] }}
             transition={{ duration: 2.4, repeat: Infinity }}
           >
-            {freeMode ? "🎉 Free today!" : `${BOOTH_PRICE_LABEL} · ${STICKERS_PER_SHEET} stickers · 2 min`}
+            {freeMode ? "🎉 Free today!" : `Stickers from ${BOOTH_FROM_LABEL} · ready in 2 min`}
           </motion.span>
           <h1 className="t-hero">
             Turn yourself into a <span className="pop">sticker!</span>
@@ -608,6 +654,9 @@ function Reveal({
   onRetry,
   onOtherStyle,
   onRetake,
+  product,
+  sheetsLeft,
+  onProduct,
   onPaid,
 }: {
   sticker: string | null;
@@ -618,7 +667,10 @@ function Reveal({
   onRetry: () => void;
   onOtherStyle: () => void;
   onRetake: () => void;
-  onPaid: () => void;
+  product: BoothProduct;
+  sheetsLeft: number;
+  onProduct: (id: BoothProduct["id"]) => void;
+  onPaid: (checkoutId?: string) => void;
 }) {
   if (error || !sticker) {
     return (
@@ -666,15 +718,16 @@ function Reveal({
       </div>
 
       <div className="flex flex-col landscape:w-[44%] portrait:items-center portrait:text-center" style={{ gap: u(1.8) }}>
-        <h2 className="t-h2">
+        <h2 className="t-h2 short:hidden">
           Ta-da! <span className="pop">Love it?</span>
         </h2>
+        <ProductMenu selected={product.id} sheetsLeft={sheetsLeft} freeMode={freeMode} onPick={onProduct} />
         {freeMode ? (
-          <button className="btn btn-lg btn-main w-fit" onClick={onPaid}>
-            🖨️ Print my stickers
+          <button className="btn btn-lg btn-main w-fit" onClick={() => onPaid()}>
+            🖨️ Print my {product.name}
           </button>
         ) : (
-          <PayWithQr styleId={styleId} onPaid={onPaid} />
+          <PayWithQr key={product.id} styleId={styleId} product={product} onPaid={onPaid} />
         )}
         <div className="flex flex-wrap portrait:justify-center" style={{ gap: u(1) }}>
           {canRetry && (
@@ -696,7 +749,58 @@ function Reveal({
   );
 }
 
-function PayWithQr({ styleId, onPaid }: { styleId: string | null; onPaid: () => void }) {
+/** The menu: what the PixCut S1 can make from a sheet. */
+function ProductMenu({
+  selected,
+  sheetsLeft,
+  freeMode,
+  onPick,
+}: {
+  selected: BoothProduct["id"];
+  sheetsLeft: number;
+  freeMode: boolean;
+  onPick: (id: BoothProduct["id"]) => void;
+}) {
+  return (
+    <div className="grid w-full grid-cols-3" style={{ gap: u(1) }}>
+      {BOOTH_PRODUCTS.map((p) => {
+        const soldOut = p.sheets > sheetsLeft;
+        const on = p.id === selected;
+        return (
+          <motion.button
+            key={p.id}
+            disabled={soldOut}
+            className={cn("card relative block text-center disabled:opacity-40", on && "outline outline-[5px] outline-[var(--purple)]")}
+            style={{ padding: `${u(1)} ${u(0.6)} ${u(0.8)}` }}
+            animate={{ scale: on ? 1.04 : 1 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => onPick(p.id)}
+          >
+            {p.tag && (
+              <span className="chip absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap bg-[var(--yellow)] text-[var(--ink)]" style={{ fontSize: `max(11px, ${u(1)})` }}>
+                {p.tag}
+              </span>
+            )}
+            <div className="short:hidden" style={{ fontSize: u(2.6), lineHeight: 1.1 }}>{p.emoji}</div>
+            <div className="t-h3" style={{ fontSize: `max(14px, ${u(1.6)})` }}>
+              {p.name}
+            </div>
+            <div className="t-body short:hidden" style={{ fontSize: `max(11px, ${u(1.05)})` }}>
+              {soldOut ? "Not enough paper" : p.blurb}
+            </div>
+            {!freeMode && (
+              <div className="font-fun font-bold text-[var(--purple)]" style={{ fontSize: `max(16px, ${u(2.2)})` }}>
+                {priceLabel(p.priceCents)}
+              </div>
+            )}
+          </motion.button>
+        );
+      })}
+    </div>
+  );
+}
+
+function PayWithQr({ styleId, product, onPaid }: { styleId: string | null; product: BoothProduct; onPaid: (checkoutId?: string) => void }) {
   const [qr, setQr] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "waiting" | "free" | "error">("loading");
   const paidRef = useRef(false);
@@ -709,7 +813,7 @@ function PayWithQr({ styleId, onPaid }: { styleId: string | null; onPaid: () => 
         const res = await fetch("/api/booth/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ styleId }),
+          body: JSON.stringify({ styleId, productId: product.id }),
         });
         const data = await res.json();
         if (!alive) return;
@@ -725,7 +829,7 @@ function PayWithQr({ styleId, onPaid }: { styleId: string | null; onPaid: () => 
               paidRef.current = true;
               clearInterval(poll);
               sounds.success();
-              onPaid();
+              onPaid(data.id);
             }
           } catch {}
         }, 2000);
@@ -737,12 +841,12 @@ function PayWithQr({ styleId, onPaid }: { styleId: string | null; onPaid: () => 
       alive = false;
       if (poll) clearInterval(poll);
     };
-  }, [styleId, onPaid]);
+  }, [styleId, product.id, onPaid]);
 
   if (state === "free") {
     return (
-      <button className="btn btn-lg btn-main w-fit" onClick={onPaid}>
-        🖨️ Print my stickers
+      <button className="btn btn-lg btn-main w-fit" onClick={() => onPaid()}>
+        🖨️ Print my {product.name}
       </button>
     );
   }
@@ -763,10 +867,10 @@ function PayWithQr({ styleId, onPaid }: { styleId: string | null; onPaid: () => 
       </div>
       <div className="flex flex-col text-left" style={{ gap: u(0.5) }}>
         <div className="font-fun font-bold" style={{ fontSize: u(4.2), lineHeight: 1 }}>
-          {BOOTH_PRICE_LABEL}
+          {priceLabel(product.priceCents)}
         </div>
         <div className="t-h3">📱 Scan to pay</div>
-        <div className="t-body">{STICKERS_PER_SHEET} stickers · Apple Pay, Google Pay, card</div>
+        <div className="t-body">{product.name} · Apple Pay, Google Pay, card</div>
         {state === "waiting" && (
           <motion.div className="t-body text-[#15803d]" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.6, repeat: Infinity }}>
             ● Printing starts automatically
@@ -779,8 +883,9 @@ function PayWithQr({ styleId, onPaid }: { styleId: string | null; onPaid: () => 
 
 // ================================================================ printing
 
-function Printing({ sheet, onDone }: { sheet: string | null; onDone: () => void }) {
-  const [left, setLeft] = useState(PRINT_SECONDS);
+function Printing({ sheet, sheets, onDone }: { sheet: string | null; sheets: number; onDone: () => void }) {
+  const total = PRINT_SECONDS * sheets;
+  const [left, setLeft] = useState(total);
   useEffect(() => {
     const id = setInterval(() => setLeft((s) => s - 1), 1000);
     return () => clearInterval(id);
@@ -795,11 +900,13 @@ function Printing({ sheet, onDone }: { sheet: string | null; onDone: () => void 
         <h2 className="t-h2">
           Printing your <span className="pop">stickers…</span>
         </h2>
-        <p className="t-lead">Printing, then cutting each one out. About {Math.max(10, Math.ceil(left / 10) * 10)} seconds.</p>
+        <p className="t-lead">
+          {sheets > 1 ? `${sheets} sheets: printing` : "Printing"}, then cutting each one out. About {Math.max(10, Math.ceil(left / 10) * 10)} seconds.
+        </p>
         <div className="w-full overflow-hidden rounded-full bg-white shadow-inner" style={{ height: `max(12px, ${u(1.4)})` }}>
           <motion.div
             className="h-full rounded-full bg-gradient-to-r from-[var(--cyan)] to-[var(--green)]"
-            animate={{ width: `${((PRINT_SECONDS - left) / PRINT_SECONDS) * 100}%` }}
+            animate={{ width: `${((total - left) / total) * 100}%` }}
           />
         </div>
         <button className="btn btn-lg btn-main w-fit" onClick={onDone}>
@@ -830,17 +937,55 @@ function Printing({ sheet, onDone }: { sheet: string | null; onDone: () => void 
 
 // ================================================================ done
 
-function Done({ sticker, digitalUrl, onFinish }: { sticker: string | null; digitalUrl: string | null; onFinish: () => void }) {
+function Done({
+  sticker,
+  digitalUrl,
+  emailOn,
+  autoEmailedTo,
+  onFinish,
+}: {
+  sticker: string | null;
+  digitalUrl: string | null;
+  emailOn: boolean;
+  autoEmailedTo: string | null;
+  onFinish: () => void;
+}) {
   const [qr, setQr] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [sendState, setSendState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [sentTo, setSentTo] = useState<string | null>(null);
+
   useEffect(() => {
-    if (digitalUrl) QRCode.toDataURL(digitalUrl, { width: 420, margin: 1 }).then(setQr).catch(() => {});
+    if (!digitalUrl) return;
+    const page = `${location.origin}/booth/get?u=${encodeURIComponent(digitalUrl)}`;
+    QRCode.toDataURL(page, { width: 420, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } }).then(setQr).catch(() => {});
   }, [digitalUrl]);
+
+  const send = async () => {
+    if (!digitalUrl || !email) return;
+    setSendState("sending");
+    try {
+      const r = await fetch("/api/booth/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: digitalUrl, email }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.sent) throw new Error();
+      setSentTo(d.to);
+      setSendState("sent");
+      setEmail("");
+      sounds.success();
+    } catch {
+      setSendState("error");
+    }
+  };
 
   return (
     <div className="relative h-full w-full">
       <Confetti />
       <Split>
-        <div className="relative flex items-center justify-center landscape:h-full landscape:w-[40%] portrait:w-full portrait:min-h-0 portrait:flex-1">
+        <div className="relative flex items-center justify-center short:hidden landscape:h-full landscape:w-[34%] portrait:w-full portrait:min-h-0 portrait:flex-1">
           {sticker && (
             <motion.img
               src={sticker}
@@ -851,21 +996,67 @@ function Done({ sticker, digitalUrl, onFinish }: { sticker: string | null; digit
             />
           )}
         </div>
-        <div className="flex flex-col landscape:w-[46%] portrait:items-center portrait:text-center" style={{ gap: u(1.8) }}>
-          <h2 className="t-hero short:!text-[calc(var(--u)*3.3)]">
+        <div className="flex flex-col landscape:w-[54%] short:!w-full portrait:items-center portrait:text-center" style={{ gap: u(1.4) }}>
+          <h2 className="t-h2">
             Peel, stick, <span className="pop">show off!</span>
           </h2>
-          <p className="t-lead">Grab your sheet from the tray. Thanks for stopping by! 💜</p>
-          {qr && (
-            <div className="card flex w-fit items-center text-left" style={{ gap: u(1.4), padding: `${u(1)} ${u(1.8)} ${u(1)} ${u(1)}` }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={qr} alt="Scan for digital copy" style={{ width: `max(96px, ${u(11)})`, height: `max(96px, ${u(11)})` }} />
-              <div>
-                <div className="t-h3">Want the digital copy?</div>
-                <div className="t-body">Scan to save it to your phone</div>
+          <p className="t-lead short:hidden">Grab your stickers from the tray, and take the pics with you 👇</p>
+
+          <div className="card flex w-full flex-wrap items-center text-left portrait:justify-center" style={{ gap: u(1.6), padding: u(1.4) }}>
+            {/* phone QR */}
+            <div className="flex items-center" style={{ gap: u(1.2) }}>
+              <div className="flex shrink-0 items-center justify-center bg-white" style={{ width: `max(104px, ${u(12)})`, height: `max(104px, ${u(12)})` }}>
+                {qr ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={qr} alt="Scan to save" className="h-full w-full" />
+                ) : (
+                  <motion.span style={{ fontSize: u(3) }} animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
+                    ✨
+                  </motion.span>
+                )}
+              </div>
+              <div style={{ maxWidth: "15em" }}>
+                <div className="t-h3">📲 Save to your phone</div>
+                <div className="t-body">Scan with your camera, then tap Save or text it to friends.</div>
               </div>
             </div>
-          )}
+
+            {/* email */}
+            {emailOn && (
+              <div className="flex min-w-[240px] flex-1 flex-col" style={{ gap: u(0.6) }}>
+                <div className="t-h3">📧 Email me the pics</div>
+                {autoEmailedTo && <div className="t-body text-[#15803d]">✓ Sent to {autoEmailedTo}</div>}
+                {sendState === "sent" ? (
+                  <div className="t-body text-[#15803d]">✓ Sent to {sentTo}! Check your inbox.</div>
+                ) : (
+                  <form
+                    className="flex"
+                    style={{ gap: u(0.6) }}
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      send();
+                    }}
+                  >
+                    <input
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      placeholder="you@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="t-body min-w-0 flex-1 rounded-full border-2 border-[#e4dcff] bg-white px-4 py-2 text-[var(--ink)] outline-none focus:border-[var(--purple)]"
+                      style={{ userSelect: "text" }}
+                    />
+                    <button className="btn btn-main" disabled={!email || !digitalUrl || sendState === "sending"}>
+                      {sendState === "sending" ? "Sending…" : "Send"}
+                    </button>
+                  </form>
+                )}
+                {sendState === "error" && <div className="t-body text-[var(--pink)]">Couldn&apos;t send. Check the address and try again.</div>}
+              </div>
+            )}
+          </div>
+
           <button className="btn btn-soft w-fit" onClick={onFinish}>
             Done
           </button>

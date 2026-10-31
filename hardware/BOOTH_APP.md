@@ -18,6 +18,16 @@ for the PixCut S1.
 
 Any screen left untouched for ~1 minute returns to the attract screen.
 
+## Menu (what the PixCut S1 makes from a 4×7" sheet)
+
+| Item | What | Sheets | Price |
+|---|---|---|---|
+| Big Sticker | one 3.7" sticker | 1 | $12 |
+| Sticker Sheet | 1 big (2.7") + 4 minis (1.8") | 1 | $20 |
+| Party Pack | 2 sticker sheets, 10 stickers | 2 | $30 |
+
+Paper + ribbon ≈ $0.60/sheet; AI ≈ $0.05/guest. Every purchase includes the digital copy (QR to phone, email).
+
 ## Printing (for now: one click by staff)
 
 Liene has no API, so for the pilot:
@@ -58,7 +68,8 @@ automatically.
 
 | Var | What |
 |---|---|
-| `NEXT_PUBLIC_BOOTH_PRICE_CENTS` | Price per sheet, default `2000` ($20) |
+| `NEXT_PUBLIC_BOOTH_PRICES` | Menu prices in cents, default `big:1200,sheet:2000,party:3000` |
+| `RESEND_API_KEY` + `BOOTH_EMAIL_FROM` | Turns on "Email me the pics" (domain must be verified in Resend) |
 | `NEXT_PUBLIC_BOOTH_FREE_MODE` | `1` = no payment (demos) |
 | `BOOTH_IMAGE_PROVIDER` | `openai` (default), `gemini` (Nano Banana 2) or `fal` (FLUX Kontext) |
 | `GEMINI_API_KEY` / `FAL_KEY` | Keys for the alternative models |
