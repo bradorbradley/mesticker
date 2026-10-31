@@ -5,26 +5,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import { u } from "../units";
-import TicTacToe from "./tic-tac-toe";
-import SnapToss from "./snap-toss";
-import SnapAttack from "./snap-attack";
-import SnapRig from "../snap-rig";
+import { WAIT_GAMES as GAMES, ReadyTakeover, type WaitGameId } from "./wait-games";
 
 /**
  * Game Lab — the loading-screen mini-games in isolation, with a fake
  * "your sticker is cooking" bar so you can feel the real wait.
  */
 
-const GAMES = [
-  { id: "ttt", label: "⭕ Tic-Tac-Toe", Comp: TicTacToe },
-  { id: "toss", label: "🎯 Snap Toss", Comp: SnapToss },
-  { id: "attack", label: "📸 Snap Attack", Comp: SnapAttack },
-] as const;
 
 const WAIT_MS = 25000;
 
 export default function GameLab() {
-  const [game, setGame] = useState<(typeof GAMES)[number]["id"]>("ttt");
+  const [game, setGame] = useState<WaitGameId>("ttt");
   const [started, setStarted] = useState(() => Date.now());
   const [progress, setProgress] = useState(0);
 
@@ -39,23 +31,9 @@ export default function GameLab() {
   // When the sticker is ready the game steps aside on its own:
   // a 3-second "it's ready!" moment, then straight to the reveal.
   const [phase, setPhase] = useState<"playing" | "ready" | "reveal">("playing");
-  const [count, setCount] = useState(3);
   useEffect(() => {
-    if (ready && phase === "playing") {
-      setPhase("ready");
-      setCount(3);
-      sounds.success();
-    }
+    if (ready && phase === "playing") setPhase("ready");
   }, [ready, phase]);
-  useEffect(() => {
-    if (phase !== "ready") return;
-    if (count <= 0) {
-      setPhase("reveal");
-      return;
-    }
-    const id = setTimeout(() => setCount((c) => c - 1), 1000);
-    return () => clearTimeout(id);
-  }, [phase, count]);
   const restart = () => {
     setPhase("playing");
     setStarted(Date.now());
@@ -118,54 +96,7 @@ export default function GameLab() {
           )}
         </AnimatePresence>
 
-        {/* "It's ready!" takeover */}
-        <AnimatePresence>
-          {phase === "ready" && (
-            <motion.button
-              key="ready"
-              className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(245,241,255,0.88)] backdrop-blur-sm landscape:flex-row portrait:flex-col"
-              style={{ gap: u(3) }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setPhase("reveal")}
-            >
-              <SnapRig expression="happy" mood="excited" cheerKey={1} className="h-[42vh] short:h-[50vh] portrait:h-[30vh]" />
-              <div className="flex flex-col items-center text-center" style={{ gap: u(1.5) }}>
-                <motion.h2 className="t-hero" initial={{ scale: 0.4 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 14 }}>
-                  It&apos;s <span className="pop">ready!</span>
-                </motion.h2>
-                <div className="relative flex items-center justify-center" style={{ width: u(9), height: u(9) }}>
-                  <svg viewBox="0 0 100 100" className="absolute inset-0 -rotate-90">
-                    <circle cx="50" cy="50" r="44" stroke="#e4dcff" strokeWidth="9" fill="none" />
-                    <motion.circle
-                      cx="50"
-                      cy="50"
-                      r="44"
-                      stroke="url(#ring)"
-                      strokeWidth="9"
-                      fill="none"
-                      strokeLinecap="round"
-                      initial={{ pathLength: 1 }}
-                      animate={{ pathLength: 0 }}
-                      transition={{ duration: 3, ease: "linear" }}
-                    />
-                    <defs>
-                      <linearGradient id="ring">
-                        <stop offset="0" stopColor="#7c5cfc" />
-                        <stop offset="1" stopColor="#ff6b9d" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                  <span className="font-fun font-bold" style={{ fontSize: u(4) }}>
-                    {Math.max(count, 1)}
-                  </span>
-                </div>
-                <span className="t-body">Taking you to your sticker…</span>
-              </div>
-            </motion.button>
-          )}
-        </AnimatePresence>
+        <AnimatePresence>{phase === "ready" && <ReadyTakeover onGo={() => setPhase("reveal")} />}</AnimatePresence>
       </main>
     </div>
   );
