@@ -132,3 +132,6 @@
 .booth {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
+
+/* Older browsers (Chrome < 87) don't know `inset`; spell it out. */
+.booth .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
