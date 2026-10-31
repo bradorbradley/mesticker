@@ -134,13 +134,15 @@ const quality = (v: string | undefined, fallback: Quality): Quality =>
   v === "low" || v === "medium" || v === "high" ? v : fallback;
 
 /**
- * Booth tiers. OpenAI's quality setting is the big speed lever:
- *   preview — what the guest waits for: "low" (~2-3x faster than medium)
- *   print   — made in the background while they decide/pay: "medium"
- * Gemini / FLUX have no quality knob, so the preview is already the print.
+ * Booth tiers. The preview is generated exactly like the main web app
+ * (same prompt, quality "medium") so stickers look the same everywhere.
+ *   BOOTH_PREVIEW_QUALITY — override the preview quality (e.g. "low" = faster, rougher)
+ *   BOOTH_PRINT_QUALITY   — if set (e.g. "high"), a second, sharper copy is made in
+ *                           the background for printing; unset = print the preview.
+ * Gemini / FLUX have no quality knob, so there is never a separate print copy.
  */
 export function hasPrintTier() {
-  return activeProvider() === "openai";
+  return activeProvider() === "openai" && !!process.env.BOOTH_PRINT_QUALITY;
 }
 
 export async function generateSticker(image: string, prompt: string, tier: "preview" | "print" = "preview"): Promise<ProviderResult> {
@@ -150,7 +152,7 @@ export async function generateSticker(image: string, prompt: string, tier: "prev
   if (provider === "gemini") out = await generateGemini(image, prompt);
   else if (provider === "fal") out = await generateFal(image, prompt);
   else {
-    const q = tier === "print" ? quality(process.env.BOOTH_PRINT_QUALITY, "medium") : quality(process.env.BOOTH_PREVIEW_QUALITY, "low");
+    const q = tier === "print" ? quality(process.env.BOOTH_PRINT_QUALITY, "high") : quality(process.env.BOOTH_PREVIEW_QUALITY, "medium");
     out = { image: await generateAtQuality(image, prompt, q), model: `${process.env.OPENAI_IMAGE_MODEL || "gpt-image"} (${q})` };
   }
   return { ...out, provider, ms: Date.now() - t0 };
