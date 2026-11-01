@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "^2.4.0",
     "@neondatabase/serverless": "^1.0.2",
     "@radix-ui/react-dialog": "^1.1.0",
     "@radix-ui/react-progress": "^1.1.0",
@@ -22,6 +23,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.0.0",
     "lucide-react": "^0.468.0",
+    "mcp-handler": "^2.3.0",
     "next": "^15.5.12",
     "next-auth": "^5.0.0-beta.30",
     "openai": "^6.22.0",
@@ -31,7 +33,8 @@
     "react-dom": "^19.0.0",
     "sharp": "^0.34.5",
     "stripe": "^17.5.0",
-    "tailwind-merge": "^2.6.0"
+    "tailwind-merge": "^2.6.0",
+    "zod": "^4.2.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
