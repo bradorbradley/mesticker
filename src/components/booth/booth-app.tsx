@@ -21,7 +21,34 @@ type Step = "attract" | "style" | "camera" | "generating" | "reveal" | "printing
 type VariantKind = Exclude<SheetKind, "same">;
 /** 4 extra stickers per pack: null = still making, false = failed */
 type Variants = Record<VariantKind, (string | null | false)[]>;
-const EMPTY_VARIANTS: Variants = { pose: [null, null, null, null], style: [null, null, null, null] };
+const EMPTY_VARIANTS: Variants = { pose: [null, null, null, null], mix: [null, null, null, null] };
+
+/** Bordered copies are slow to make; reuse them between the live preview and printing. */
+const borderCache = new Map<string, Promise<string>>();
+const bordered = (src: string) => {
+  if (!borderCache.has(src)) {
+    if (borderCache.size > 40) borderCache.clear();
+    borderCache.set(src, addStickerBorder(src));
+  }
+  return borderCache.get(src)!;
+};
+
+/**
+ * The sheet(s) for a product, exactly as they will print. Pending extras are
+ * null (drawn as placeholders) when previewing; failed ones use the main sticker.
+ */
+async function buildSheets(product: BoothProduct, main: string, variants: Variants, preview: boolean) {
+  const mainB = await bordered(main);
+  return Promise.all(
+    product.sheets.map(async (kind) => {
+      if (kind === "same") return composePrintSheet([mainB], "collage8");
+      const extras = await Promise.all(
+        variants[kind].map((v) => (v ? bordered(v) : v === null && preview ? Promise.resolve(null) : Promise.resolve(mainB)))
+      );
+      return composePrintSheet([mainB, ...extras], "hero5");
+    })
+  );
+}
 
 const BOOTH_STYLES = stylePresets.filter((p) => p.id !== "custom");
 const MAX_TRIES = 3; // generations per guest
@@ -96,11 +123,10 @@ export default function BoothApp() {
   }, []);
   const showReveal = useCallback(() => setStep("reveal"), []);
 
-  // ---- Pose / Style packs: 4 extra stickers made only when a pack is picked
-  const [resolvedStyle, setResolvedStyle] = useState<string | null>(null);
+  // ---- Pose / Mix packs: 8 extra stickers, started the moment the photo is taken
   const [variants, setVariantsState] = useState<Variants>(EMPTY_VARIANTS);
   const variantsRef = useRef<Variants>(EMPTY_VARIANTS);
-  const variantJobs = useRef<Partial<Record<VariantKind, Promise<unknown>>>>({});
+  const variantJob = useRef<Promise<unknown> | null>(null);
   const genId = useRef(0);
   const setVariant = (kind: VariantKind, i: number, v: string | false, id: number) => {
     if (id !== genId.current) return; // a newer photo/style replaced this one
@@ -110,7 +136,7 @@ export default function BoothApp() {
   };
   const resetVariants = () => {
     genId.current += 1;
-    variantJobs.current = {};
+    variantJob.current = null;
     variantsRef.current = EMPTY_VARIANTS;
     setVariantsState(EMPTY_VARIANTS);
   };
@@ -193,44 +219,43 @@ export default function BoothApp() {
       })
       .catch(() => null);
 
-  /** Start (once) the 4 extra stickers for a pose or style sheet. */
-  const loadVariants = (kind: VariantKind) => {
-    if (variantJobs.current[kind] || !photo || !sticker) return variantJobs.current[kind];
+  /**
+   * Start the Pose and Mix stickers from the original photo, in parallel with
+   * the main sticker: 4 poses in the chosen style, 4 that change pose AND
+   * style. Each request retries once (e.g. an OpenAI rate-limit blip).
+   */
+  const startVariants = (image: string, style: string) => {
     const id = genId.current;
-    const post = (url: string, body: object) =>
-      fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) =>
+    const post = (body: object) =>
+      fetch("/api/booth/pose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) =>
         r.ok ? r.json() : Promise.reject(new Error(String(r.status)))
       );
-    let job: Promise<unknown>;
-    if (kind === "pose") {
-      job = post("/api/booth/pose", { photo }).then(({ ideas }: { ideas: string[] }) =>
-        Promise.allSettled(
-          [0, 1, 2, 3].map((i) =>
-            post("/api/booth/pose", { sticker, idea: ideas[i] ?? ideas[0] })
-              .then((d) => setVariant("pose", i, d.image, id))
-              .catch(() => setVariant("pose", i, false, id))
+    const retry = <T,>(fn: () => Promise<T>) => fn().catch(() => new Promise<T>((ok, no) => setTimeout(() => fn().then(ok, no), 3000)));
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const otherStyles = BOOTH_STYLES.filter((p) => p.id !== "random" && p.id !== style).map((p) => p.id);
+    variantJob.current = retry(() => post({ photo: image }))
+      .then(({ ideas }: { ideas: string[] }) => {
+        const jobs: { kind: VariantKind; i: number; styleId: string; idea: string }[] = [0, 1, 2, 3].flatMap((i) => [
+          { kind: "pose" as const, i, styleId: style, idea: ideas[i] ?? ideas[0] },
+          { kind: "mix" as const, i, styleId: otherStyles[i % otherStyles.length], idea: ideas[4 + i] ?? ideas[i] ?? ideas[0] },
+        ]);
+        // small stagger so 9 image requests don't all land in the same instant
+        return Promise.allSettled(
+          jobs.map((j, n) =>
+            wait(n * 350)
+              .then(() => retry(() => post({ photo: image, styleId: j.styleId, idea: j.idea })))
+              .then((d) => setVariant(j.kind, j.i, d.image, id))
+              .catch(() => setVariant(j.kind, j.i, false, id))
           )
-        )
-      );
-    } else {
-      // the other cartoon styles, from the same original photo
-      const others = BOOTH_STYLES.filter((p) => p.id !== "random" && p.id !== resolvedStyle).slice(0, 4);
-      job = Promise.allSettled(
-        others.map((p, i) =>
-          post("/api/booth/generate", { image: photo, styleId: p.id })
-            .then((d) => setVariant("style", i, d.generatedImage, id))
-            .catch(() => setVariant("style", i, false, id))
-        )
-      );
-    }
-    variantJobs.current[kind] = job.catch(() => {
-      for (let i = 0; i < 4; i++) if (variantsRef.current[kind][i] === null) setVariant(kind, i, false, id);
-    });
-    return variantJobs.current[kind];
+        );
+      })
+      .catch(() => {
+        (["pose", "mix"] as const).forEach((k) => [0, 1, 2, 3].forEach((i) => variantsRef.current[k][i] === null && setVariant(k, i, false, id)));
+      });
   };
 
-  const loadVariantsRef = useRef(loadVariants);
-  loadVariantsRef.current = loadVariants;
+  const startVariantsRef = useRef(startVariants);
+  startVariantsRef.current = startVariants;
 
   const generate = useCallback(async (image: string, style: string) => {
     printCopy.current = null;
@@ -241,16 +266,21 @@ export default function BoothApp() {
     setSticker(null);
     setPrintFile(null);
     setTries((t) => t + 1);
+    // pick "Surprise me" here, so the pose stickers can share the main sticker's style
+    const real = BOOTH_STYLES.filter((p) => p.id !== "random");
+    const resolved = style === "random" ? real[Math.floor(Math.random() * real.length)].id : style;
+    // main sticker first, then the 8 pack stickers right behind it
+    const main = fetch("/api/booth/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image, styleId: resolved }),
+    });
+    startVariantsRef.current(image, resolved);
     try {
-      const res = await fetch("/api/booth/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image, styleId: style }),
-      });
+      const res = await main;
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Something went wrong");
       setSticker(data.generatedImage);
-      setResolvedStyle(data.stylePreset ?? style);
       setLastGen({ provider: data.provider, model: data.model, ms: data.ms });
       startPrintCopy(image, data.stylePreset);
       try {
@@ -276,17 +306,12 @@ export default function BoothApp() {
         const pending = printCopy.current;
         const hq = pending ? await Promise.race([pending, new Promise<null>((r) => setTimeout(() => r(null), 30000))]) : null;
         const main = hq || sticker;
-        // pose/style sheets: wait for their 4 extra stickers (up to 90s); any that
-        // failed fall back to the main sticker so the sheet still prints
-        const kinds = product.sheets.filter((k): k is VariantKind => k !== "same");
-        await Promise.race([Promise.all(kinds.map((k) => loadVariantsRef.current(k))), new Promise((r) => setTimeout(r, 90000))]);
-        const mainBordered = await addStickerBorder(main);
-        const sheets: string[] = [];
-        for (const kind of product.sheets) {
-          const extras = kind === "same" ? [] : variantsRef.current[kind].map((v) => (v ? v : main));
-          const bordered = [mainBordered, ...(await Promise.all(extras.map((v) => addStickerBorder(v))))];
-          sheets.push(await composePrintSheet(bordered));
+        // pack sheets: the extras started with the photo; give stragglers up to 60s,
+        // and any that failed print as the main sticker so the sheet still prints
+        if (product.sheets.some((k) => k !== "same") && variantJob.current) {
+          await Promise.race([variantJob.current, new Promise((r) => setTimeout(r, 60000))]);
         }
+        const sheets = await buildSheets(product, main, variantsRef.current, false);
         setPrintFile(sheets[0]);
         const stamp = Date.now();
         sheets.forEach((sheet, i) =>
@@ -402,7 +427,6 @@ export default function BoothApp() {
                 onProduct={(id) => {
                   sounds.tap();
                   setProductId(id);
-                  getProduct(id)?.sheets.forEach((k) => k !== "same" && loadVariants(k));
                 }}
                 onPaid={startPrint}
               />
@@ -883,70 +907,58 @@ function Reveal({
   );
 }
 
-/** What the sheet(s) will look like: the real 1 big + 4 minis layout, with new poses/styles filling in as they're made. */
+/**
+ * What the sheet(s) will look like: rendered by the same code that makes the
+ * print file, re-rendered as each pose / mix sticker arrives.
+ */
 function SheetPreviews({ product, sticker, variants }: { product: BoothProduct; sticker: string; variants: Variants }) {
+  const [sheets, setSheets] = useState<string[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const t = setTimeout(() => {
+      buildSheets(product, sticker, variants, true)
+        .then((s) => alive && setSheets(s))
+        .catch(() => {});
+    }, 120);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [product, sticker, variants]);
+
   const n = product.sheets.length;
+  const pending = product.sheets.some((k) => k !== "same" && variants[k].some((v) => v === null));
   return (
     <div className="flex h-full w-full flex-col items-center justify-center" style={{ gap: u(0.6) }}>
       <div className="flex min-h-0 w-full flex-1 items-center justify-center" style={{ containerType: "size", gap: u(1.6) }}>
         {product.sheets.map((kind, i) => (
           <motion.div
             key={kind + i}
-            className="relative flex flex-col overflow-visible bg-white shadow-[0_14px_40px_rgba(91,63,214,0.22)]"
+            className="relative bg-white shadow-[0_14px_40px_rgba(91,63,214,0.22)]"
             // a 3.9×6.7" sheet that fits the panel, two side by side for the Party Pack
             style={{
               height: `min(100cqh, calc((100cqw - ${(n - 1) * 24}px) / ${n} * 6.7 / 3.9))`,
               aspectRatio: "3.9 / 6.7",
-              borderRadius: 14,
-              padding: "3%",
-              gap: "2.5%",
+              borderRadius: 12,
               rotate: n > 1 ? (i ? 3 : -3) : -2,
             }}
             initial={{ y: 40, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: i * 0.12, type: "spring", stiffness: 200, damping: 18 }}
           >
-            <SheetSlot src={sticker} big />
-            <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 overflow-hidden" style={{ gap: "4%" }}>
-              {[0, 1, 2, 3].map((j) => (
-                <SheetSlot key={j} src={kind === "same" ? sticker : variants[kind][j] === false ? sticker : variants[kind][j]} />
-              ))}
-            </div>
+            {sheets[i] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={sheets[i]} alt="Sheet preview" className="h-full w-full rounded-[12px]" />
+            ) : (
+              <div className="h-full w-full animate-pulse rounded-[12px] bg-[var(--lav)]" />
+            )}
             <span className="chip absolute -bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-[var(--ink)] text-white" style={{ fontSize: `max(11px, ${u(1)})` }}>
-              {kind === "same" ? "Sticker Sheet" : kind === "pose" ? "🤸 5 poses" : "🎨 5 styles"}
+              {kind === "same" ? "8 stickers" : kind === "pose" ? "🤸 5 poses" : "🎨 5 poses × 5 styles"}
             </span>
           </motion.div>
         ))}
       </div>
-      {product.sheets.some((k) => k !== "same" && variants[k].some((v) => v === null)) && (
-        <div className="t-body shrink-0">✨ Snap is drawing your new {product.sheets.includes("style") && product.sheets.includes("pose") ? "poses & styles" : product.sheets.includes("pose") ? "poses" : "styles"}…</div>
-      )}
-    </div>
-  );
-}
-
-function SheetSlot({ src, big }: { src: string | null | false; big?: boolean }) {
-  return (
-    <div className={cn("relative flex min-h-0 min-w-0 items-center justify-center overflow-hidden", big ? "h-[44%] shrink-0" : "h-full w-full")}>
-      {src ? (
-        <motion.img
-          key={src.slice(-40)}
-          src={src}
-          alt=""
-          className="die-cut max-h-full max-w-full object-contain"
-          initial={{ scale: 0.5, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 260, damping: 16 }}
-        />
-      ) : (
-        <div className="relative h-[86%] w-[86%] overflow-hidden rounded-full bg-[var(--lav)]">
-          <motion.div
-            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/80 to-transparent"
-            animate={{ x: ["-100%", "100%"] }}
-            transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
-          />
-        </div>
-      )}
+      {pending && <div className="t-body shrink-0">✨ Snap is still drawing a few of these…</div>}
     </div>
   );
 }

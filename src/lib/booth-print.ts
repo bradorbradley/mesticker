@@ -4,8 +4,8 @@
  *   addStickerBorder → the sticker with a thick white die-cut border plus a
  *                      faint grey hairline, so the printer's auto-contour has
  *                      a visible edge to cut along on white paper.
- *   composePrintSheet → portrait 1170×2010 px (300 DPI): one big sticker on
- *                      top, four minis below (same sticker, or 5 different).
+ *   composePrintSheet → portrait 1170×2010 px (300 DPI) collage layouts with
+ *                      mixed sizes and tilts (see LAYOUTS).
  *
  * Runs in the browser via Canvas, like compose-sheet-client.ts.
  */
@@ -24,7 +24,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function silhouette(img: HTMLImageElement, color: string) {
+function silhouette(img: HTMLImageElement | HTMLCanvasElement, color: string) {
   const c = document.createElement("canvas");
   c.width = img.width;
   c.height = img.height;
@@ -46,9 +46,43 @@ function stampRing(ctx: CanvasRenderingContext2D, sil: HTMLCanvasElement, pad: n
   }
 }
 
+/**
+ * Crop away the empty transparent margin around the character, so each
+ * sticker prints at its real size and shape (tall, wide, round) instead of
+ * every one being the same padded square.
+ */
+function trimTransparent(img: HTMLImageElement): HTMLCanvasElement | HTMLImageElement {
+  const c = document.createElement("canvas");
+  c.width = img.width;
+  c.height = img.height;
+  const ctx = c.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(img, 0, 0);
+  const { data, width, height } = ctx.getImageData(0, 0, c.width, c.height);
+  let x0 = width, y0 = height, x1 = -1, y1 = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (data[(y * width + x) * 4 + 3] > 24) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+    }
+  }
+  if (x1 < 0) return img; // fully transparent? leave it
+  const w = x1 - x0 + 1, h = y1 - y0 + 1;
+  if (w > width * 0.97 && h > height * 0.97) return img; // opaque photo, nothing to trim
+  const out = document.createElement("canvas");
+  out.width = w;
+  out.height = h;
+  out.getContext("2d")!.drawImage(c, x0, y0, w, h, 0, 0, w, h);
+  return out;
+}
+
 export async function addStickerBorder(src: string, borderFraction = 0.035): Promise<string> {
-  const img = await loadImage(src);
-  const radius = Math.round(img.width * borderFraction);
+  const loaded = await loadImage(src);
+  const img = trimTransparent(loaded);
+  const radius = Math.round(Math.max(img.width, img.height) * borderFraction);
   const hairline = 3;
   const pad = radius + hairline + 4;
   const c = document.createElement("canvas");
@@ -61,37 +95,65 @@ export async function addStickerBorder(src: string, borderFraction = 0.035): Pro
   return c.toDataURL("image/png");
 }
 
-/** Draw `img` contained in the box, trimmed to its visible pixels. */
-function drawContained(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, size: number) {
-  const scale = Math.min(size / img.width, size / img.height);
-  const w = img.width * scale;
-  const h = img.height * scale;
-  ctx.drawImage(img, x + (size - w) / 2, y + (size - h) / 2, w, h);
-}
+/**
+ * Sticker layouts for one 3.9×6.7" sheet, in 300 DPI pixels: [x, y, w, h, rotation°].
+ * Mixed sizes and slight tilts, like the printer's own sample sheets. Checked
+ * offline so that, for tall/square/wide stickers alike, every pair of
+ * stickers keeps ≥30px (~2.5mm) of paper between cut lines.
+ */
+type Slot = [number, number, number, number, number];
+export const LAYOUTS = {
+  /** one sticker, 8 times: hero + 7 smaller */
+  collage8: [
+    [50, 30, 780, 760, -4], [830, 50, 310, 340, 6], [840, 420, 290, 340, -5], [40, 830, 540, 540, 3],
+    [610, 810, 520, 560, -3], [40, 1420, 350, 400, -6], [425, 1410, 330, 380, 5], [795, 1430, 335, 380, -2],
+  ] as Slot[],
+  /** five different stickers: hero + 4 of varied sizes */
+  hero5: [
+    [85, 30, 1000, 960, -3], [40, 1030, 560, 540, 4], [640, 1050, 490, 470, -5], [60, 1600, 470, 380, -4], [570, 1580, 560, 400, 3],
+  ] as Slot[],
+};
+export type LayoutId = keyof typeof LAYOUTS;
+const SHRINK = 0.92; // leaves room for the tilt
 
 /**
- * One PixCut sheet: images[0] big on top, images[1..4] as minis below.
- * Pass one image to repeat it (classic sheet) or five for a pose/style pack.
+ * Compose one print sheet. `srcs[i]` fills slot i (bordered stickers);
+ * null draws a soft placeholder (used by the on-screen preview while a
+ * pose is still being made); missing entries reuse srcs[0].
  */
-export async function composePrintSheet(borderedSrcs: string[]): Promise<string> {
-  const imgs = await Promise.all(borderedSrcs.map(loadImage));
-  const at = (i: number) => imgs[i] ?? imgs[0];
+export async function composePrintSheet(srcs: (string | null)[], layout: LayoutId): Promise<string> {
+  const slots = LAYOUTS[layout];
+  const uniq = Array.from(new Set(srcs.filter((s): s is string => !!s)));
+  const loaded = new Map(await Promise.all(uniq.map(async (s) => [s, await loadImage(s)] as const)));
   const c = document.createElement("canvas");
   c.width = SHEET_W;
   c.height = SHEET_H;
   const ctx = c.getContext("2d")!;
 
-  const margin = 30;
-  const gap = 24;
-  const small = Math.floor((SHEET_W - margin * 2 - gap) / 2); // ≈543
-  const big = Math.min(SHEET_W - margin * 2, SHEET_H - margin * 2 - gap * 2 - small * 2);
-
-  drawContained(ctx, at(0), (SHEET_W - big) / 2, margin, big);
-  for (let row = 0; row < 2; row++) {
-    for (let col = 0; col < 2; col++) {
-      drawContained(ctx, at(1 + row * 2 + col), margin + col * (small + gap), margin + big + gap + row * (small + gap), small);
+  slots.forEach(([x, y, w, h, rot], i) => {
+    const src = i < srcs.length ? srcs[i] : srcs[0];
+    const img = src ? loaded.get(src) : null;
+    const aspect = img ? img.width / img.height : 1;
+    const fw = (aspect >= w / h ? w : h * aspect) * SHRINK;
+    const fh = (aspect >= w / h ? w / aspect : h) * SHRINK;
+    ctx.save();
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.rotate((rot * Math.PI) / 180);
+    if (img) {
+      ctx.drawImage(img, -fw / 2, -fh / 2, fw, fh);
+    } else {
+      ctx.fillStyle = "#efe9ff";
+      ctx.beginPath();
+      ctx.roundRect(-fw / 2, -fh / 2, fw, fh, Math.min(fw, fh) * 0.3);
+      ctx.fill();
+      ctx.fillStyle = "#b8a9f5";
+      ctx.font = `600 ${Math.round(Math.min(fw, fh) * 0.22)}px Fredoka, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("✨", 0, 0);
     }
-  }
+    ctx.restore();
+  });
   return c.toDataURL("image/png");
 }
 
