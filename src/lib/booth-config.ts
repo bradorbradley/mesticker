@@ -7,21 +7,23 @@ export const BOOTH_FREE_MODE = process.env.NEXT_PUBLIC_BOOTH_FREE_MODE === "1";
 export const SHEETS_PER_CASSETTE = 36;
 
 /**
- * What a guest can buy, sized to the PixCut S1's 4×7" sheet (3.9×6.7"
- * printable). Each sheet costs ~$0.60 in paper + ribbon.
- *   big   — one 3.7" sticker on its own sheet
- *   sheet — 1 big (2.7") + 4 small (1.8") on one sheet
- * Prices can be overridden with NEXT_PUBLIC_BOOTH_PRICES="big:1200,sheet:2000,party:3000".
+ * What a guest can buy. Every sheet is the PixCut S1's 4×7" sticker paper
+ * (3.9×6.7" printable) laid out as 1 big (2.7") + 4 minis (1.8"); paper +
+ * ribbon is ~$0.60/sheet. What changes is what goes on the sheet:
+ *   same  — 5 of their sticker
+ *   pose  — their sticker + 4 new poses of the same character (web app's
+ *           variations engine designs poses for this person)
+ *   style — their sticker + the same photo in the other 4 cartoon styles
+ * Prices can be overridden with NEXT_PUBLIC_BOOTH_PRICES="sheet:2000,pose:2500,style:2500,party:4000".
  */
-export type PrintLayout = "big" | "sheet";
+export type SheetKind = "same" | "pose" | "style";
 
 export interface BoothProduct {
-  id: "big" | "sheet" | "party";
+  id: "sheet" | "pose" | "style" | "party";
   name: string;
   blurb: string;
   priceCents: number;
-  sheets: number;
-  layout: PrintLayout;
+  sheets: SheetKind[];
   tag?: string;
   emoji: string;
 }
@@ -34,11 +36,14 @@ const PRICE_OVERRIDES = Object.fromEntries(
     .map(([id, cents]) => [id, Math.round(Number(cents))])
 ) as Record<string, number>;
 
-export const BOOTH_PRODUCTS: BoothProduct[] = [
-  { id: "big", name: "Big Sticker", blurb: "One big 3.7\" sticker", priceCents: 1200, sheets: 1, layout: "big", emoji: "⭐" },
-  { id: "sheet", name: "Sticker Sheet", blurb: "5 stickers: 1 big + 4 minis", priceCents: 2000, sheets: 1, layout: "sheet", tag: "Most popular", emoji: "✨" },
-  { id: "party", name: "Party Pack", blurb: "2 sheets · 10 stickers to share", priceCents: 3000, sheets: 2, layout: "sheet", tag: "Best value", emoji: "🎉" },
-].map((p) => ({ ...p, priceCents: PRICE_OVERRIDES[p.id] ?? p.priceCents })) as BoothProduct[];
+export const BOOTH_PRODUCTS: BoothProduct[] = (
+  [
+    { id: "sheet", name: "Sticker Sheet", blurb: "5 of your sticker", priceCents: 2000, sheets: ["same"], emoji: "✨" },
+    { id: "pose", name: "Pose Pack", blurb: "You in 5 different poses", priceCents: 2500, sheets: ["pose"], tag: "New!", emoji: "🤸" },
+    { id: "style", name: "Style Pack", blurb: "You in 5 cartoon styles", priceCents: 2500, sheets: ["style"], emoji: "🎨" },
+    { id: "party", name: "Party Pack", blurb: "Poses + styles · 10 stickers", priceCents: 4000, sheets: ["pose", "style"], tag: "Best value", emoji: "🎉" },
+  ] as BoothProduct[]
+).map((p) => ({ ...p, priceCents: PRICE_OVERRIDES[p.id] ?? p.priceCents }));
 
 export const DEFAULT_PRODUCT_ID: BoothProduct["id"] = "sheet";
 
