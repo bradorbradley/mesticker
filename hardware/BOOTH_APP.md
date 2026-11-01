@@ -20,17 +20,19 @@ Any screen left untouched for ~1 minute returns to the attract screen.
 
 ## Menu (what the PixCut S1 makes from a 4×7" sheet)
 
-Every sheet is 1 big (2.7") + 4 minis (1.8"). What goes on it:
+Sheets are collages with mixed sizes and slight tilts (≥2.5mm between cut lines); each sticker is
+trimmed to the character's own shape before its white border is added.
 
 | Item | On the sheet(s) | Sheets | Price |
 |---|---|---|---|
-| Sticker Sheet | 5 of their sticker | 1 | $20 |
-| Pose Pack | their sticker + 4 new poses (web app's variations engine) | 1 | $25 |
-| Style Pack | their sticker + the same photo in the 4 other cartoon styles | 1 | $25 |
-| Party Pack | a Pose sheet + a Style sheet, 10 different stickers | 2 | $40 |
+| Sticker Sheet | their sticker 8 times, all sizes | 1 | $20 |
+| Pose Pack | their sticker + 4 new poses, same style | 1 | $25 |
+| Mix Pack | their sticker + 4 that change pose AND style | 1 | $25 |
+| Party Pack | a Pose sheet + a Mix sheet, 10 different stickers | 2 | $40 |
 
-Poses/styles are only generated when a pack is tapped (~4¢ poses, ~16¢ styles). The left panel
-switches to a live preview of the sheet(s), filling in as each sticker is made. Paper + ribbon ≈ $0.60/sheet.
+The 8 pack stickers start generating the moment the photo is taken (in parallel with the main one), so
+they're ready by the reveal. That's ~9 image generations per guest (~$0.40) whether or not they buy a
+pack. Paper + ribbon ≈ $0.60/sheet.
 
 ## Printing (for now: one click by staff)
 
@@ -72,7 +74,7 @@ automatically.
 
 | Var | What |
 |---|---|
-| `NEXT_PUBLIC_BOOTH_PRICES` | Menu prices in cents, default `sheet:2000,pose:2500,style:2500,party:4000` |
+| `NEXT_PUBLIC_BOOTH_PRICES` | Menu prices in cents, default `sheet:2000,pose:2500,mix:2500,party:4000` |
 | `RESEND_API_KEY` + `BOOTH_EMAIL_FROM` | Turns on "Email me the pics" (domain must be verified in Resend) |
 | `NEXT_PUBLIC_BOOTH_FREE_MODE` | `1` = no payment (demos) |
 | `BOOTH_IMAGE_PROVIDER` | `openai` (default), `gemini` (Nano Banana 2) or `fal` (FLUX Kontext) |
