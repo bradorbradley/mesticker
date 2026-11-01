@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "qrcode";
 import { stylePresets } from "@/lib/presets";
-import { BOOTH_FREE_MODE, BOOTH_FROM_LABEL, BOOTH_PRODUCTS, DEFAULT_PRODUCT_ID, SHEETS_PER_CASSETTE, getProduct, priceLabel, type BoothProduct } from "@/lib/booth-config";
+import { BOOTH_FREE_MODE, BOOTH_FROM_LABEL, BOOTH_PRODUCTS, DEFAULT_PRODUCT_ID, SHEETS_PER_CASSETTE, getProduct, priceLabel, type BoothProduct, type SheetKind } from "@/lib/booth-config";
 import { addStickerBorder, composePrintSheet, downloadDataUrl } from "@/lib/booth-print";
 import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,11 @@ import BoothReveal from "./booth-reveal";
 import { WAIT_GAMES, ReadyTakeover, type WaitGameId } from "./games/wait-games";
 
 type Step = "attract" | "style" | "camera" | "generating" | "reveal" | "printing" | "done";
+
+type VariantKind = Exclude<SheetKind, "same">;
+/** 4 extra stickers per pack: null = still making, false = failed */
+type Variants = Record<VariantKind, (string | null | false)[]>;
+const EMPTY_VARIANTS: Variants = { pose: [null, null, null, null], style: [null, null, null, null] };
 
 const BOOTH_STYLES = stylePresets.filter((p) => p.id !== "custom");
 const MAX_TRIES = 3; // generations per guest
@@ -91,6 +96,25 @@ export default function BoothApp() {
   }, []);
   const showReveal = useCallback(() => setStep("reveal"), []);
 
+  // ---- Pose / Style packs: 4 extra stickers made only when a pack is picked
+  const [resolvedStyle, setResolvedStyle] = useState<string | null>(null);
+  const [variants, setVariantsState] = useState<Variants>(EMPTY_VARIANTS);
+  const variantsRef = useRef<Variants>(EMPTY_VARIANTS);
+  const variantJobs = useRef<Partial<Record<VariantKind, Promise<unknown>>>>({});
+  const genId = useRef(0);
+  const setVariant = (kind: VariantKind, i: number, v: string | false, id: number) => {
+    if (id !== genId.current) return; // a newer photo/style replaced this one
+    const next = { ...variantsRef.current, [kind]: variantsRef.current[kind].map((x, j) => (j === i ? v : x)) };
+    variantsRef.current = next;
+    setVariantsState(next);
+  };
+  const resetVariants = () => {
+    genId.current += 1;
+    variantJobs.current = {};
+    variantsRef.current = EMPTY_VARIANTS;
+    setVariantsState(EMPTY_VARIANTS);
+  };
+
   useEffect(() => setSettings(loadSettings()), []);
   const updateSettings = useCallback((patch: Partial<BoothSettings>) => {
     setSettings((s) => {
@@ -115,6 +139,7 @@ export default function BoothApp() {
     setStickerReady(false);
     setProductId(DEFAULT_PRODUCT_ID);
     setAutoEmailedTo(null);
+    resetVariants();
     setOperatorOpen(false);
     printCopy.current = null;
   }, []);
@@ -168,8 +193,48 @@ export default function BoothApp() {
       })
       .catch(() => null);
 
+  /** Start (once) the 4 extra stickers for a pose or style sheet. */
+  const loadVariants = (kind: VariantKind) => {
+    if (variantJobs.current[kind] || !photo || !sticker) return variantJobs.current[kind];
+    const id = genId.current;
+    const post = (url: string, body: object) =>
+      fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) =>
+        r.ok ? r.json() : Promise.reject(new Error(String(r.status)))
+      );
+    let job: Promise<unknown>;
+    if (kind === "pose") {
+      job = post("/api/booth/pose", { photo }).then(({ ideas }: { ideas: string[] }) =>
+        Promise.allSettled(
+          [0, 1, 2, 3].map((i) =>
+            post("/api/booth/pose", { sticker, idea: ideas[i] ?? ideas[0] })
+              .then((d) => setVariant("pose", i, d.image, id))
+              .catch(() => setVariant("pose", i, false, id))
+          )
+        )
+      );
+    } else {
+      // the other cartoon styles, from the same original photo
+      const others = BOOTH_STYLES.filter((p) => p.id !== "random" && p.id !== resolvedStyle).slice(0, 4);
+      job = Promise.allSettled(
+        others.map((p, i) =>
+          post("/api/booth/generate", { image: photo, styleId: p.id })
+            .then((d) => setVariant("style", i, d.generatedImage, id))
+            .catch(() => setVariant("style", i, false, id))
+        )
+      );
+    }
+    variantJobs.current[kind] = job.catch(() => {
+      for (let i = 0; i < 4; i++) if (variantsRef.current[kind][i] === null) setVariant(kind, i, false, id);
+    });
+    return variantJobs.current[kind];
+  };
+
+  const loadVariantsRef = useRef(loadVariants);
+  loadVariantsRef.current = loadVariants;
+
   const generate = useCallback(async (image: string, style: string) => {
     printCopy.current = null;
+    resetVariants();
     setStickerReady(false);
     setStep("generating");
     setError(null);
@@ -185,6 +250,7 @@ export default function BoothApp() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Something went wrong");
       setSticker(data.generatedImage);
+      setResolvedStyle(data.stylePreset ?? style);
       setLastGen({ provider: data.provider, model: data.model, ms: data.ms });
       startPrintCopy(image, data.stylePreset);
       try {
@@ -209,23 +275,33 @@ export default function BoothApp() {
         // Prefer the sharper print copy; don't hold the printer more than 30s for it.
         const pending = printCopy.current;
         const hq = pending ? await Promise.race([pending, new Promise<null>((r) => setTimeout(() => r(null), 30000))]) : null;
-        const bordered = await addStickerBorder(hq || sticker);
-        const sheet = await composePrintSheet(bordered, product.layout);
-        setPrintFile(sheet);
-        const stamp = Date.now();
-        for (let i = 1; i <= product.sheets; i++) {
-          downloadDataUrl(sheet, `mesticker-print-${stamp}${product.sheets > 1 ? `-${i}of${product.sheets}` : ""}.png`);
+        const main = hq || sticker;
+        // pose/style sheets: wait for their 4 extra stickers (up to 90s); any that
+        // failed fall back to the main sticker so the sheet still prints
+        const kinds = product.sheets.filter((k): k is VariantKind => k !== "same");
+        await Promise.race([Promise.all(kinds.map((k) => loadVariantsRef.current(k))), new Promise((r) => setTimeout(r, 90000))]);
+        const mainBordered = await addStickerBorder(main);
+        const sheets: string[] = [];
+        for (const kind of product.sheets) {
+          const extras = kind === "same" ? [] : variantsRef.current[kind].map((v) => (v ? v : main));
+          const bordered = [mainBordered, ...(await Promise.all(extras.map((v) => addStickerBorder(v))))];
+          sheets.push(await composePrintSheet(bordered));
         }
+        setPrintFile(sheets[0]);
+        const stamp = Date.now();
+        sheets.forEach((sheet, i) =>
+          downloadDataUrl(sheet, `mesticker-print-${stamp}${sheets.length > 1 ? `-${i + 1}of${sheets.length}` : ""}.png`)
+        );
         setSettings((s) => {
           if (!s) return s;
-          const next = { ...s, sheetsLeft: Math.max(0, s.sheetsLeft - product.sheets), salesToday: s.salesToday + 1 };
+          const next = { ...s, sheetsLeft: Math.max(0, s.sheetsLeft - sheets.length), salesToday: s.salesToday + 1 };
           try {
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
           } catch {}
           return next;
         });
         // the sharp copy replaces the preview for the phone QR, then email it to whoever paid
-        const url = await uploadDigital(hq || sticker);
+        const url = await uploadDigital(main);
         if (url && checkoutId && emailOn) {
           fetch("/api/booth/send", {
             method: "POST",
@@ -322,14 +398,16 @@ export default function BoothApp() {
                 }}
                 product={getProduct(productId) ?? BOOTH_PRODUCTS[0]}
                 sheetsLeft={settings?.sheetsLeft ?? SHEETS_PER_CASSETTE}
+                variants={variants}
                 onProduct={(id) => {
                   sounds.tap();
                   setProductId(id);
+                  getProduct(id)?.sheets.forEach((k) => k !== "same" && loadVariants(k));
                 }}
                 onPaid={startPrint}
               />
             )}
-            {step === "printing" && <Printing sheet={printFile} sheets={(getProduct(productId) ?? BOOTH_PRODUCTS[0]).sheets} onDone={() => setStep("done")} />}
+            {step === "printing" && <Printing sheet={printFile} sheets={(getProduct(productId) ?? BOOTH_PRODUCTS[0]).sheets.length} onDone={() => setStep("done")} />}
             {step === "done" && <Done sticker={sticker} digitalUrl={digitalUrl} emailOn={emailOn} autoEmailedTo={autoEmailedTo} onFinish={reset} />}
           </motion.div>
         </AnimatePresence>
@@ -682,6 +760,7 @@ function Reveal({
   onRetake,
   product,
   sheetsLeft,
+  variants,
   onProduct,
   onPaid,
 }: {
@@ -696,9 +775,12 @@ function Reveal({
   onRetake: () => void;
   product: BoothProduct;
   sheetsLeft: number;
+  variants: Variants;
   onProduct: (id: BoothProduct["id"]) => void;
   onPaid: (checkoutId?: string) => void;
 }) {
+  // left panel: the before/after reveal, or a live preview of the sheet they're buying
+  const [view, setView] = useState<"sticker" | "sheet">("sticker");
   if (error || !sticker) {
     return (
       <Split>
@@ -726,16 +808,53 @@ function Reveal({
   }
 
   return (
-    <Split>
-      <div className="relative flex items-center justify-center landscape:h-full landscape:w-[46%] portrait:w-full portrait:min-h-0 portrait:flex-1">
-        <BoothReveal photo={photo} sticker={sticker} />
+    // phones held upright scroll, so the reveal gets real height instead of being squeezed
+    <div className="h-full w-full overflow-y-auto overflow-x-hidden">
+    <Split className="portrait:h-auto portrait:min-h-full portrait:justify-start portrait:pt-2">
+      <div className="relative flex flex-col items-center landscape:h-full landscape:w-[46%] portrait:h-[58vh] portrait:w-full portrait:shrink-0" style={{ gap: u(0.8) }}>
+        <div className="flex shrink-0 rounded-full bg-white/80 p-1 shadow" style={{ gap: 4 }}>
+          {(["sticker", "sheet"] as const).map((v) => (
+            <button
+              key={v}
+              className={cn("chip min-h-[36px]", view === v ? "bg-[var(--purple)] text-white" : "text-[var(--ink)]")}
+              onClick={() => {
+                sounds.tap();
+                setView(v);
+              }}
+            >
+              {v === "sticker" ? "😎 Your sticker" : `📄 Your ${product.name}`}
+            </button>
+          ))}
+        </div>
+        <div className="relative min-h-0 w-full flex-1">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={view}
+              className="absolute inset-0"
+              initial={{ opacity: 0, rotateY: -25, scale: 0.94 }}
+              animate={{ opacity: 1, rotateY: 0, scale: 1 }}
+              exit={{ opacity: 0, rotateY: 25, scale: 0.94 }}
+              transition={{ duration: 0.3 }}
+            >
+              {view === "sticker" ? <BoothReveal photo={photo} sticker={sticker} /> : <SheetPreviews product={product} sticker={sticker} variants={variants} />}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
 
-      <div className="flex flex-col landscape:w-[44%] portrait:items-center portrait:text-center" style={{ gap: u(1.8) }}>
+      <div className="flex flex-col landscape:w-[48%] portrait:w-full portrait:items-center portrait:text-center" style={{ gap: u(1.6) }}>
         <h2 className="t-h2 short:hidden">
           Ta-da! <span className="pop">Love it?</span>
         </h2>
-        <ProductMenu selected={product.id} sheetsLeft={sheetsLeft} freeMode={freeMode} onPick={onProduct} />
+        <ProductMenu
+          selected={product.id}
+          sheetsLeft={sheetsLeft}
+          freeMode={freeMode}
+          onPick={(id) => {
+            onProduct(id);
+            setView("sheet");
+          }}
+        />
         {freeMode ? (
           <button className="btn btn-lg btn-main w-fit" onClick={() => onPaid()}>
             🖨️ Print my {product.name}
@@ -760,6 +879,75 @@ function Reveal({
         </div>
       </div>
     </Split>
+    </div>
+  );
+}
+
+/** What the sheet(s) will look like: the real 1 big + 4 minis layout, with new poses/styles filling in as they're made. */
+function SheetPreviews({ product, sticker, variants }: { product: BoothProduct; sticker: string; variants: Variants }) {
+  const n = product.sheets.length;
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center" style={{ gap: u(0.6) }}>
+      <div className="flex min-h-0 w-full flex-1 items-center justify-center" style={{ containerType: "size", gap: u(1.6) }}>
+        {product.sheets.map((kind, i) => (
+          <motion.div
+            key={kind + i}
+            className="relative flex flex-col overflow-visible bg-white shadow-[0_14px_40px_rgba(91,63,214,0.22)]"
+            // a 3.9×6.7" sheet that fits the panel, two side by side for the Party Pack
+            style={{
+              height: `min(100cqh, calc((100cqw - ${(n - 1) * 24}px) / ${n} * 6.7 / 3.9))`,
+              aspectRatio: "3.9 / 6.7",
+              borderRadius: 14,
+              padding: "3%",
+              gap: "2.5%",
+              rotate: n > 1 ? (i ? 3 : -3) : -2,
+            }}
+            initial={{ y: 40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: i * 0.12, type: "spring", stiffness: 200, damping: 18 }}
+          >
+            <SheetSlot src={sticker} big />
+            <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 overflow-hidden" style={{ gap: "4%" }}>
+              {[0, 1, 2, 3].map((j) => (
+                <SheetSlot key={j} src={kind === "same" ? sticker : variants[kind][j] === false ? sticker : variants[kind][j]} />
+              ))}
+            </div>
+            <span className="chip absolute -bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-[var(--ink)] text-white" style={{ fontSize: `max(11px, ${u(1)})` }}>
+              {kind === "same" ? "Sticker Sheet" : kind === "pose" ? "🤸 5 poses" : "🎨 5 styles"}
+            </span>
+          </motion.div>
+        ))}
+      </div>
+      {product.sheets.some((k) => k !== "same" && variants[k].some((v) => v === null)) && (
+        <div className="t-body shrink-0">✨ Snap is drawing your new {product.sheets.includes("style") && product.sheets.includes("pose") ? "poses & styles" : product.sheets.includes("pose") ? "poses" : "styles"}…</div>
+      )}
+    </div>
+  );
+}
+
+function SheetSlot({ src, big }: { src: string | null | false; big?: boolean }) {
+  return (
+    <div className={cn("relative flex min-h-0 min-w-0 items-center justify-center overflow-hidden", big ? "h-[44%] shrink-0" : "h-full w-full")}>
+      {src ? (
+        <motion.img
+          key={src.slice(-40)}
+          src={src}
+          alt=""
+          className="die-cut max-h-full max-w-full object-contain"
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 260, damping: 16 }}
+        />
+      ) : (
+        <div className="relative h-[86%] w-[86%] overflow-hidden rounded-full bg-[var(--lav)]">
+          <motion.div
+            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/80 to-transparent"
+            animate={{ x: ["-100%", "100%"] }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -776,9 +964,9 @@ function ProductMenu({
   onPick: (id: BoothProduct["id"]) => void;
 }) {
   return (
-    <div className="grid w-full grid-cols-3" style={{ gap: u(1) }}>
+    <div className="grid w-full grid-cols-4 portrait:grid-cols-2" style={{ gap: `${u(1.4)} ${u(1)}`, paddingTop: 8 }}>
       {BOOTH_PRODUCTS.map((p) => {
-        const soldOut = p.sheets > sheetsLeft;
+        const soldOut = p.sheets.length > sheetsLeft;
         const on = p.id === selected;
         return (
           <motion.button
