@@ -22,13 +22,13 @@ export const toDataUrl = (buf: Buffer, mime = "image/png") => `data:${mime};base
 
 /** Grow the alpha mask outward by ~radius px (blur + threshold = round corners). */
 async function grow(alpha: Buffer, width: number, height: number, radius: number) {
-  return sharp(alpha, { raw: { width, height, channels: 1 } })
-    .blur(Math.max(0.3, radius / 1.76))
-    .threshold(10)
-    .blur(0.8) // soften the stair-steps
-    .extractChannel(0) // threshold outputs 3 channels; keep one mask byte per pixel
-    .raw()
-    .toBuffer();
+  // Separate pipelines on purpose: sharp keeps one blur per pipeline and
+  // applies threshold in its own fixed order, so chaining these would skip
+  // the big blur and the border would barely grow.
+  const raw = { raw: { width, height, channels: 1 as const } };
+  const spread = await sharp(alpha, raw).blur(Math.max(0.3, radius / 1.76)).extractChannel(0).raw().toBuffer();
+  const hard = await sharp(spread, raw).threshold(10).extractChannel(0).raw().toBuffer();
+  return sharp(hard, raw).blur(0.8).extractChannel(0).raw().toBuffer(); // soften the stair-steps
 }
 
 /** One solid-colour layer shaped like the mask. */
