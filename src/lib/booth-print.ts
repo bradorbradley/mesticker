@@ -10,9 +10,9 @@
  * Runs in the browser via Canvas, like compose-sheet-client.ts.
  */
 
-const DPI = 300;
-export const SHEET_W = Math.round(3.9 * DPI); // 1170
-export const SHEET_H = Math.round(6.7 * DPI); // 2010
+import { LAYOUTS, SHEET_H, SHEET_W, SLOT_SHRINK as SHRINK, type LayoutId } from "./sheet-layouts";
+
+export { LAYOUTS, type LayoutId };
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -94,27 +94,6 @@ export async function addStickerBorder(src: string, borderFraction = 0.035): Pro
   ctx.drawImage(img, pad, pad);
   return c.toDataURL("image/png");
 }
-
-/**
- * Sticker layouts for one 3.9×6.7" sheet, in 300 DPI pixels: [x, y, w, h, rotation°].
- * Mixed sizes and slight tilts, like the printer's own sample sheets. Checked
- * offline so that, for tall/square/wide stickers alike, every pair of
- * stickers keeps ≥30px (~2.5mm) of paper between cut lines.
- */
-type Slot = [number, number, number, number, number];
-export const LAYOUTS = {
-  /** one sticker, 8 times: hero + 7 smaller */
-  collage8: [
-    [50, 30, 780, 760, -4], [830, 50, 310, 340, 6], [840, 420, 290, 340, -5], [40, 830, 540, 540, 3],
-    [610, 810, 520, 560, -3], [40, 1420, 350, 400, -6], [425, 1410, 330, 380, 5], [795, 1430, 335, 380, -2],
-  ] as Slot[],
-  /** five different stickers: hero + 4 of varied sizes */
-  hero5: [
-    [85, 30, 1000, 960, -3], [40, 1030, 560, 540, 4], [640, 1050, 490, 470, -5], [60, 1600, 470, 380, -4], [570, 1580, 560, 400, 3],
-  ] as Slot[],
-};
-export type LayoutId = keyof typeof LAYOUTS;
-const SHRINK = 0.92; // leaves room for the tilt
 
 /**
  * Compose one print sheet. `srcs[i]` fills slot i (bordered stickers);
