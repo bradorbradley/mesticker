@@ -164,7 +164,7 @@ export async function stickerForLiene(src: string): Promise<string> {
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, c.width, c.height);
   ctx.drawImage(img, pad, pad);
-  return c.toDataURL("image/jpeg", 0.92);
+  return c.toDataURL("image/png");
 }
 
 /** Aspect (w/h) of a sticker once its empty margin is trimmed. */

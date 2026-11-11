@@ -95,7 +95,7 @@ export default function OperatorPanel({
 
         <div className="mt-6 flex flex-wrap gap-3">
           <button className={small} disabled={!canReprint} onClick={onReprint}>
-            Download print file again
+            Open the Liene kit again
           </button>
           <button className={small} disabled={!canMarkPaid} onClick={onMarkPaid}>
             Mark as paid (cash)

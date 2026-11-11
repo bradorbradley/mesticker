@@ -12,38 +12,45 @@ for the PixCut S1.
 4. **Preview** — sticker is generated free (~20 s). Up to 3 tries per guest.
 5. **Pay** — QR code → Stripe Checkout on the guest's own phone (Apple Pay / Google Pay / card).
    The booth polls Stripe and moves on by itself when paid.
-6. **Print** — the booth saves `mesticker-print-<time>.png` (1 big + 4 small stickers, white cut border,
-   3.9×6.7" at 300 DPI) to the laptop's Downloads folder.
+6. **Print** — the booth shows the Liene kit for staff: the numbered sheet guide + the 8 images to
+   upload one by one into the Liene app (see below).
 7. **Done** — confetti + QR code for the digital copy. Resets itself after 30 s.
 
 Any screen left untouched for ~1 minute returns to the attract screen.
 
 ## Menu (what the PixCut S1 makes from a 4×7" sheet)
 
-Sheets are collages with mixed sizes and slight tilts (≥2.5mm between cut lines); each sticker is
-trimmed to the character's own shape before its white border is added.
+Every sheet holds 8 stickers in the `kit8` layout: a big #1, two beside it, two medium, three small,
+no tilts (so it's easy to copy by hand), ≥2.5mm between cut lines.
 
-| Item | On the sheet(s) | Sheets | Price |
-|---|---|---|---|
-| Sticker Sheet | their sticker 8 times, all sizes | 1 | $20 |
-| Pose Pack | their sticker + 4 new poses, same style | 1 | $25 |
-| Mix Pack | their sticker + 4 that change pose AND style | 1 | $25 |
-| Party Pack | a Pose sheet + a Mix sheet, 10 different stickers | 2 | $40 |
+| Item | On the sheet | Price |
+|---|---|---|
+| Pose Sheet (default) | their sticker + 7 new poses, same style | $25 |
+| Sticker Sheet | their sticker 8 times, all sizes | $20 |
+| Mix Sheet | their sticker + 7 that change pose AND style | $25 |
 
-The 8 pack stickers start generating the moment the photo is taken (in parallel with the main one), so
-they're ready by the reveal. That's ~9 image generations per guest (~$0.40) whether or not they buy a
-pack. Paper + ribbon ≈ $0.60/sheet.
+The 7 poses start generating the moment the photo is taken (in parallel with the main sticker), so the
+sheet preview fills in during the reveal: 8 image generations per guest (~$0.35). Mix stickers are only
+made if a guest taps Mix. Paper + ribbon ≈ $0.60/sheet.
 
-## Printing (for now: one click by staff)
+## Printing: the Liene kit (staff, ~1 min + 2 min print/cut)
 
-Liene has no API, so for the pilot:
+The Liene app needs each image added on its own, then **Remove background** on each (multi-select
+doesn't offer it). After payment the booth shows the **Liene kit**:
 
-1. When the booth says "Printing…", open the newest `mesticker-print-*.png` from Downloads in the
-   **Liene Photo** app (4×7 sticker paper).
-2. Press **Print & Cut**.
+- a numbered guide of the sheet, and images **1–8** with their size in inches;
+- **Download all 8** (or tap one) to save them to this laptop, or scan the QR with the phone running
+  the Liene app → **Save all 8 to Photos** (`/booth/kit`), with a "Placed?" checklist.
 
-Next step once the printer is here: a small Windows script that watches Downloads and clicks Print
-automatically.
+Then in the Liene app:
+
+1. **Sticker** → new **4×7** canvas.
+2. For 1 → 8: add the image → **Remove background** → resize to the size shown → drag it to its
+   numbered spot. Leave a small gap between stickers.
+3. **Print** (print + cut ≈ 2 min). Tap **Got them!** on the booth when the sheet is out.
+
+Practice: turn on Free mode in the staff panel and run through it. "Open the Liene kit again" in the
+staff panel reopens the last kit.
 
 ## Staff panel
 
@@ -53,7 +60,7 @@ automatically.
 - Free mode on/off
 - Prints today
 - Last generation model + seconds
-- Download print file again · Mark as paid (cash) · Fullscreen · Reset
+- Open the Liene kit again · Mark as paid (cash) · Fullscreen · Reset
 
 ## Run it like an app (no browser bars)
 
@@ -74,7 +81,7 @@ automatically.
 
 | Var | What |
 |---|---|
-| `NEXT_PUBLIC_BOOTH_PRICES` | Menu prices in cents, default `sheet:2000,pose:2500,mix:2500,party:4000` |
+| `NEXT_PUBLIC_BOOTH_PRICES` | Menu prices in cents, default `pose:2500,sheet:2000,mix:2500` |
 | `RESEND_API_KEY` + `BOOTH_EMAIL_FROM` | Turns on "Email me the pics" (domain must be verified in Resend) |
 | `NEXT_PUBLIC_BOOTH_FREE_MODE` | `1` = no payment (demos) |
 | `BOOTH_IMAGE_PROVIDER` | `openai` (default), `gemini` (Nano Banana 2) or `fal` (FLUX Kontext) |
