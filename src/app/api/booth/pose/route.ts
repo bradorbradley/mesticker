@@ -8,7 +8,7 @@ import { recordGeneration, isThrottled } from "@/lib/spend-tracker";
 /**
  * Pose / Mix packs. Both start from the ORIGINAL photo, so they can run in
  * parallel with the main sticker instead of waiting for it.
- *   POST { photo }                  → { ideas: string[8] } poses designed for this person
+ *   POST { photo }                  → { ideas: string[9] } poses designed for this person
  *                                     (the web app's variations engine)
  *   POST { photo, styleId, idea }   → { image } one sticker: that style, that pose
  * One request per sticker keeps each response small and lets the booth show
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
 
     if (!idea) {
       const { descriptors } = await generateVariationDescriptors(photo);
-      return NextResponse.json({ ideas: descriptors.slice(0, 8) });
+      return NextResponse.json({ ideas: descriptors.slice(0, 9) });
     }
     if (!stylePresets.some((p) => p.id === styleId && p.id !== "custom" && p.id !== "random")) {
       return NextResponse.json({ error: "Invalid style" }, { status: 400 });

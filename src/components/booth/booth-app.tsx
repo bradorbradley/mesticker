@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "qrcode";
 import { stylePresets } from "@/lib/presets";
 import { BOOTH_FREE_MODE, BOOTH_FROM_LABEL, BOOTH_PRODUCTS, DEFAULT_PRODUCT_ID, SHEETS_PER_CASSETTE, getProduct, priceLabel, type BoothProduct, type SheetKind } from "@/lib/booth-config";
-import { addStickerBorder, composePrintSheet, downloadDataUrl } from "@/lib/booth-print";
+import { addStickerBorder, composePrintSheet, downloadDataUrl, slotInches, stickerForLiene, trimmedAspect } from "@/lib/booth-print";
 import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import Mascot from "./mascot";
@@ -19,9 +19,20 @@ import { WAIT_GAMES, ReadyTakeover, type WaitGameId } from "./games/wait-games";
 type Step = "attract" | "style" | "camera" | "generating" | "reveal" | "printing" | "done";
 
 type VariantKind = Exclude<SheetKind, "same">;
-/** 4 extra stickers per pack: null = still making, false = failed */
+/** 7 extra stickers per sheet: null = still making, false = failed */
 type Variants = Record<VariantKind, (string | null | false)[]>;
-const EMPTY_VARIANTS: Variants = { pose: [null, null, null, null], mix: [null, null, null, null] };
+const EXTRAS = 7;
+const SLOTS = Array.from({ length: EXTRAS }, (_, i) => i);
+const EMPTY_VARIANTS: Variants = { pose: SLOTS.map(() => null), mix: SLOTS.map(() => null) };
+const SHEET_LAYOUT = "kit8" as const;
+
+/** One image for the Liene app: number on the guide, where it goes, how big. */
+export interface KitItem {
+  n: number;
+  src: string; // transparent sticker (raw, no border)
+  w: number; // inches
+  h: number;
+}
 
 /** Bordered copies are slow to make; reuse them between the live preview and printing. */
 const borderCache = new Map<string, Promise<string>>();
@@ -37,22 +48,34 @@ const bordered = (src: string) => {
  * The sheet(s) for a product, exactly as they will print. Pending extras are
  * null (drawn as placeholders) when previewing; failed ones use the main sticker.
  */
-async function buildSheets(product: BoothProduct, main: string, variants: Variants, preview: boolean) {
+async function buildSheets(product: BoothProduct, main: string, variants: Variants, preview: boolean, numbers = false) {
   const mainB = await bordered(main);
   return Promise.all(
     product.sheets.map(async (kind) => {
-      if (kind === "same") return composePrintSheet([mainB], "collage8");
+      if (kind === "same") return composePrintSheet([mainB], SHEET_LAYOUT, { numbers });
       const extras = await Promise.all(
         variants[kind].map((v) => (v ? bordered(v) : v === null && preview ? Promise.resolve(null) : Promise.resolve(mainB)))
       );
-      return composePrintSheet([mainB, ...extras], "hero5");
+      return composePrintSheet([mainB, ...extras], SHEET_LAYOUT, { numbers });
+    })
+  );
+}
+
+/** The 8 images staff upload into the Liene app, in guide order (failed poses fall back to the main sticker). */
+async function buildKit(product: BoothProduct, main: string, variants: Variants): Promise<KitItem[]> {
+  const kind = product.sheets[0];
+  const srcs = [main, ...SLOTS.map((i) => (kind === "same" ? main : variants[kind][i] || main))];
+  return Promise.all(
+    srcs.map(async (src, i) => {
+      // the guide's sizes include the white border the Liene app adds
+      const { w, h } = slotInches(SHEET_LAYOUT, i, await trimmedAspect(src));
+      return { n: i + 1, src, w, h };
     })
   );
 }
 
 const BOOTH_STYLES = stylePresets.filter((p) => p.id !== "custom");
 const MAX_TRIES = 3; // generations per guest
-const PRINT_SECONDS = 90;
 
 /** Seconds of no touches before a screen gives up and returns to attract. */
 const IDLE_SECONDS: Partial<Record<Step, number>> = {
@@ -106,6 +129,7 @@ export default function BoothApp() {
   const [error, setError] = useState<string | null>(null);
   const [lastGen, setLastGen] = useState<GenStats | null>(null);
   const [printFile, setPrintFile] = useState<string | null>(null);
+  const [kit, setKit] = useState<KitItem[] | null>(null);
   const [digitalUrl, setDigitalUrl] = useState<string | null>(null);
   const [settings, setSettings] = useState<BoothSettings | null>(null);
   const [operatorOpen, setOperatorOpen] = useState(false);
@@ -126,7 +150,6 @@ export default function BoothApp() {
   // ---- Pose / Mix packs: 8 extra stickers, started the moment the photo is taken
   const [variants, setVariantsState] = useState<Variants>(EMPTY_VARIANTS);
   const variantsRef = useRef<Variants>(EMPTY_VARIANTS);
-  const variantJob = useRef<Promise<unknown> | null>(null);
   const genId = useRef(0);
   const setVariant = (kind: VariantKind, i: number, v: string | false, id: number) => {
     if (id !== genId.current) return; // a newer photo/style replaced this one
@@ -136,7 +159,9 @@ export default function BoothApp() {
   };
   const resetVariants = () => {
     genId.current += 1;
-    variantJob.current = null;
+    variantJobs.current = {};
+    ideasJob.current = null;
+    variantPhoto.current = null;
     variantsRef.current = EMPTY_VARIANTS;
     setVariantsState(EMPTY_VARIANTS);
   };
@@ -160,6 +185,7 @@ export default function BoothApp() {
     setTries(0);
     setError(null);
     setPrintFile(null);
+    setKit(null);
     setDigitalUrl(null);
     setPaid(false);
     setStickerReady(false);
@@ -220,11 +246,18 @@ export default function BoothApp() {
       .catch(() => null);
 
   /**
-   * Start the Pose and Mix stickers from the original photo, in parallel with
-   * the main sticker: 4 poses in the chosen style, 4 that change pose AND
-   * style. Each request retries once (e.g. an OpenAI rate-limit blip).
+   * Make 7 extra stickers from the original photo, in parallel with the main
+   * one: "pose" = 7 poses in the chosen style (started at capture), "mix" = 7
+   * that change pose AND style (only once a guest picks the Mix Sheet). Pose
+   * ideas come from the vision engine once per photo. Each request retries once.
    */
-  const startVariants = (image: string, style: string) => {
+  const ideasJob = useRef<Promise<string[]> | null>(null);
+  const variantPhoto = useRef<{ image: string; style: string } | null>(null);
+  const variantJobs = useRef<Partial<Record<VariantKind, Promise<unknown>>>>({});
+  const startVariants = (kind: VariantKind) => {
+    const src = variantPhoto.current;
+    if (!src || variantJobs.current[kind]) return;
+    const { image, style } = src;
     const id = genId.current;
     const post = (body: object) =>
       fetch("/api/booth/pose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) =>
@@ -233,25 +266,22 @@ export default function BoothApp() {
     const retry = <T,>(fn: () => Promise<T>) => fn().catch(() => new Promise<T>((ok, no) => setTimeout(() => fn().then(ok, no), 3000)));
     const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
     const otherStyles = BOOTH_STYLES.filter((p) => p.id !== "random" && p.id !== style).map((p) => p.id);
-    variantJob.current = retry(() => post({ photo: image }))
-      .then(({ ideas }: { ideas: string[] }) => {
-        const jobs: { kind: VariantKind; i: number; styleId: string; idea: string }[] = [0, 1, 2, 3].flatMap((i) => [
-          { kind: "pose" as const, i, styleId: style, idea: ideas[i] ?? ideas[0] },
-          { kind: "mix" as const, i, styleId: otherStyles[i % otherStyles.length], idea: ideas[4 + i] ?? ideas[i] ?? ideas[0] },
-        ]);
-        // small stagger so 9 image requests don't all land in the same instant
-        return Promise.allSettled(
-          jobs.map((j, n) =>
-            wait(n * 350)
-              .then(() => retry(() => post({ photo: image, styleId: j.styleId, idea: j.idea })))
-              .then((d) => setVariant(j.kind, j.i, d.image, id))
-              .catch(() => setVariant(j.kind, j.i, false, id))
-          )
-        );
-      })
-      .catch(() => {
-        (["pose", "mix"] as const).forEach((k) => [0, 1, 2, 3].forEach((i) => variantsRef.current[k][i] === null && setVariant(k, i, false, id)));
-      });
+    ideasJob.current ??= retry(() => post({ photo: image })).then((d: { ideas: string[] }) => d.ideas);
+    variantJobs.current[kind] = ideasJob.current
+      .then((ideas) =>
+        // small stagger so 8 image requests don't all land in the same instant
+        Promise.allSettled(
+          SLOTS.map((i) => {
+            const idea = kind === "pose" ? ideas[i % ideas.length] : ideas[(i + 2) % ideas.length];
+            const styleId = kind === "pose" ? style : otherStyles[i % otherStyles.length];
+            return wait(i * 350)
+              .then(() => retry(() => post({ photo: image, styleId, idea })))
+              .then((d) => setVariant(kind, i, d.image, id))
+              .catch(() => setVariant(kind, i, false, id));
+          })
+        )
+      )
+      .catch(() => SLOTS.forEach((i) => variantsRef.current[kind][i] === null && setVariant(kind, i, false, id)));
   };
 
   const startVariantsRef = useRef(startVariants);
@@ -275,7 +305,8 @@ export default function BoothApp() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image, styleId: resolved }),
     });
-    startVariantsRef.current(image, resolved);
+    variantPhoto.current = { image, style: resolved };
+    startVariantsRef.current("pose");
     try {
       const res = await main;
       const data = await res.json();
@@ -308,18 +339,19 @@ export default function BoothApp() {
         const main = hq || sticker;
         // pack sheets: the extras started with the photo; give stragglers up to 60s,
         // and any that failed print as the main sticker so the sheet still prints
-        if (product.sheets.some((k) => k !== "same") && variantJob.current) {
-          await Promise.race([variantJob.current, new Promise((r) => setTimeout(r, 60000))]);
+        const kind = product.sheets[0];
+        if (kind !== "same") {
+          startVariantsRef.current(kind);
+          const job = variantJobs.current[kind];
+          if (job) await Promise.race([job, new Promise((r) => setTimeout(r, 60000))]);
         }
-        const sheets = await buildSheets(product, main, variantsRef.current, false);
-        setPrintFile(sheets[0]);
-        const stamp = Date.now();
-        sheets.forEach((sheet, i) =>
-          downloadDataUrl(sheet, `mesticker-print-${stamp}${sheets.length > 1 ? `-${i + 1}of${sheets.length}` : ""}.png`)
-        );
+        // the numbered guide + the 8 images staff upload one by one into the Liene app
+        const [guide] = await buildSheets(product, main, variantsRef.current, false, true);
+        setPrintFile(guide);
+        setKit(await buildKit(product, main, variantsRef.current));
         setSettings((s) => {
           if (!s) return s;
-          const next = { ...s, sheetsLeft: Math.max(0, s.sheetsLeft - sheets.length), salesToday: s.salesToday + 1 };
+          const next = { ...s, sheetsLeft: Math.max(0, s.sheetsLeft - product.sheets.length), salesToday: s.salesToday + 1 };
           try {
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
           } catch {}
@@ -427,11 +459,12 @@ export default function BoothApp() {
                 onProduct={(id) => {
                   sounds.tap();
                   setProductId(id);
+                  if (id === "mix") startVariantsRef.current("mix");
                 }}
                 onPaid={startPrint}
               />
             )}
-            {step === "printing" && <Printing sheet={printFile} sheets={(getProduct(productId) ?? BOOTH_PRODUCTS[0]).sheets.length} onDone={() => setStep("done")} />}
+            {step === "printing" && <PrintKit guide={printFile} kit={kit} onDone={() => setStep("done")} />}
             {step === "done" && <Done sticker={sticker} digitalUrl={digitalUrl} emailOn={emailOn} autoEmailedTo={autoEmailedTo} onFinish={reset} />}
           </motion.div>
         </AnimatePresence>
@@ -442,9 +475,9 @@ export default function BoothApp() {
           settings={settings}
           update={updateSettings}
           lastGen={lastGen}
-          canReprint={!!printFile}
+          canReprint={!!kit && step === "done"}
           canMarkPaid={step === "reveal" && !!sticker && !paid}
-          onReprint={() => printFile && downloadDataUrl(printFile, `mesticker-print-${Date.now()}.png`)}
+          onReprint={() => kit && setStep("printing")}
           onMarkPaid={() => {
             setOperatorOpen(false);
             startPrint();
@@ -935,7 +968,7 @@ function SheetPreviews({ product, sticker, variants }: { product: BoothProduct; 
           <motion.div
             key={kind + i}
             className="relative bg-white shadow-[0_14px_40px_rgba(91,63,214,0.22)]"
-            // a 3.9×6.7" sheet that fits the panel, two side by side for the Party Pack
+            // a 3.9×6.7" sheet that fits the panel
             style={{
               height: `min(100cqh, calc((100cqw - ${(n - 1) * 24}px) / ${n} * 6.7 / 3.9))`,
               aspectRatio: "3.9 / 6.7",
@@ -953,12 +986,12 @@ function SheetPreviews({ product, sticker, variants }: { product: BoothProduct; 
               <div className="h-full w-full animate-pulse rounded-[12px] bg-[var(--lav)]" />
             )}
             <span className="chip absolute -bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-[var(--ink)] text-white" style={{ fontSize: `max(11px, ${u(1)})` }}>
-              {kind === "same" ? "8 stickers" : kind === "pose" ? "🤸 5 poses" : "🎨 5 poses × 5 styles"}
+              {kind === "same" ? "8 stickers" : `${kind === "pose" ? "🤸" : "🎨"} you + ${variants[kind].filter(Boolean).length}/${EXTRAS} ${kind === "pose" ? "poses" : "styles"}`}
             </span>
           </motion.div>
         ))}
       </div>
-      {pending && <div className="t-body shrink-0">✨ Snap is still drawing a few of these…</div>}
+      {pending && <div className="t-body shrink-0">✨ Snap is still drawing the poses: they pop in as they&apos;re ready</div>}
     </div>
   );
 }
@@ -1097,55 +1130,139 @@ function PayWithQr({ styleId, product, onPaid }: { styleId: string | null; produ
 
 // ================================================================ printing
 
-function Printing({ sheet, sheets, onDone }: { sheet: string | null; sheets: number; onDone: () => void }) {
-  const total = PRINT_SECONDS * sheets;
-  const [left, setLeft] = useState(total);
+/**
+ * Printing = the Liene hand-off. The Liene app wants each image uploaded on
+ * its own (then "Remove background" on each), so this screen gives staff the
+ * numbered guide, the 8 images (download here, or scan to get them on the
+ * phone running the Liene app) and the steps, while the guest watches Snap.
+ */
+function PrintKit({ guide, kit, onDone }: { guide: string | null; kit: KitItem[] | null; onDone: () => void }) {
+  const [files, setFiles] = useState<string[] | null>(null);
+  const [phoneQr, setPhoneQr] = useState<string | null>(null);
+  const [got, setGot] = useState<Set<number>>(new Set());
+
+  // white-background copies for the Liene app, then a phone link for staff
   useEffect(() => {
-    const id = setInterval(() => setLeft((s) => s - 1), 1000);
-    return () => clearInterval(id);
-  }, []);
-  useEffect(() => {
-    if (left <= 0) onDone();
-  }, [left, onDone]);
+    if (!kit) return;
+    let alive = true;
+    (async () => {
+      const imgs = await Promise.all(kit.map((k) => stickerForLiene(k.src)));
+      if (!alive) return;
+      setFiles(imgs);
+      try {
+        const up = (image: string) =>
+          fetch("/api/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image }) })
+            .then((r) => r.json())
+            .then((d) => d.url as string);
+        const [guideUrl, ...urls] = await Promise.all([guide ? up(guide) : Promise.resolve(""), ...imgs.map(up)]);
+        const res = await fetch("/api/booth/kit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ guide: guideUrl, items: kit.map((k, i) => ({ n: k.n, url: urls[i], w: k.w, h: k.h })) }),
+        });
+        const { url } = await res.json();
+        if (alive && url) setPhoneQr(await QRCode.toDataURL(url, { width: 480, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } }));
+      } catch {}
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [kit, guide]);
+
+  const stamp = useRef(Date.now()).current;
+  const save = (i: number) => {
+    if (!files) return;
+    downloadDataUrl(files[i], `mesticker-${stamp}-${i + 1}of${files.length}.png`);
+    setGot((g) => new Set(g).add(i));
+  };
+  const saveAll = () => files?.forEach((_, i) => setTimeout(() => save(i), i * 300));
 
   return (
-    <Split>
-      <div className="flex flex-col landscape:w-[46%] portrait:items-center portrait:text-center" style={{ gap: u(1.8) }}>
-        <h2 className="t-h2">
-          Printing your <span className="pop">stickers…</span>
-        </h2>
-        <p className="t-lead">
-          {sheets > 1 ? `${sheets} sheets: printing` : "Printing"}, then cutting each one out. About {Math.max(10, Math.ceil(left / 10) * 10)} seconds.
-        </p>
-        <div className="w-full overflow-hidden rounded-full bg-white shadow-inner" style={{ height: `max(12px, ${u(1.4)})` }}>
-          <motion.div
-            className="h-full rounded-full bg-gradient-to-r from-[var(--cyan)] to-[var(--green)]"
-            animate={{ width: `${((total - left) / total) * 100}%` }}
-          />
+    <div className="h-full w-full overflow-y-auto overflow-x-hidden">
+      <div className="mx-auto flex min-h-full w-full max-w-[1400px] landscape:flex-row portrait:flex-col" style={{ gap: u(2), padding: u(2) }}>
+        <div className="flex shrink-0 flex-col items-center landscape:w-[28%]" style={{ gap: u(1) }}>
+          <h2 className="t-h2 text-center">
+            Making your <span className="pop">stickers…</span>
+          </h2>
+          <div
+            className="relative w-full bg-white shadow-[0_14px_40px_rgba(91,63,214,0.22)]"
+            // fits beside the kit on a laptop without pushing "Got them" off screen
+            style={{ aspectRatio: "3.9 / 6.7", borderRadius: 12, maxWidth: "min(340px, calc((100dvh - 300px) * 3.9 / 6.7))", minWidth: 150 }}
+          >
+            {guide ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={guide} alt="Where each sticker goes" className="h-full w-full rounded-[12px]" />
+            ) : (
+              <div className="h-full w-full animate-pulse rounded-[12px] bg-[var(--lav)]" />
+            )}
+          </div>
+          <p className="t-body text-center">Printing + cutting takes about 2 minutes. Snap&apos;s on it!</p>
+          <button className="btn btn-lg btn-main" onClick={onDone}>
+            Got them! 🎉
+          </button>
         </div>
-        <button className="btn btn-lg btn-main w-fit" onClick={onDone}>
-          Got them! 🎉
-        </button>
-      </div>
 
-      <div className="relative flex items-end justify-center landscape:h-full landscape:w-[40%] portrait:w-full portrait:min-h-0 portrait:flex-1" style={{ gap: u(1) }}>
-        <Mascot className="h-[70%] max-h-full" mood="excited" />
-        <motion.div
-          className="card shrink-0 overflow-hidden"
-          style={{ width: u(13), padding: u(0.5), marginBottom: u(3) }}
-          initial={{ y: 60, opacity: 0, rotate: 0 }}
-          animate={{ y: 0, opacity: 1, rotate: 6 }}
-          transition={{ duration: 1.2, delay: 0.4, type: "spring" }}
-        >
-          {sheet ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={sheet} alt="Your sticker sheet" className="w-full" />
-          ) : (
-            <div className="aspect-[3.9/6.7] w-full bg-[var(--lav)]" />
-          )}
-        </motion.div>
+        <div className="card flex min-w-0 flex-1 flex-col" style={{ gap: u(1.2), padding: u(1.6) }}>
+          <div className="flex flex-wrap items-center justify-between" style={{ gap: u(1) }}>
+            <div>
+              <div className="t-h3">🖨️ Staff: Liene kit</div>
+              <div className="t-body">Upload these one at a time. The number shows where each goes on the sheet.</div>
+            </div>
+            <button className="btn btn-soft" disabled={!files} onClick={saveAll}>
+              ⬇️ Download all 8
+            </button>
+          </div>
+
+          <div className="grid grid-cols-4 portrait:grid-cols-2" style={{ gap: u(1) }}>
+            {(kit ?? Array.from({ length: 8 }, () => null)).map((k, i) => (
+              <button
+                key={i}
+                disabled={!files}
+                onClick={() => save(i)}
+                className={cn("relative flex flex-col items-center rounded-2xl border-2 bg-white", got.has(i) ? "border-[#22c55e]" : "border-[#eee8ff]")}
+                style={{ padding: u(0.6), gap: u(0.3) }}
+              >
+                <span className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--ink)] font-fun font-bold text-white">{i + 1}</span>
+                {got.has(i) && <span className="absolute right-2 top-2 text-xl">✅</span>}
+                <div className="flex aspect-square w-full items-center justify-center">
+                  {files?.[i] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={files[i]} alt={`Sticker ${i + 1}`} className="max-h-full max-w-full object-contain" />
+                  ) : (
+                    <div className="h-3/4 w-3/4 animate-pulse rounded-xl bg-[var(--lav)]" />
+                  )}
+                </div>
+                <div className="t-body font-semibold">{k ? `${k.w}" × ${k.h}"` : "…"}</div>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-start" style={{ gap: u(1.6) }}>
+            <ol className="t-body min-w-[260px] flex-1 list-decimal pl-5" style={{ lineHeight: 1.6 }}>
+              <li>Liene app → <b>Sticker</b> → new <b>4×7</b> canvas.</li>
+              <li>
+                For <b>1 → 8</b>: add the image → tap <b>Remove background</b> → resize to the size shown → drag it to its numbered spot.
+              </li>
+              <li>Keep a little gap between stickers so the cutter has room.</li>
+              <li>
+                Tap <b>Print</b> (print + cut ≈ 2 min).
+              </li>
+            </ol>
+            <div className="flex flex-col items-center" style={{ gap: 6 }}>
+              <div className="flex items-center justify-center overflow-hidden bg-white" style={{ width: `max(120px, ${u(13)})`, height: `max(120px, ${u(13)})` }}>
+                {phoneQr ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={phoneQr} alt="Open the kit on your phone" className="h-full w-full" />
+                ) : (
+                  <div className="h-full w-full animate-pulse bg-[var(--lav)]" />
+                )}
+              </div>
+              <div className="t-body text-center">📱 Liene on a phone?<br />Scan to save all 8 to Photos</div>
+            </div>
+          </div>
+        </div>
       </div>
-    </Split>
+    </div>
   );
 }
 

@@ -8,20 +8,21 @@ export const SHEETS_PER_CASSETTE = 36;
 
 /**
  * What a guest can buy. Every sheet is the PixCut S1's 4×7" sticker paper
- * (3.9×6.7" printable) laid out as 1 big (2.7") + 4 minis (1.8"); paper +
- * ribbon is ~$0.60/sheet. What changes is what goes on the sheet:
- *   same — their sticker 8 times in a mixed-size collage
- *   pose — their sticker + 4 new poses in the same style (poses designed for
- *          this person by the web app's variations engine)
- *   mix  — their sticker + 4 more, each a different pose AND a different style
- * The 8 extra stickers start generating the moment the photo is taken, in
- * parallel with the main one, so they're ready by the reveal.
- * Prices can be overridden with NEXT_PUBLIC_BOOTH_PRICES="sheet:2000,pose:2500,mix:2500,party:4000".
+ * (3.9×6.7" printable) holding 8 stickers in the hand-arrangeable kit8
+ * layout; paper + ribbon is ~$0.60/sheet. What changes is what goes on it:
+ *   pose — their sticker + 7 new poses in the same style (poses designed for
+ *          this person by the web app's variations engine). Started the moment
+ *          the photo is taken, so they're ready by the reveal.
+ *   same — their sticker 8 times, in different sizes
+ *   mix  — their sticker + 7 that change pose AND style (made only if picked)
+ * Staff then upload the 8 images one by one into the Liene app (which removes
+ * each background) and arrange them like the numbered guide.
+ * Prices can be overridden with NEXT_PUBLIC_BOOTH_PRICES="pose:2500,sheet:2000,mix:2500".
  */
 export type SheetKind = "same" | "pose" | "mix";
 
 export interface BoothProduct {
-  id: "sheet" | "pose" | "mix" | "party";
+  id: "sheet" | "pose" | "mix";
   name: string;
   blurb: string;
   priceCents: number;
@@ -40,14 +41,13 @@ const PRICE_OVERRIDES = Object.fromEntries(
 
 export const BOOTH_PRODUCTS: BoothProduct[] = (
   [
+    { id: "pose", name: "Pose Sheet", blurb: "You + 7 new poses · 8 stickers", priceCents: 2500, sheets: ["pose"], tag: "Most fun", emoji: "🤸" },
     { id: "sheet", name: "Sticker Sheet", blurb: "8 of your sticker, all sizes", priceCents: 2000, sheets: ["same"], emoji: "✨" },
-    { id: "pose", name: "Pose Pack", blurb: "You in 5 different poses", priceCents: 2500, sheets: ["pose"], tag: "New!", emoji: "🤸" },
-    { id: "mix", name: "Mix Pack", blurb: "5 poses × 5 cartoon styles", priceCents: 2500, sheets: ["mix"], emoji: "🎨" },
-    { id: "party", name: "Party Pack", blurb: "Pose + Mix sheets · 10 stickers", priceCents: 4000, sheets: ["pose", "mix"], tag: "Best value", emoji: "🎉" },
+    { id: "mix", name: "Mix Sheet", blurb: "7 poses, each a new style", priceCents: 2500, sheets: ["mix"], emoji: "🎨" },
   ] as BoothProduct[]
 ).map((p) => ({ ...p, priceCents: PRICE_OVERRIDES[p.id] ?? p.priceCents }));
 
-export const DEFAULT_PRODUCT_ID: BoothProduct["id"] = "sheet";
+export const DEFAULT_PRODUCT_ID: BoothProduct["id"] = "pose";
 
 export const getProduct = (id: string | null | undefined) => BOOTH_PRODUCTS.find((p) => p.id === id);
 

@@ -32,6 +32,14 @@ export const LAYOUTS = {
     [40, 40, 525, 610, -3], [605, 40, 525, 610, 3], [40, 700, 525, 610, 2], [605, 700, 525, 610, -2],
     [40, 1360, 525, 610, -3], [605, 1360, 525, 610, 3],
   ] as Slot[],
+  /**
+   * 8 different stickers with no tilt, so staff can copy it by hand on the
+   * Liene canvas: a big #1 top-left, two beside it, two medium, three small.
+   */
+  kit8: [
+    [40, 40, 660, 740, 0], [730, 40, 400, 360, 0], [730, 420, 400, 360, 0], [40, 820, 525, 560, 0],
+    [605, 820, 525, 560, 0], [40, 1420, 350, 560, 0], [410, 1420, 350, 560, 0], [780, 1420, 350, 560, 0],
+  ] as Slot[],
   /** one big sticker (~3.6") */
   big1: [[35, 335, 1100, 1340, 0]] as Slot[],
 };
@@ -41,6 +49,7 @@ export const LAYOUT_INFO: Record<LayoutId, string> = {
   collage8: "8 slots: one hero (~2.4\") + 7 smaller (1–1.8\"), mixed sizes and tilts. Best for one sticker repeated.",
   hero5: "5 slots: a big hero (~3\") on top + 4 varied minis (1.2–1.8\"). Best for 5 different stickers (poses/styles).",
   grid6: "6 slots of ~1.8×2\", 2 columns × 3 rows, gently tilted. Best for 6 different stickers of equal importance.",
+  kit8: "8 slots, no tilt (easy to copy by hand in the Liene app): a big #1 (~2.2\") top-left, #2–3 beside it, #4–5 medium, #6–8 small. Best for you + 7 poses.",
   big1: "1 slot: a single ~3.6\" sticker.",
 };
 

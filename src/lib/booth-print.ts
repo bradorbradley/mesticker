@@ -10,7 +10,7 @@
  * Runs in the browser via Canvas, like compose-sheet-client.ts.
  */
 
-import { LAYOUTS, SHEET_H, SHEET_W, SLOT_SHRINK as SHRINK, type LayoutId } from "./sheet-layouts";
+import { DPI, LAYOUTS, SHEET_H, SHEET_W, SLOT_SHRINK as SHRINK, type LayoutId } from "./sheet-layouts";
 
 export { LAYOUTS, type LayoutId };
 
@@ -100,7 +100,7 @@ export async function addStickerBorder(src: string, borderFraction = 0.035): Pro
  * null draws a soft placeholder (used by the on-screen preview while a
  * pose is still being made); missing entries reuse srcs[0].
  */
-export async function composePrintSheet(srcs: (string | null)[], layout: LayoutId): Promise<string> {
+export async function composePrintSheet(srcs: (string | null)[], layout: LayoutId, opts: { numbers?: boolean } = {}): Promise<string> {
   const slots = LAYOUTS[layout];
   const uniq = Array.from(new Set(srcs.filter((s): s is string => !!s)));
   const loaded = new Map(await Promise.all(uniq.map(async (s) => [s, await loadImage(s)] as const)));
@@ -132,8 +132,54 @@ export async function composePrintSheet(srcs: (string | null)[], layout: LayoutI
       ctx.fillText("✨", 0, 0);
     }
     ctx.restore();
+    if (opts.numbers) {
+      // a numbered badge on each spot, matching the kit's image numbers
+      const r = Math.max(38, Math.min(w, h) * 0.09);
+      ctx.fillStyle = "#1a1a2e";
+      ctx.beginPath();
+      ctx.arc(x + r * 0.9, y + r * 0.9, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `700 ${Math.round(r * 1.2)}px Fredoka, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(i + 1), x + r * 0.9, y + r * 0.95);
+    }
   });
   return c.toDataURL("image/png");
+}
+
+/**
+ * One sticker as the Liene app wants it: trimmed to the character, on plain
+ * white with breathing room, so its "Remove background" button gets a clean
+ * cut-out and adds its own white contour.
+ */
+export async function stickerForLiene(src: string): Promise<string> {
+  const img = trimTransparent(await loadImage(src));
+  const pad = Math.round(Math.max(img.width, img.height) * 0.08);
+  const c = document.createElement("canvas");
+  c.width = img.width + pad * 2;
+  c.height = img.height + pad * 2;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(img, pad, pad);
+  return c.toDataURL("image/png");
+}
+
+/** Aspect (w/h) of a sticker once its empty margin is trimmed. */
+export async function trimmedAspect(src: string): Promise<number> {
+  const img = trimTransparent(await loadImage(src));
+  return img.width / img.height;
+}
+
+/** How big a sticker ends up in a slot, in inches (for the arranging guide). */
+export function slotInches(layout: LayoutId, i: number, aspect: number) {
+  const [, , w, h] = LAYOUTS[layout][i];
+  const fw = (aspect >= w / h ? w : h * aspect) * SHRINK;
+  const fh = (aspect >= w / h ? w / aspect : h) * SHRINK;
+  const r = (px: number) => Math.round((px / DPI) * 10) / 10;
+  return { w: r(fw), h: r(fh) };
 }
 
 export function downloadDataUrl(dataUrl: string, filename: string) {
