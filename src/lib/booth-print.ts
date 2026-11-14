@@ -173,6 +173,19 @@ export async function trimmedAspect(src: string): Promise<number> {
   return img.width / img.height;
 }
 
+/**
+ * Where a sticker sits on the sheet, in inches from the top-left of the
+ * printable area (3.9×6.7"): its fitted box, centred in the slot. The print
+ * station uses this to place each sticker in StixCut by numbers.
+ */
+export function slotPlacement(layout: LayoutId, i: number, aspect: number) {
+  const [x, y, w, h] = LAYOUTS[layout][i];
+  const fw = (aspect >= w / h ? w : h * aspect) * SHRINK;
+  const fh = (aspect >= w / h ? w / aspect : h) * SHRINK;
+  const r = (px: number) => Math.round((px / DPI) * 100) / 100;
+  return { x: r(x + (w - fw) / 2), y: r(y + (h - fh) / 2), w: r(fw), h: r(fh) };
+}
+
 /** How big a sticker ends up in a slot, in inches (for the arranging guide). */
 export function slotInches(layout: LayoutId, i: number, aspect: number) {
   const [, , w, h] = LAYOUTS[layout][i];

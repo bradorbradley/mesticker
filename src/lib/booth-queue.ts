@@ -16,11 +16,15 @@ import { getDb } from "@/lib/db";
 
 export type QueueStatus = "queued" | "printing" | "done" | "failed";
 
+/** One sticker placement: on which sheet (0-based), slot n, where and how big (inches from the printable area's top-left). */
 export interface QueueItem {
   n: number;
   url: string;
   w: number;
   h: number;
+  sheet?: number;
+  x?: number;
+  y?: number;
 }
 
 export interface QueueOrder {
@@ -33,6 +37,8 @@ export interface QueueOrder {
   status: QueueStatus;
   kitUrl: string;
   guideUrl: string | null;
+  /** numbered guide per sheet, in sheet order */
+  guides: string[];
   items: QueueItem[];
   attempts: number;
   error: string | null;
@@ -84,6 +90,7 @@ function ensureTable() {
       )
     `
       .then(() => sql`CREATE INDEX IF NOT EXISTS idx_booth_queue_status ON booth_queue(status, created_at)`)
+      .then(() => sql`ALTER TABLE booth_queue ADD COLUMN IF NOT EXISTS guides JSONB`)
       .catch((e) => {
         tableReady = null;
         throw e;
@@ -104,6 +111,7 @@ function fromRow(r: Row): QueueOrder {
     status: r.status as QueueStatus,
     kitUrl: String(r.kit_url),
     guideUrl: (r.guide_url as string) ?? null,
+    guides: ((typeof r.guides === "string" ? JSON.parse(r.guides) : r.guides) as string[] | null) ?? (r.guide_url ? [String(r.guide_url)] : []),
     items: (typeof r.items === "string" ? JSON.parse(r.items) : r.items) as QueueItem[],
     attempts: Number(r.attempts) || 0,
     error: (r.error as string) ?? null,
@@ -116,7 +124,7 @@ function fromRow(r: Row): QueueOrder {
 // ---------------------------------------------------------------- operations
 
 /** Add a paid order. Same id twice (e.g. staff reopens the kit) is a no-op. */
-export async function enqueue(o: Pick<QueueOrder, "id" | "boothId" | "productId" | "checkoutId" | "verified" | "kitUrl" | "guideUrl" | "items">) {
+export async function enqueue(o: Pick<QueueOrder, "id" | "boothId" | "productId" | "checkoutId" | "verified" | "kitUrl" | "guideUrl" | "guides" | "items">) {
   if (inMemory()) {
     const m = memory();
     if (!m.has(o.id)) {
@@ -126,8 +134,8 @@ export async function enqueue(o: Pick<QueueOrder, "id" | "boothId" | "productId"
   }
   await ensureTable();
   await getDb()`
-    INSERT INTO booth_queue (id, booth_id, product_id, checkout_id, verified, kit_url, guide_url, items)
-    VALUES (${o.id}, ${o.boothId}, ${o.productId}, ${o.checkoutId}, ${o.verified}, ${o.kitUrl}, ${o.guideUrl}, ${JSON.stringify(o.items)}::jsonb)
+    INSERT INTO booth_queue (id, booth_id, product_id, checkout_id, verified, kit_url, guide_url, guides, items)
+    VALUES (${o.id}, ${o.boothId}, ${o.productId}, ${o.checkoutId}, ${o.verified}, ${o.kitUrl}, ${o.guideUrl}, ${JSON.stringify(o.guides)}::jsonb, ${JSON.stringify(o.items)}::jsonb)
     ON CONFLICT (id) DO NOTHING
   `;
 }

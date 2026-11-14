@@ -30,19 +30,51 @@ node hardware/station/station.mjs next                       # paid (Stripe-veri
 node hardware/station/station.mjs next --include-unverified  # also free mode / cash
 ```
 
-This claims the oldest order and saves `1.png … 8.png`, `guide.png` and `order.json` (sizes in
-inches) to `~/MeSticker Orders/<orderId>/`. Then, in StixCut:
+This claims the oldest order and saves it to `~/MeSticker Orders/<orderId>/`:
 
-1. New 4×7 sheet, media **4.00 × 7.00 in Cut**. Use kiss-cut, not perf-cut, which wears the cutting strip.
-2. Import the 8 images, remove backgrounds, size each one to its `w × h` and place it like `guide.png`.
-3. **Print & Cut**.
-4. Check the sheet against `guide.png`, then report back:
-   - `node hardware/station/station.mjs done <orderId>`
-   - `node hardware/station/station.mjs failed <orderId> "paper jam"`
-   - `node hardware/station/station.mjs requeue <orderId>` (puts it back in line)
+- `stickers/s01.png …`: each distinct sticker once. They're already transparent with a white die-cut
+  border, so **no background removal is needed**.
+- `sheet-N-guide.png`: the sheet exactly as the guest saw it, with numbered spots.
+- `order.json`: `sheets[].placements[]` = `{ n, file, x, y, w, h }`, in inches from the top-left of
+  the **printable area** (3.9 × 6.7", which starts 0.05" in from the left and 0.15" down on 4 × 7" paper).
+
+## Station agent playbook (StixCut)
+
+The goal is a fast, accurate sheet every time: 12 stickers per sheet (`pack12`: a ~2.2" hero, two
+~1.1" beside it, three rows of three), at least 2.5 mm of paper between cut lines, nothing off the
+printable area. Budget about 2 minutes of arranging per sheet; print + cut is another ~2.
+
+For each sheet in `order.json`, in order:
+
+1. **New sheet.** File → New. Media **4.00 × 7.00 in Cut**, cut mode **Kiss** (never Perf, which
+   scores the cutting strip and can jam). Printer shows "1 READY".
+2. **Import once.** Add Files… → select all of `stickers/` for this order (a single import).
+3. **Place by numbers.** For each placement, drag `file` onto the sheet, then set its size to `w × h`
+   and its position to `x, y`. Use the inspector fields, not dragging by eye. Add the printable-area
+   offset if StixCut measures from the paper edge. Repeats (same `file` in several slots) are
+   intended: the small last row repeats favourites.
+4. **Cut lines.** Each sticker gets an auto-traced contour around its white border (kiss cut). No
+   contour may touch or cross another, and keep about 30 px / 2.5 mm between them. If StixCut adds
+   its own offset, keep it small (≤ 1 mm) so neighbours don't merge.
+5. **Quality check.** Compare against `sheet-N-guide.png` before printing:
+   - 12 stickers, each in its numbered spot, none missing, none duplicated by mistake
+   - every face crisp and recognizable, nothing clipped at an edge, no stray background boxes
+   - the hero is the guest's main sticker; nothing upside down or mirrored
+   - every cut line is closed and separate; nothing within ~0.1" of the paper edge
+   If anything fails, fix it. If a sticker image itself is bad (wrong person, broken), stop and
+   `failed` the order with the reason instead of printing it.
+6. **Print & Cut**, then a quick look at the printed sheet: colours present, cuts aligned with the
+   print. Misaligned cuts mean a recalibration (StixCut → Printer → Cut Calibration) before the next order.
+
+When every sheet is printed:
+
+- `node hardware/station/station.mjs done <orderId>`
+- `node hardware/station/station.mjs failed <orderId> "paper jam"` (with what went wrong)
+- `node hardware/station/station.mjs requeue <orderId>` (puts it back in line)
 
 An order claimed but not finished within 15 minutes goes back in line automatically.
-
-The exact StixCut click path gets recorded here after the first sheet is done by hand.
-
 `node hardware/station/station.mjs list [queued|printing|done|failed]` shows the queue.
+
+**Cost per sheet:** 15 AI images per guest (~$0.60 at medium quality), made whether or not they buy,
+plus paper and ink of about $0.60 per sheet. The exact StixCut clicks get recorded here once the
+first sheet has been done by hand.

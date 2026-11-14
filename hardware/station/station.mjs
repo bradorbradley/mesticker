@@ -13,9 +13,9 @@
  *   MCP_SECRET=<station key, same as Vercel's MCP_SECRET>
  *   BOOTH_URL=https://mesticker.fun        (optional)
  *
- * Orders land in ~/MeSticker Orders/<orderId>/  as 1.png … 8.png, guide.png
- * and order.json (sizes in inches). Prints a JSON summary on stdout so an
- * agent (Claude) can read it and drive StixCut.
+ * Orders land in ~/MeSticker Orders/<orderId>/ (stickers/, a guide per sheet,
+ * order.json with every placement in inches). Prints the JSON summary on
+ * stdout so an agent (Claude) can read it and drive StixCut.
  */
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -84,21 +84,50 @@ async function download(url, path) {
   return buf.length;
 }
 
+/**
+ * Download an order: each distinct sticker once (stickers repeat across
+ * slots and sheets), one guide per sheet, and a placement plan per sheet.
+ *   ~/MeSticker Orders/<id>/stickers/s01.png …
+ *   ~/MeSticker Orders/<id>/sheet-1-guide.png …
+ *   ~/MeSticker Orders/<id>/order.json  → sheets[].placements[] { n, file, x, y, w, h } (inches)
+ */
 async function fetchOrder(order) {
   const dir = join(ORDERS, order.id);
-  mkdirSync(dir, { recursive: true });
-  const files = [];
-  for (const it of [...order.items].sort((a, b) => a.n - b.n)) {
-    const path = join(dir, `${it.n}.png`);
+  const stickerDir = join(dir, "stickers");
+  mkdirSync(stickerDir, { recursive: true });
+  const fileOf = new Map();
+  for (const it of order.items) {
+    if (fileOf.has(it.url)) continue;
+    const path = join(stickerDir, `s${String(fileOf.size + 1).padStart(2, "0")}.png`);
     await download(it.url, path);
-    files.push({ n: it.n, path, w: it.w, h: it.h });
+    fileOf.set(it.url, path);
   }
-  let guide = null;
-  if (order.guideUrl) {
-    guide = join(dir, "guide.png");
-    await download(order.guideUrl, guide).catch(() => (guide = null));
+  const guideUrls = order.guides?.length ? order.guides : order.guideUrl ? [order.guideUrl] : [];
+  const sheetNames = String(order.productId || "").split("+");
+  const count = Math.max(guideUrls.length, ...order.items.map((it) => (it.sheet ?? 0) + 1));
+  const sheets = [];
+  for (let s = 0; s < count; s++) {
+    let guide = null;
+    if (guideUrls[s]) {
+      guide = join(dir, `sheet-${s + 1}-guide.png`);
+      await download(guideUrls[s], guide).catch(() => (guide = null));
+    }
+    const placements = order.items
+      .filter((it) => (it.sheet ?? 0) === s)
+      .sort((a, b) => a.n - b.n)
+      .map((it) => ({ n: it.n, file: fileOf.get(it.url), x: it.x ?? null, y: it.y ?? null, w: it.w, h: it.h }));
+    sheets.push({ sheet: s + 1, design: sheetNames[s] ?? null, guide, stickers: placements.length, placements });
   }
-  const summary = { id: order.id, product: order.productId, verified: order.verified, attempts: order.attempts, kitUrl: order.kitUrl, dir, guide, files };
+  const summary = {
+    id: order.id,
+    designs: order.productId,
+    verified: order.verified,
+    attempts: order.attempts,
+    kitUrl: order.kitUrl,
+    dir,
+    uniqueStickers: fileOf.size,
+    sheets,
+  };
   writeFileSync(join(dir, "order.json"), JSON.stringify(summary, null, 2));
   return summary;
 }
