@@ -130,6 +130,8 @@ export default function BoothApp() {
   const [lastGen, setLastGen] = useState<GenStats | null>(null);
   const [printFile, setPrintFile] = useState<string | null>(null);
   const [kit, setKit] = useState<KitItem[] | null>(null);
+  // one id per paid order, so reopening the kit never queues it twice
+  const [printOrder, setPrintOrder] = useState<PrintOrder | null>(null);
   const [digitalUrl, setDigitalUrl] = useState<string | null>(null);
   const [settings, setSettings] = useState<BoothSettings | null>(null);
   const [operatorOpen, setOperatorOpen] = useState(false);
@@ -186,6 +188,7 @@ export default function BoothApp() {
     setError(null);
     setPrintFile(null);
     setKit(null);
+    setPrintOrder(null);
     setDigitalUrl(null);
     setPaid(false);
     setStickerReady(false);
@@ -331,6 +334,7 @@ export default function BoothApp() {
       if (!sticker) return;
       const product = getProduct(productId) ?? BOOTH_PRODUCTS[0];
       setPaid(true);
+      setPrintOrder({ id: newOrderId(), productId: product.id, checkoutId: checkoutId ?? null });
       setStep("printing");
       try {
         // Prefer the sharper print copy; don't hold the printer more than 30s for it.
@@ -464,7 +468,7 @@ export default function BoothApp() {
                 onPaid={startPrint}
               />
             )}
-            {step === "printing" && <PrintKit guide={printFile} kit={kit} onDone={() => setStep("done")} />}
+            {step === "printing" && <PrintKit guide={printFile} kit={kit} order={printOrder} onDone={() => setStep("done")} />}
             {step === "done" && <Done sticker={sticker} digitalUrl={digitalUrl} emailOn={emailOn} autoEmailedTo={autoEmailedTo} onFinish={reset} />}
           </motion.div>
         </AnimatePresence>
@@ -1136,9 +1140,15 @@ function PayWithQr({ styleId, product, onPaid }: { styleId: string | null; produ
  * numbered guide, the 8 images (download here, or scan to get them on the
  * phone running the Liene app) and the steps, while the guest watches Snap.
  */
-function PrintKit({ guide, kit, onDone }: { guide: string | null; kit: KitItem[] | null; onDone: () => void }) {
+type PrintOrder = { id: string; productId: string; checkoutId: string | null };
+
+const newOrderId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `o-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+function PrintKit({ guide, kit, order, onDone }: { guide: string | null; kit: KitItem[] | null; order: PrintOrder | null; onDone: () => void }) {
   const [files, setFiles] = useState<string[] | null>(null);
   const [phoneQr, setPhoneQr] = useState<string | null>(null);
+  const [queued, setQueued] = useState(false);
   const [got, setGot] = useState<Set<number>>(new Set());
 
   // white-background copies for the Liene app, then a phone link for staff
@@ -1158,16 +1168,17 @@ function PrintKit({ guide, kit, onDone }: { guide: string | null; kit: KitItem[]
         const res = await fetch("/api/booth/kit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ guide: guideUrl, items: kit.map((k, i) => ({ n: k.n, url: urls[i], w: k.w, h: k.h })) }),
+          body: JSON.stringify({ guide: guideUrl, items: kit.map((k, i) => ({ n: k.n, url: urls[i], w: k.w, h: k.h })), order }),
         });
-        const { url } = await res.json();
+        const { url, queued: inQueue } = await res.json();
+        if (alive && inQueue) setQueued(true);
         if (alive && url) setPhoneQr(await QRCode.toDataURL(url, { width: 480, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } }));
       } catch {}
     })();
     return () => {
       alive = false;
     };
-  }, [kit, guide]);
+  }, [kit, guide, order]);
 
   const stamp = useRef(Date.now()).current;
   const save = (i: number) => {
@@ -1207,6 +1218,7 @@ function PrintKit({ guide, kit, onDone }: { guide: string | null; kit: KitItem[]
             <div>
               <div className="t-h3">🖨️ Staff: Liene kit</div>
               <div className="t-body">Upload these one at a time. The number shows where each goes on the sheet.</div>
+              {queued && <div className="t-body font-semibold text-[#15803d]">✓ Sent to the print station</div>}
             </div>
             <button className="btn btn-soft" disabled={!files} onClick={saveAll}>
               ⬇️ Download all 8
