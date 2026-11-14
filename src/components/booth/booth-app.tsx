@@ -999,6 +999,7 @@ function SheetShop({
 
 function PayWithQr({ sheets, onPaid }: { sheets: SheetKind[]; onPaid: (checkoutId?: string) => void }) {
   const [qr, setQr] = useState<string | null>(null);
+  const [payUrl, setPayUrl] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "waiting" | "free" | "error">("loading");
   const paidRef = useRef(false);
   const price = bundlePrice(sheets.length);
@@ -1019,6 +1020,7 @@ function PayWithQr({ sheets, onPaid }: { sheets: SheetKind[]; onPaid: (checkoutI
         if (data.free) return setState("free");
         if (!res.ok || !data.url) throw new Error(data.error);
         setQr(await QRCode.toDataURL(data.url, { width: 560, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } }));
+        setPayUrl(data.url);
         setState("waiting");
         poll = setInterval(async () => {
           try {
@@ -1059,6 +1061,12 @@ function PayWithQr({ sheets, onPaid }: { sheets: SheetKind[]; onPaid: (checkoutI
         </div>
         <div className="t-h3">📱 Scan to pay</div>
         <div className="t-body">Apple Pay, Google Pay, card</div>
+        {payUrl && (
+          // already on your phone? pay in a new tab: this one keeps waiting and moves on by itself
+          <a className="btn btn-soft mt-1 w-fit self-end" href={payUrl} target="_blank" rel="noopener noreferrer">
+            💳 Pay on this device
+          </a>
+        )}
         {state === "waiting" && (
           <motion.div className="t-body text-[#15803d]" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.6, repeat: Infinity }}>
             ● Printing starts automatically

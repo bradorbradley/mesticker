@@ -188,17 +188,6 @@ export default function BoothCamera({
                   Use a photo instead
                 </button>
               </div>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) loadPhotoFile(f);
-                  e.target.value = "";
-                }}
-              />
             </div>
           )}
           <AnimatePresence>
@@ -218,6 +207,18 @@ export default function BoothCamera({
           </AnimatePresence>
         </div>
 
+        {/* pick a photo you already have (phones, or no camera): always available */}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) loadPhotoFile(f);
+            e.target.value = "";
+          }}
+        />
         <div className="flex shrink-0 flex-wrap items-center justify-center short:flex-col-reverse short:flex-nowrap" style={{ gap: u(1.2) }}>
           {shot ? (
             <>
@@ -231,7 +232,10 @@ export default function BoothCamera({
           ) : (
             <>
               <button className="btn btn-soft" onClick={onBack}>
-                ← Styles
+                ← Back
+              </button>
+              <button className="btn btn-soft" disabled={count !== null} onClick={() => fileRef.current?.click()}>
+                🖼️ Upload a photo
               </button>
               <button className="btn btn-lg btn-main" disabled={!ready || count !== null} onClick={startCountdown}>
                 {count !== null ? "Smile! 😁" : "📸 I'm ready"}
