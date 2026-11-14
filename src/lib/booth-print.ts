@@ -51,7 +51,7 @@ function stampRing(ctx: CanvasRenderingContext2D, sil: HTMLCanvasElement, pad: n
  * sticker prints at its real size and shape (tall, wide, round) instead of
  * every one being the same padded square.
  */
-function trimTransparent(img: HTMLImageElement): HTMLCanvasElement | HTMLImageElement {
+function trimTransparent(img: HTMLImageElement | HTMLCanvasElement): HTMLCanvasElement | HTMLImageElement {
   const c = document.createElement("canvas");
   c.width = img.width;
   c.height = img.height;
@@ -79,9 +79,51 @@ function trimTransparent(img: HTMLImageElement): HTMLCanvasElement | HTMLImageEl
   return out;
 }
 
+/**
+ * AI cut-outs leave faint haze and tiny specks around the character. Growing
+ * a border from that makes a lumpy outline and stray islands, and the
+ * cutter traces every one. Drop near-invisible alpha, then any blob smaller
+ * than 0.3% of the sticker (real detached bits like music notes are far bigger).
+ */
+function cleanEdges(img: HTMLImageElement): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = img.width;
+  c.height = img.height;
+  const ctx = c.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(img, 0, 0);
+  const id = ctx.getImageData(0, 0, c.width, c.height);
+  const { data, width: W, height: H } = id;
+  for (let i = 3; i < data.length; i += 4) if (data[i] < 72) data[i] = 0;
+  const label = new Int32Array(W * H).fill(-1);
+  const sizes: number[] = [];
+  for (let i = 0; i < W * H; i++) {
+    if (label[i] !== -1 || !data[i * 4 + 3]) continue;
+    const n = sizes.length;
+    const stack = [i];
+    let count = 0;
+    label[i] = n;
+    while (stack.length) {
+      const p = stack.pop()!;
+      count++;
+      const x = p % W, y = (p / W) | 0;
+      for (const q of [x > 0 ? p - 1 : -1, x < W - 1 ? p + 1 : -1, y > 0 ? p - W : -1, y < H - 1 ? p + W : -1]) {
+        if (q >= 0 && label[q] === -1 && data[q * 4 + 3]) {
+          label[q] = n;
+          stack.push(q);
+        }
+      }
+    }
+    sizes.push(count);
+  }
+  const min = Math.max(200, Math.max(0, ...sizes) * 0.003);
+  for (let i = 0; i < W * H; i++) if (label[i] !== -1 && sizes[label[i]] < min) data[i * 4 + 3] = 0;
+  ctx.putImageData(id, 0, 0);
+  return c;
+}
+
 export async function addStickerBorder(src: string, borderFraction = 0.035): Promise<string> {
   const loaded = await loadImage(src);
-  const img = trimTransparent(loaded);
+  const img = trimTransparent(cleanEdges(loaded));
   const radius = Math.round(Math.max(img.width, img.height) * borderFraction);
   const hairline = 3;
   const pad = radius + hairline + 4;

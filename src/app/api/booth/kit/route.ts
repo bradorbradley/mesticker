@@ -76,7 +76,9 @@ export async function POST(request: NextRequest) {
     const guides = (Array.isArray(guideList) ? guideList : [guide]).filter(okUrl).slice(0, 3);
     const guideUrl = guides[0] ?? null;
     const manifest = await uploadJson({ kind: "mesticker-liene-kit", created: Date.now(), guide: guideUrl, guides, items: clean });
-    const origin = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    // a localhost NEXT_PUBLIC_APP_URL (set for dev) must not leak into preview/prod kit links
+    const envOrigin = process.env.NEXT_PUBLIC_APP_URL;
+    const origin = envOrigin && !envOrigin.includes("localhost") ? envOrigin.replace(/\/$/, "") : request.nextUrl.origin;
     const url = `${origin}/booth/kit?m=${encodeURIComponent(manifest)}`;
     const queued = order ? await queueOrder(order, url, guides, clean) : false;
     return NextResponse.json({ url, queued });
