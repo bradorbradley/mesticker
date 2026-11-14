@@ -46,6 +46,10 @@ printable area. Budget about 2 minutes of arranging per sheet; print + cut is an
 
 For each sheet in `order.json`, in order:
 
+0. **Heal missing stickers.** If `order.json` shows fewer distinct stickers than the design needs (Pose Party
+   and Big Feelings need 8, Best Of needs 11), the extras never arrived. This happens when a guest pays on
+   their phone and Safari pauses the booth tab. Run `node hardware/station/heal.mjs <orderId>`: it
+   regenerates them from the hero sticker, borders and places them. Never print a sheet of 12 identical stickers.
 1. **Build the layout (seconds, exact).**
    `node hardware/station/stixcut-layout.mjs <orderId>` writes `sheet-N.stixcut`: every sticker at its
    spot and size, kiss cut (perf off), a 0.4 mm cut margin just outside the white border, and each
