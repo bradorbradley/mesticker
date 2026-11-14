@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "qrcode";
 import { stylePresets } from "@/lib/presets";
 import { BOOTH_FREE_MODE, BOOTH_FROM_LABEL, BOOTH_PRODUCTS, DEFAULT_PRODUCT_ID, SHEETS_PER_CASSETTE, getProduct, priceLabel, type BoothProduct, type SheetKind } from "@/lib/booth-config";
-import { addStickerBorder, composePrintSheet, downloadDataUrl, slotInches, stickerForLiene, trimmedAspect } from "@/lib/booth-print";
+import { addStickerBorder, composePrintSheet, slotInches, stickerForLiene, trimmedAspect } from "@/lib/booth-print";
 import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import Mascot from "./mascot";
@@ -130,6 +130,7 @@ export default function BoothApp() {
   const [lastGen, setLastGen] = useState<GenStats | null>(null);
   const [printFile, setPrintFile] = useState<string | null>(null);
   const [kit, setKit] = useState<KitItem[] | null>(null);
+  const [checkoutId, setCheckoutId] = useState<string | undefined>();
   const [digitalUrl, setDigitalUrl] = useState<string | null>(null);
   const [settings, setSettings] = useState<BoothSettings | null>(null);
   const [operatorOpen, setOperatorOpen] = useState(false);
@@ -186,6 +187,7 @@ export default function BoothApp() {
     setError(null);
     setPrintFile(null);
     setKit(null);
+    setCheckoutId(undefined);
     setDigitalUrl(null);
     setPaid(false);
     setStickerReady(false);
@@ -331,6 +333,7 @@ export default function BoothApp() {
       if (!sticker) return;
       const product = getProduct(productId) ?? BOOTH_PRODUCTS[0];
       setPaid(true);
+      setCheckoutId(checkoutId);
       setStep("printing");
       try {
         // Prefer the sharper print copy; don't hold the printer more than 30s for it.
@@ -464,7 +467,7 @@ export default function BoothApp() {
                 onPaid={startPrint}
               />
             )}
-            {step === "printing" && <PrintKit guide={printFile} kit={kit} onDone={() => setStep("done")} />}
+            {step === "printing" && <SendToPrinter guide={printFile} kit={kit} productId={productId} checkoutId={checkoutId} onDone={() => setStep("done")} />}
             {step === "done" && <Done sticker={sticker} digitalUrl={digitalUrl} emailOn={emailOn} autoEmailedTo={autoEmailedTo} onFinish={reset} />}
           </motion.div>
         </AnimatePresence>
@@ -1049,6 +1052,7 @@ function ProductMenu({
 
 function PayWithQr({ styleId, product, onPaid }: { styleId: string | null; product: BoothProduct; onPaid: (checkoutId?: string) => void }) {
   const [qr, setQr] = useState<string | null>(null);
+  const [payUrl, setPayUrl] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "waiting" | "free" | "error">("loading");
   const paidRef = useRef(false);
 
@@ -1066,6 +1070,7 @@ function PayWithQr({ styleId, product, onPaid }: { styleId: string | null; produ
         if (!alive) return;
         if (data.free) return setState("free");
         if (!res.ok || !data.url) throw new Error(data.error);
+        setPayUrl(data.url);
         setQr(await QRCode.toDataURL(data.url, { width: 560, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } }));
         setState("waiting");
         poll = setInterval(async () => {
@@ -1118,6 +1123,11 @@ function PayWithQr({ styleId, product, onPaid }: { styleId: string | null; produ
         </div>
         <div className="t-h3">📱 Scan to pay</div>
         <div className="t-body">{product.name} · Apple Pay, Google Pay, card</div>
+        {payUrl && (
+          <a className="t-body font-semibold text-[var(--purple)] underline" href={payUrl} target="_blank" rel="noreferrer">
+            On this phone? Tap to pay here
+          </a>
+        )}
         {state === "waiting" && (
           <motion.div className="t-body text-[#15803d]" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.6, repeat: Infinity }}>
             ● Printing starts automatically
@@ -1131,138 +1141,127 @@ function PayWithQr({ styleId, product, onPaid }: { styleId: string | null; produ
 // ================================================================ printing
 
 /**
- * Printing = the Liene hand-off. The Liene app wants each image uploaded on
- * its own (then "Remove background" on each), so this screen gives staff the
- * numbered guide, the 8 images (download here, or scan to get them on the
- * phone running the Liene app) and the steps, while the guest watches Snap.
+ * Printing = sending the sheet to the print queue. Works the same on any
+ * device (the guest's own phone or the booth laptop): the 8 images go up as a
+ * Liene kit, the order joins the queue, and the staff phone at the printer
+ * (/booth/station) prints it. The guest gets a pickup number.
  */
-function PrintKit({ guide, kit, onDone }: { guide: string | null; kit: KitItem[] | null; onDone: () => void }) {
-  const [files, setFiles] = useState<string[] | null>(null);
-  const [phoneQr, setPhoneQr] = useState<string | null>(null);
-  const [got, setGot] = useState<Set<number>>(new Set());
+function SendToPrinter({
+  guide,
+  kit,
+  productId,
+  checkoutId,
+  onDone,
+}: {
+  guide: string | null;
+  kit: KitItem[] | null;
+  productId: BoothProduct["id"];
+  checkoutId?: string;
+  onDone: () => void;
+}) {
+  const [state, setState] = useState<"sending" | "sent" | "error">("sending");
+  const [code, setCode] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const sentFor = useRef<string | null>(null);
 
-  // white-background copies for the Liene app, then a phone link for staff
   useEffect(() => {
     if (!kit) return;
-    let alive = true;
+    const tag = `${kit.map((k) => k.src.length).join(",")}:${attempt}`;
+    if (sentFor.current === tag) return; // once per kit (dev double effects)
+    sentFor.current = tag;
+    setState("sending");
     (async () => {
-      const imgs = await Promise.all(kit.map((k) => stickerForLiene(k.src)));
-      if (!alive) return;
-      setFiles(imgs);
       try {
         const up = (image: string) =>
           fetch("/api/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image }) })
             .then((r) => r.json())
-            .then((d) => d.url as string);
-        const [guideUrl, ...urls] = await Promise.all([guide ? up(guide) : Promise.resolve(""), ...imgs.map(up)]);
-        const res = await fetch("/api/booth/kit", {
+            .then((d) => {
+              if (!d.url) throw new Error("upload");
+              return d.url as string;
+            });
+        // the same image appears several times on a Sticker Sheet: upload it once
+        const uniq = Array.from(new Set(kit.map((k) => k.src)));
+        const urlBySrc = new Map(await Promise.all(uniq.map(async (src) => [src, await up(await stickerForLiene(src))] as const)));
+        const guideUrl = guide ? await up(guide).catch(() => "") : "";
+        const kitRes = await fetch("/api/booth/kit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ guide: guideUrl, items: kit.map((k, i) => ({ n: k.n, url: urls[i], w: k.w, h: k.h })) }),
-        });
-        const { url } = await res.json();
-        if (alive && url) setPhoneQr(await QRCode.toDataURL(url, { width: 480, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } }));
-      } catch {}
+          body: JSON.stringify({ guide: guideUrl, items: kit.map((k) => ({ n: k.n, url: urlBySrc.get(k.src), w: k.w, h: k.h })) }),
+        }).then((r) => r.json());
+        if (!kitRes.url) throw new Error("kit");
+        const q = await fetch("/api/booth/queue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kitUrl: kitRes.url, guide: guideUrl, productId, sessionId: checkoutId }),
+        }).then((r) => r.json());
+        if (!q.code) throw new Error("queue");
+        setCode(q.code);
+        setState("sent");
+        sounds.success();
+      } catch (e) {
+        console.error("send to printer failed", e);
+        setState("error");
+      }
     })();
-    return () => {
-      alive = false;
-    };
-  }, [kit, guide]);
-
-  const stamp = useRef(Date.now()).current;
-  const save = (i: number) => {
-    if (!files) return;
-    downloadDataUrl(files[i], `mesticker-${stamp}-${i + 1}of${files.length}.png`);
-    setGot((g) => new Set(g).add(i));
-  };
-  const saveAll = () => files?.forEach((_, i) => setTimeout(() => save(i), i * 300));
+  }, [kit, guide, productId, checkoutId, attempt]);
 
   return (
-    <div className="h-full w-full overflow-y-auto overflow-x-hidden">
-      <div className="mx-auto flex min-h-full w-full max-w-[1400px] landscape:flex-row portrait:flex-col" style={{ gap: u(2), padding: u(2) }}>
-        <div className="flex shrink-0 flex-col items-center landscape:w-[28%]" style={{ gap: u(1) }}>
-          <h2 className="t-h2 text-center">
-            Making your <span className="pop">stickers…</span>
-          </h2>
-          <div
-            className="relative w-full bg-white shadow-[0_14px_40px_rgba(91,63,214,0.22)]"
-            // fits beside the kit on a laptop without pushing "Got them" off screen
-            style={{ aspectRatio: "3.9 / 6.7", borderRadius: 12, maxWidth: "min(340px, calc((100dvh - 300px) * 3.9 / 6.7))", minWidth: 150 }}
-          >
-            {guide ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={guide} alt="Where each sticker goes" className="h-full w-full rounded-[12px]" />
-            ) : (
-              <div className="h-full w-full animate-pulse rounded-[12px] bg-[var(--lav)]" />
-            )}
-          </div>
-          <p className="t-body text-center">Printing + cutting takes about 2 minutes. Snap&apos;s on it!</p>
-          <button className="btn btn-lg btn-main" onClick={onDone}>
-            Got them! 🎉
-          </button>
-        </div>
-
-        <div className="card flex min-w-0 flex-1 flex-col" style={{ gap: u(1.2), padding: u(1.6) }}>
-          <div className="flex flex-wrap items-center justify-between" style={{ gap: u(1) }}>
-            <div>
-              <div className="t-h3">🖨️ Staff: Liene kit</div>
-              <div className="t-body">Upload these one at a time. The number shows where each goes on the sheet.</div>
-            </div>
-            <button className="btn btn-soft" disabled={!files} onClick={saveAll}>
-              ⬇️ Download all 8
+    <Split>
+      <div className="flex flex-col landscape:w-[50%] portrait:items-center portrait:text-center" style={{ gap: u(1.6) }}>
+        {state === "error" ? (
+          <>
+            <h2 className="t-h2">
+              Hmm, the printer <span className="pop">didn&apos;t answer.</span>
+            </h2>
+            <p className="t-lead">Check the Wi-Fi and try again. You won&apos;t be charged twice.</p>
+            <button className="btn btn-lg btn-main w-fit" onClick={() => setAttempt((a) => a + 1)}>
+              Try again
             </button>
-          </div>
-
-          <div className="grid grid-cols-4 portrait:grid-cols-2" style={{ gap: u(1) }}>
-            {(kit ?? Array.from({ length: 8 }, () => null)).map((k, i) => (
-              <button
-                key={i}
-                disabled={!files}
-                onClick={() => save(i)}
-                className={cn("relative flex flex-col items-center rounded-2xl border-2 bg-white", got.has(i) ? "border-[#22c55e]" : "border-[#eee8ff]")}
-                style={{ padding: u(0.6), gap: u(0.3) }}
-              >
-                <span className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--ink)] font-fun font-bold text-white">{i + 1}</span>
-                {got.has(i) && <span className="absolute right-2 top-2 text-xl">✅</span>}
-                <div className="flex aspect-square w-full items-center justify-center">
-                  {files?.[i] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={files[i]} alt={`Sticker ${i + 1}`} className="max-h-full max-w-full object-contain" />
-                  ) : (
-                    <div className="h-3/4 w-3/4 animate-pulse rounded-xl bg-[var(--lav)]" />
-                  )}
-                </div>
-                <div className="t-body font-semibold">{k ? `${k.w}" × ${k.h}"` : "…"}</div>
-              </button>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-start" style={{ gap: u(1.6) }}>
-            <ol className="t-body min-w-[260px] flex-1 list-decimal pl-5" style={{ lineHeight: 1.6 }}>
-              <li>Liene app → <b>Sticker</b> → new <b>4×7</b> canvas.</li>
-              <li>
-                For <b>1 → 8</b>: add the image → tap <b>Remove background</b> → resize to the size shown → drag it to its numbered spot.
-              </li>
-              <li>Keep a little gap between stickers so the cutter has room.</li>
-              <li>
-                Tap <b>Print</b> (print + cut ≈ 2 min).
-              </li>
-            </ol>
-            <div className="flex flex-col items-center" style={{ gap: 6 }}>
-              <div className="flex items-center justify-center overflow-hidden bg-white" style={{ width: `max(120px, ${u(13)})`, height: `max(120px, ${u(13)})` }}>
-                {phoneQr ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={phoneQr} alt="Open the kit on your phone" className="h-full w-full" />
-                ) : (
-                  <div className="h-full w-full animate-pulse bg-[var(--lav)]" />
-                )}
+          </>
+        ) : state === "sending" ? (
+          <>
+            <h2 className="t-h2">
+              Sending to the <span className="pop">printer…</span>
+            </h2>
+            <p className="t-lead">Snap is packing up your {kit ? kit.length : 8} stickers.</p>
+            <motion.div className="font-fun" style={{ fontSize: u(6) }} animate={{ rotate: 360 }} transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}>
+              ✨
+            </motion.div>
+          </>
+        ) : (
+          <>
+            <h2 className="t-h2">
+              You&apos;re in the <span className="pop">print queue!</span>
+            </h2>
+            <div className="card w-fit text-center" style={{ padding: `${u(1.2)} ${u(3)}` }}>
+              <div className="t-body">Your pickup number</div>
+              <div className="font-fun font-bold text-[var(--purple)]" style={{ fontSize: u(9), lineHeight: 1 }}>
+                #{code}
               </div>
-              <div className="t-body text-center">📱 Liene on a phone?<br />Scan to save all 8 to Photos</div>
             </div>
-          </div>
-        </div>
+            <p className="t-lead">Head to the printer. Printing + cutting takes about 2 minutes.</p>
+            <button className="btn btn-lg btn-main w-fit" onClick={onDone}>
+              Save my pics 📲
+            </button>
+          </>
+        )}
       </div>
-    </div>
+      <div className="relative flex items-end justify-center landscape:h-full landscape:w-[38%] portrait:w-full portrait:min-h-0 portrait:flex-1">
+        <Mascot className="h-[70%] max-h-full" mood="excited" />
+        {guide && (
+          <motion.div
+            className="card shrink-0 overflow-hidden"
+            style={{ width: u(12), padding: u(0.5), marginBottom: u(3) }}
+            initial={{ y: 60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1, rotate: 6 }}
+            transition={{ duration: 1, delay: 0.3, type: "spring" }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={guide} alt="Your sticker sheet" className="w-full" />
+          </motion.div>
+        )}
+      </div>
+    </Split>
   );
 }
 
@@ -1349,6 +1348,11 @@ function Done({
               <div style={{ maxWidth: "15em" }}>
                 <div className="t-h3">📲 Save to your phone</div>
                 <div className="t-body">Scan with your camera, then tap Save or text it to friends.</div>
+                {digitalUrl && (
+                  <a className="t-body font-semibold text-[var(--purple)] underline" href={`/booth/get?u=${encodeURIComponent(digitalUrl)}`} target="_blank" rel="noreferrer">
+                    On this phone? Tap here
+                  </a>
+                )}
               </div>
             </div>
 

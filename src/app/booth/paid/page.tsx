@@ -16,14 +16,14 @@ export default async function BoothPaidPage({
           </>
         ) : (
           <>
-            You&apos;re all set! <span className="pop">Look up.</span>
+            Paid! <span className="pop">You&apos;re all set.</span>
           </>
         )}
       </h1>
       <p className="max-w-[28ch] t-lead">
         {canceled
           ? "Scan the code on the booth screen again whenever you're ready."
-          : "Your stickers are printing at the booth right now. Your receipt is on its way to your email."}
+          : "Go back to MeSticker (the booth screen, or your other tab) for your pickup number. Your receipt is on its way to your email."}
       </p>
     </div>
   );
