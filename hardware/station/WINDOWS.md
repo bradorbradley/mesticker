@@ -5,14 +5,24 @@ to a Windows laptop. Everything except the print-software step is plain Node and
 
 ## 1. Set up the laptop (you, ~10 minutes)
 
-1. Install **Git** (git-scm.com), **Node.js 22 LTS** (nodejs.org) and **Claude Code** (desktop app).
-2. Turn off sleep while plugged in: Settings → System → Power → Screen and sleep → *Never*.
+1. Install, each from its official site with the default options, then close and reopen PowerShell:
+   - **Git for Windows**: https://git-scm.com/download/win
+   - **Node.js 22 LTS**: https://nodejs.org
+   - **GitHub CLI**: https://cli.github.com
+   - **Claude desktop app** (has Claude Code): https://claude.ai/download
+2. Log in:
+   - Claude desktop: sign in with your Claude account, open the **Code** tab.
+   - GitHub, so the station session can push its work: run `gh auth login` (GitHub.com → HTTPS →
+     Yes, authenticate Git → Login with a web browser), then `gh auth setup-git`.
+   - Turn off sleep while plugged in: Settings → System → Power → Screen and sleep → *Never*.
 3. Clone and install (PowerShell):
 
    ```powershell
    git clone -b feature/booth-chibi-sheets https://github.com/bradorbradley/mesticker.git $HOME\mesticker
    cd $HOME\mesticker
    npm install
+   node -v                 # v22 or higher
+   git log --oneline -1    # this commit or newer
    ```
 
 4. Station key. Create `%USERPROFILE%\.mesticker-station\env` (no extension) with:
@@ -24,7 +34,15 @@ to a Windows laptop. Everything except the print-software step is plain Node and
    Get the value from Vercel → mesticker-main → Settings → Environment Variables → MCP_SECRET, or
    copy the Mac's `~/.mesticker-station/env` over on a USB stick. Until PR 29 is merged to
    production, also copy `RECOVER_URL` and `VERCEL_SHARE_COOKIE` from the Mac's file (they point the
-   station at the preview deployment). Don't paste any of these into a chat.
+   station at the preview deployment). Don't paste any of these into a chat. The file must be
+   named exactly `env`, with no `.txt`. Check it, showing names only, then test the queue:
+
+   ```powershell
+   Get-Content $HOME\.mesticker-station\env | ForEach-Object { ($_ -split "=")[0] }
+   node hardware\station\station.mjs list
+   ```
+
+   Top up OpenAI credits (platform.openai.com → Settings → Billing) before guests arrive.
 
 5. **Stop the Mac station before the laptop goes live.** Two stations would both recover the same
    Stripe payment and print it twice.
@@ -57,8 +75,8 @@ How the product works (read these files first):
 
 Do this, in order, and tell me in one line each time a step is done:
 
-1. Check the setup: node -v (22+), npm install done, sharp loads, the env file exists (check the key
-   names only), and `node hardware/station/station.mjs list` reaches the queue.
+1. Check the setup: node -v (22+), npm install done, sharp loads, git and gh are logged in (gh auth status), the env file exists (check the key
+   names only), and `node hardware/station/station.mjs list` reaches the queue. Fix anything missing and tell me what to click.
 2. Find the fastest reliable way to print AND contour-cut a sheet on this PC. StixCut (what the
    Mac uses) is Mac-only. Look at what is installed and what Liene offers for Windows for the
    PixCut S1, check the printer shows up and is ready, and pick the path that can be driven without
