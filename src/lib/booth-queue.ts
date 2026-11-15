@@ -123,21 +123,48 @@ function fromRow(r: Row): QueueOrder {
 
 // ---------------------------------------------------------------- operations
 
-/** Add a paid order. Same id twice (e.g. staff reopens the kit) is a no-op. */
+/**
+ * Add an order. Same id again (the booth re-sends it once paid, or staff
+ * reopens the kit) only upgrades it to verified, never back.
+ */
 export async function enqueue(o: Pick<QueueOrder, "id" | "boothId" | "productId" | "checkoutId" | "verified" | "kitUrl" | "guideUrl" | "guides" | "items">) {
   if (inMemory()) {
     const m = memory();
-    if (!m.has(o.id)) {
-      m.set(o.id, { ...o, status: "queued", attempts: 0, error: null, createdAt: new Date().toISOString(), claimedAt: null, doneAt: null });
-    }
+    const had = m.get(o.id);
+    if (had) had.verified ||= o.verified;
+    else m.set(o.id, { ...o, status: "queued", attempts: 0, error: null, createdAt: new Date().toISOString(), claimedAt: null, doneAt: null });
     return;
   }
   await ensureTable();
   await getDb()`
     INSERT INTO booth_queue (id, booth_id, product_id, checkout_id, verified, kit_url, guide_url, guides, items)
     VALUES (${o.id}, ${o.boothId}, ${o.productId}, ${o.checkoutId}, ${o.verified}, ${o.kitUrl}, ${o.guideUrl}, ${JSON.stringify(o.guides)}::jsonb, ${JSON.stringify(o.items)}::jsonb)
-    ON CONFLICT (id) DO NOTHING
+    ON CONFLICT (id) DO UPDATE SET verified = booth_queue.verified OR EXCLUDED.verified
   `;
+}
+
+/** Queued orders with a Stripe checkout that isn't confirmed paid yet (last 2 hours). */
+export async function awaitingPayment(): Promise<Pick<QueueOrder, "id" | "checkoutId" | "productId">[]> {
+  if (inMemory()) {
+    const since = Date.now() - 2 * 3600_000;
+    return [...memory().values()].filter((o) => o.status === "queued" && !o.verified && o.checkoutId && Date.parse(o.createdAt) > since);
+  }
+  await ensureTable();
+  const rows = await getDb()`
+    SELECT id, checkout_id, product_id FROM booth_queue
+    WHERE status = 'queued' AND NOT verified AND checkout_id IS NOT NULL AND created_at > NOW() - INTERVAL '2 hours'
+    ORDER BY created_at LIMIT 20
+  `;
+  return (rows as Row[]).map((r) => ({ id: r.id as string, checkoutId: r.checkout_id as string, productId: r.product_id as string }));
+}
+
+export async function markVerified(id: string) {
+  if (inMemory()) {
+    const o = memory().get(id);
+    if (o) o.verified = true;
+    return;
+  }
+  await getDb()`UPDATE booth_queue SET verified = TRUE WHERE id = ${id}`;
 }
 
 /** Orders, oldest first. */
@@ -157,13 +184,14 @@ export async function listOrders(status?: QueueStatus, limit = 50): Promise<Queu
 
 /**
  * Hand the station the next order to print (oldest queued, or a stale
- * "printing" one). Unverified orders (free mode / cash) only when asked.
+ * "printing" one). Unverified orders (free mode / cash) only when asked;
+ * an unpaid Stripe checkout never.
  */
 export async function claimNext(boothId: string | null, includeUnverified: boolean): Promise<QueueOrder | null> {
   if (inMemory()) {
     const staleBefore = Date.now() - STALE_MINUTES * 60_000;
     const next = [...memory().values()]
-      .filter((o) => (!boothId || o.boothId === boothId) && (includeUnverified || o.verified))
+      .filter((o) => (!boothId || o.boothId === boothId) && (o.verified || (includeUnverified && !o.checkoutId)))
       .filter((o) => o.status === "queued" || (o.status === "printing" && Date.parse(o.claimedAt ?? "") < staleBefore))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
     if (!next) return null;
@@ -177,7 +205,7 @@ export async function claimNext(boothId: string | null, includeUnverified: boole
       SELECT id FROM booth_queue
       WHERE (status = 'queued' OR (status = 'printing' AND claimed_at < NOW() - make_interval(mins => ${STALE_MINUTES})))
         AND (${boothId}::text IS NULL OR booth_id = ${boothId})
-        AND (verified OR ${includeUnverified})
+        AND (verified OR (${includeUnverified} AND checkout_id IS NULL))
       ORDER BY created_at
       LIMIT 1
       FOR UPDATE SKIP LOCKED

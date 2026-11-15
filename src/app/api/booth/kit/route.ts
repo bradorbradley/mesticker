@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { uploadJson } from "@/lib/storage";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { enqueue, type QueueItem } from "@/lib/booth-queue";
-import { getStripe } from "@/lib/stripe";
+import { checkoutPaid } from "@/lib/booth-payment";
 import { parseSheets } from "@/lib/booth-config";
 
 /**
@@ -27,10 +27,13 @@ const isLocal = (url: unknown) => process.env.NODE_ENV !== "production" && /^htt
 const okUrl = (url: unknown): url is string => isHosted(url) || isLocal(url);
 
 /**
- * Put a paid order on the print queue. Payment is checked with Stripe here,
- * never taken from the browser: orders without a paid booth Checkout Session
- * (free mode, cash) are queued as unverified, and the station only prints
- * those when told to. Never blocks the kit itself.
+ * Put an order on the print queue. Payment is checked with Stripe here,
+ * never taken from the browser. The booth sends each order as soon as its
+ * checkout exists (unpaid), then again once it sees the payment; the queue
+ * re-checks Stripe for unpaid ones when the station asks for work, so an
+ * order prints even if the booth tab never sees the payment. Orders with no
+ * checkout (free mode, cash) are unverified and print only when the station
+ * is told to. Never blocks the kit itself.
  */
 async function queueOrder(order: { id?: unknown; sheets?: unknown; checkoutId?: unknown }, kitUrl: string, guides: string[], items: QueueItem[]) {
   const id = String(order?.id ?? "");
@@ -39,16 +42,7 @@ async function queueOrder(order: { id?: unknown; sheets?: unknown; checkoutId?: 
   const sheets = parseSheets(order.sheets);
   if (!sheets.length) return false;
   const productId = sheets.join("+");
-  let verified = false;
-  if (checkoutId && process.env.STRIPE_SECRET_KEY) {
-    try {
-      const session = await getStripe().checkout.sessions.retrieve(checkoutId);
-      // paid, from the booth, and for exactly these sheets (not 1 paid, 3 printed)
-      verified = session.payment_status === "paid" && session.metadata?.source === "booth" && session.metadata?.sheets === productId;
-    } catch (e) {
-      console.error("[booth/kit] Stripe check failed:", e);
-    }
-  }
+  const verified = checkoutId ? await checkoutPaid(checkoutId, productId) : false;
   try {
     await enqueue({ id, boothId: process.env.BOOTH_ID || "booth-1", productId, checkoutId, verified, kitUrl, guideUrl: guides[0] ?? null, guides, items });
     return true;

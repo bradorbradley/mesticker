@@ -368,28 +368,58 @@ export default function BoothApp() {
   }, []);
 
   // ---- printing: build the sheets, hand them to the print station, send the digital copy
+  /**
+   * The print files for these sheets: the sharp main sticker (≤30s wait), the
+   * extras (≤60s for stragglers; any that failed print as the main sticker),
+   * a numbered guide per sheet and every sticker's placement.
+   */
+  const buildPrintFiles = useCallback(
+    async (sheets: SheetKind[]) => {
+      if (!sticker) throw new Error("no sticker");
+      const pending = printCopy.current;
+      const hq = pending ? await Promise.race([pending, new Promise<null>((r) => setTimeout(() => r(null), 30000))]) : null;
+      const main = hq || sticker;
+      const needs = new Set<VariantKind>(sheets.flatMap((k) => (k === "best" ? ["pose", "face"] : [k])) as VariantKind[]);
+      await Promise.race([Promise.all([...needs].map((k) => variantJobs.current[k])), new Promise((r) => setTimeout(r, 60000))]);
+      const v = variantsRef.current;
+      const sheetGuides = await Promise.all(sheets.map((k) => buildSheet(k, main, v, false, true)));
+      return { main, guides: sheetGuides, kit: await buildKit(sheets, main, v) };
+    },
+    [sticker]
+  );
+
+  /**
+   * As soon as a Stripe checkout exists, send the complete order to the print
+   * queue (unpaid). The server checks Stripe itself, so the order prints once
+   * paid even if this tab never sees the payment (a phone paying in another
+   * tab pauses this one).
+   */
+  const prepared = useRef<{ checkoutId: string; orderId: string } | null>(null);
+  const prepareOrder = useCallback(
+    async (checkoutId: string) => {
+      if (!sticker || !picked.length) return;
+      const sheets = picked;
+      const orderId = newOrderId();
+      prepared.current = { checkoutId, orderId };
+      const files = await buildPrintFiles(sheets);
+      await sendKit(files.guides, files.kit, { id: orderId, sheets, checkoutId });
+    },
+    [sticker, picked, buildPrintFiles]
+  );
+
   const startPrint = useCallback(
     async (checkoutId?: string) => {
       if (!sticker || !picked.length) return;
       const sheets = picked;
       setPaid(true);
-      setPrintOrder({ id: newOrderId(), sheets, checkoutId: checkoutId ?? null });
+      // same order id as the one already sent unpaid, so it's one order, now paid
+      const orderId = checkoutId && prepared.current?.checkoutId === checkoutId ? prepared.current.orderId : newOrderId();
+      setPrintOrder({ id: orderId, sheets, checkoutId: checkoutId ?? null });
       setStep("printing");
       try {
-        // Prefer the sharper print copy; don't hold the printer more than 30s for it.
-        const pending = printCopy.current;
-        const hq = pending ? await Promise.race([pending, new Promise<null>((r) => setTimeout(() => r(null), 30000))]) : null;
-        const main = hq || sticker;
-        // the extras started with the photo; give stragglers up to 60s, and any
-        // that failed print as the main sticker so every sheet still prints
-        const needs = new Set<VariantKind>(sheets.flatMap((k) => (k === "best" ? ["pose", "face"] : [k])) as VariantKind[]);
-        await Promise.race([
-          Promise.all([...needs].map((k) => variantJobs.current[k])),
-          new Promise((r) => setTimeout(r, 60000)),
-        ]);
-        const v = variantsRef.current;
-        setGuides(await Promise.all(sheets.map((k) => buildSheet(k, main, v, false, true))));
-        setKit(await buildKit(sheets, main, v));
+        const { main, guides: sheetGuides, kit: sheetKit } = await buildPrintFiles(sheets);
+        setGuides(sheetGuides);
+        setKit(sheetKit);
         setSettings((s) => {
           if (!s) return s;
           const next = { ...s, sheetsLeft: Math.max(0, s.sheetsLeft - sheets.length), salesToday: s.salesToday + 1 };
@@ -414,7 +444,7 @@ export default function BoothApp() {
         console.error("print file failed", e);
       }
     },
-    [sticker, picked, emailOn]
+    [sticker, picked, emailOn, buildPrintFiles]
   );
 
   const outOfPaper = settings !== null && settings.sheetsLeft <= 0;
@@ -499,6 +529,7 @@ export default function BoothApp() {
                 }}
                 onBack={() => setStep("reveal")}
                 onPaid={startPrint}
+                onCheckout={prepareOrder}
               />
             )}
             {step === "printing" && <PrintKit guides={guides} kit={kit} order={printOrder} onDone={() => setStep("done")} />}
@@ -886,6 +917,7 @@ function SheetShop({
   onToggle,
   onBack,
   onPaid,
+  onCheckout,
 }: {
   sticker: string;
   variants: Variants;
@@ -895,6 +927,7 @@ function SheetShop({
   onToggle: (id: SheetKind) => void;
   onBack: () => void;
   onPaid: (checkoutId?: string) => void;
+  onCheckout: (checkoutId: string) => Promise<void>;
 }) {
   const [previews, setPreviews] = useState<Partial<Record<SheetKind, string>>>({});
   useEffect(() => {
@@ -990,15 +1023,25 @@ function SheetShop({
               🖨️ Print {count === 1 ? "my sheet" : `my ${count} sheets`}
             </button>
           ) : (
-            <PayWithQr key={picked.join("+")} sheets={picked} onPaid={onPaid} />
+            <PayWithQr key={picked.join("+")} sheets={picked} onPaid={onPaid} onCheckout={onCheckout} />
           ))}
       </div>
     </div>
   );
 }
 
-function PayWithQr({ sheets, onPaid }: { sheets: SheetKind[]; onPaid: (checkoutId?: string) => void }) {
+function PayWithQr({
+  sheets,
+  onPaid,
+  onCheckout,
+}: {
+  sheets: SheetKind[];
+  onPaid: (checkoutId?: string) => void;
+  onCheckout: (checkoutId: string) => Promise<void>;
+}) {
   const [qr, setQr] = useState<string | null>(null);
+  // paying on this same phone pauses this tab: only offer it once the order is safely sent
+  const [sentAhead, setSentAhead] = useState(false);
   const [payUrl, setPayUrl] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "waiting" | "free" | "error">("loading");
   const paidRef = useRef(false);
@@ -1022,6 +1065,9 @@ function PayWithQr({ sheets, onPaid }: { sheets: SheetKind[]; onPaid: (checkoutI
         setQr(await QRCode.toDataURL(data.url, { width: 560, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } }));
         setPayUrl(data.url);
         setState("waiting");
+        onCheckout(data.id)
+          .catch((e) => console.error("order pre-send failed", e))
+          .finally(() => alive && setSentAhead(true));
         poll = setInterval(async () => {
           try {
             const r = await fetch(`/api/booth/checkout?id=${data.id}`);
@@ -1043,7 +1089,7 @@ function PayWithQr({ sheets, onPaid }: { sheets: SheetKind[]; onPaid: (checkoutI
       clearTimeout(start);
       if (poll) clearInterval(poll);
     };
-  }, [sheets, onPaid]);
+  }, [sheets, onPaid, onCheckout]);
 
   if (state === "free") {
     return (
@@ -1061,12 +1107,15 @@ function PayWithQr({ sheets, onPaid }: { sheets: SheetKind[]; onPaid: (checkoutI
         </div>
         <div className="t-h3">📱 Scan to pay</div>
         <div className="t-body">Apple Pay, Google Pay, card</div>
-        {payUrl && (
-          // already on your phone? pay in a new tab: this one keeps waiting and moves on by itself
-          <a className="btn btn-soft mt-1 w-fit self-end" href={payUrl} target="_blank" rel="noopener noreferrer">
-            💳 Pay on this device
-          </a>
-        )}
+        {payUrl &&
+          (sentAhead ? (
+            // already on your phone? pay in a new tab: the order is already at the print station
+            <a className="btn btn-soft mt-1 w-fit self-end" href={payUrl} target="_blank" rel="noopener noreferrer">
+              💳 Pay on this device
+            </a>
+          ) : (
+            <span className="t-body mt-1 self-end opacity-70">Getting your sheets ready…</span>
+          ))}
         {state === "waiting" && (
           <motion.div className="t-body text-[#15803d]" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.6, repeat: Infinity }}>
             ● Printing starts automatically
@@ -1102,6 +1151,32 @@ type PrintOrder = { id: string; sheets: SheetKind[]; checkoutId: string | null }
 const newOrderId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `o-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
+/** Upload each sticker once plus the guides, and put the order on the print queue. */
+async function sendKit(guides: string[], kit: KitItem[], order: PrintOrder): Promise<boolean> {
+  const up = (image: string) =>
+    fetch("/api/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image }) })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.url) throw new Error("upload failed");
+        return d.url as string;
+      });
+  const unique = Array.from(new Set(kit.map((k) => k.src)));
+  const [guideUrls, imageUrls] = await Promise.all([Promise.all(guides.map(up)), Promise.all(unique.map(up))]);
+  const urlOf = new Map(unique.map((s, i) => [s, imageUrls[i]]));
+  const res = await fetch("/api/booth/kit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      guide: guideUrls[0],
+      guides: guideUrls,
+      items: kit.map((k) => ({ sheet: k.sheet, n: k.n, url: urlOf.get(k.src), x: k.x, y: k.y, w: k.w, h: k.h })),
+      order,
+    }),
+  });
+  const data = await res.json();
+  return !!data.queued;
+}
+
 function PrintKit({ guides, kit, order, onDone }: { guides: string[] | null; kit: KitItem[] | null; order: PrintOrder | null; onDone: () => void }) {
   const [sent, setSent] = useState<"sending" | "queued" | "error">("sending");
 
@@ -1110,28 +1185,8 @@ function PrintKit({ guides, kit, order, onDone }: { guides: string[] | null; kit
     let alive = true;
     (async () => {
       try {
-        const up = (image: string) =>
-          fetch("/api/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image }) })
-            .then((r) => r.json())
-            .then((d) => {
-              if (!d.url) throw new Error("upload failed");
-              return d.url as string;
-            });
-        const unique = Array.from(new Set(kit.map((k) => k.src)));
-        const [guideUrls, imageUrls] = await Promise.all([Promise.all(guides.map(up)), Promise.all(unique.map(up))]);
-        const urlOf = new Map(unique.map((s, i) => [s, imageUrls[i]]));
-        const res = await fetch("/api/booth/kit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            guide: guideUrls[0],
-            guides: guideUrls,
-            items: kit.map((k) => ({ sheet: k.sheet, n: k.n, url: urlOf.get(k.src), x: k.x, y: k.y, w: k.w, h: k.h })),
-            order,
-          }),
-        });
-        const data = await res.json();
-        if (alive) setSent(data.queued ? "queued" : "error");
+        const queued = await sendKit(guides, kit, order);
+        if (alive) setSent(queued ? "queued" : "error");
       } catch {
         if (alive) setSent("error");
       }
