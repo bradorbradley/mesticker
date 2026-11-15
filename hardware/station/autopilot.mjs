@@ -57,7 +57,7 @@ function fromStripe() {
       .filter((i) => Date.parse(i.uploadedAt) <= paidAt + 5000 && Date.parse(i.uploadedAt) > paidAt - 20 * 60_000)
       .sort((a, b) => Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt))[0];
     if (!img) continue;
-    if (Date.now() - paidAt < 20_000) continue; // give the booth 20s to send it the normal way
+    if (Date.now() - paidAt < 40_000) continue; // the booth's own copy (all stickers, no regenerating) usually lands within ~25s
     log(`recovering ${s.id} (${s.sheets}) from ${img.url}`);
     run("recover.mjs", "build", s.id, img.url);
     return { id: s.id, checkoutId: s.id, recovered: true };
@@ -76,7 +76,14 @@ for (;;) {
     remember(got.id, got.checkoutId);
     const dir = join(ORDERS, got.id);
     run("station.mjs", "clean", got.id);
-    const healed = JSON.parse(run("heal.mjs", got.id));
+    let healed;
+    try {
+      healed = JSON.parse(run("heal.mjs", got.id));
+    } catch (e) {
+      // e.g. image API out of credits: print with the stickers we have rather than not at all
+      healed = { error: String(e.stderr || e.message).match(/Error: (.*)/)?.[1] ?? "heal failed" };
+      log("heal failed, printing as is:", healed.error);
+    }
     const sheets = JSON.parse(run("stixcut-layout.mjs", got.id));
     execFileSync("open", ["-a", "StixCut", sheets[0].path]);
     console.log("READY " + JSON.stringify({ id: got.id, recovered: got.recovered, dir, healed, sheets: sheets.map((s) => s.path) }));
