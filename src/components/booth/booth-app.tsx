@@ -24,8 +24,7 @@ import BoothCamera from "./booth-camera";
 import OperatorPanel, { type BoothSettings, type GenStats } from "./operator-panel";
 import { u } from "./units";
 import LoadingState from "@/components/loading-state";
-import BoothReveal from "./booth-reveal";
-import { WAIT_GAMES, ReadyTakeover, type WaitGameId } from "./games/wait-games";
+import { WAIT_GAMES, type WaitGameId } from "./games/wait-games";
 
 type Step = "attract" | "camera" | "generating" | "reveal" | "sheets" | "printing" | "done";
 
@@ -169,7 +168,7 @@ export default function BoothApp() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [sticker, setSticker] = useState<string | null>(null);
   const [tries, setTries] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
   const [lastGen, setLastGen] = useState<GenStats | null>(null);
   // numbered guide per picked sheet, shown while printing
   const [guides, setGuides] = useState<string[] | null>(null);
@@ -192,7 +191,6 @@ export default function BoothApp() {
       .then((d) => setEmailOn(!!d.email))
       .catch(() => {});
   }, []);
-  const showReveal = useCallback(() => setStep("reveal"), []);
 
   // ---- Pose / Mix packs: 8 extra stickers, started the moment the photo is taken
   const [variants, setVariantsState] = useState<Variants>(EMPTY_VARIANTS);
@@ -360,6 +358,8 @@ export default function BoothApp() {
         localStorage.setItem("mesticker-booth-gen-ms", String(data.ms));
       } catch {}
       setStickerReady(true);
+      setStep("sheets");
+      sounds.success();
       uploadDigital(data.generatedImage);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -456,7 +456,7 @@ export default function BoothApp() {
         step={step}
         canJump={(s) =>
           step !== "generating" && step !== "printing" && step !== "done" && step !== s &&
-          (s === "camera" || ((s === "reveal" || s === "sheets") && !!sticker))
+          (s === "camera" || (s === "sheets" && !!sticker))
         }
         onJump={(s) => {
           sounds.tap();
@@ -498,21 +498,14 @@ export default function BoothApp() {
                 }}
               />
             )}
-            {step === "generating" && <Generating photo={photo} ready={stickerReady} onReveal={showReveal} />}
+            {step === "generating" && <Generating photo={photo} ready={stickerReady} />}
             {step === "reveal" && (
               <Reveal
-                photo={photo}
-                sticker={sticker}
-                error={error}
                 canRetry={tries < MAX_TRIES}
                 onRetry={() => (photo ? generate(photo) : setStep("camera"))}
                 onRetake={() => {
                   setPhoto(null);
                   setStep("camera");
-                }}
-                onNext={() => {
-                  sounds.tap();
-                  setStep("sheets");
                 }}
               />
             )}
@@ -527,7 +520,12 @@ export default function BoothApp() {
                   sounds.tap();
                   setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : SHEET_DESIGNS.map((d) => d.id).filter((x) => x === id || p.includes(x))));
                 }}
-                onBack={() => setStep("reveal")}
+                canRetry={tries < MAX_TRIES}
+                onRetry={() => photo && generate(photo)}
+                onRetake={() => {
+                  setPhoto(null);
+                  setStep("camera");
+                }}
                 onPaid={startPrint}
                 onCheckout={prepareOrder}
               />
@@ -562,8 +560,7 @@ export default function BoothApp() {
 
 const STEP_LABELS: { label: string; target: Step; steps: Step[] }[] = [
   { label: "Snap", target: "camera", steps: ["camera"] },
-  { label: "Reveal", target: "reveal", steps: ["generating", "reveal"] },
-  { label: "Sheets", target: "sheets", steps: ["sheets"] },
+  { label: "Your stickers", target: "sheets", steps: ["generating", "reveal", "sheets"] },
   { label: "Print", target: "printing", steps: ["printing", "done"] },
 ];
 
@@ -734,7 +731,7 @@ function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOf
 
 // ================================================================ generating
 
-function Generating({ photo, ready, onReveal }: { photo: string | null; ready: boolean; onReveal: () => void }) {
+function Generating({ photo, ready }: { photo: string | null; ready: boolean }) {
   const [game, setGame] = useState<WaitGameId>(() => WAIT_GAMES[Math.floor(Math.random() * WAIT_GAMES.length)].id);
   const [line, setLine] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -814,83 +811,35 @@ function Generating({ photo, ready, onReveal }: { photo: string | null; ready: b
         </AnimatePresence>
       </div>
 
-      <AnimatePresence>{ready && <ReadyTakeover onGo={onReveal} />}</AnimatePresence>
     </div>
   );
 }
 
 // ================================================================ reveal
 
-function Reveal({
-  photo,
-  sticker,
-  error,
-  canRetry,
-  onRetry,
-  onRetake,
-  onNext,
-}: {
-  photo: string | null;
-  sticker: string | null;
-  error: string | null;
-  canRetry: boolean;
-  onRetry: () => void;
-  onRetake: () => void;
-  onNext: () => void;
-}) {
-  if (error || !sticker) {
-    return (
-      <Split>
-        <div className="flex items-center justify-center landscape:h-full landscape:w-[36%] portrait:w-full portrait:min-h-0 portrait:flex-1">
-          <Mascot className="h-[75%] max-h-full" />
-        </div>
-        <div className="flex flex-col landscape:w-[48%] portrait:items-center portrait:text-center" style={{ gap: u(2) }}>
-          <h2 className="t-h2">
-            Oops! That one <span className="pop">didn&apos;t develop.</span>
-          </h2>
-          <p className="t-lead">Let&apos;s try again. You haven&apos;t been charged.</p>
-          <div className="flex flex-wrap" style={{ gap: u(1.2) }}>
-            {canRetry && (
-              <button className="btn btn-lg btn-main" onClick={onRetry}>
-                Try again
-              </button>
-            )}
-            <button className="btn btn-soft" onClick={onRetake}>
-              📸 New photo
-            </button>
-          </div>
-        </div>
-      </Split>
-    );
-  }
-
+function Reveal({ canRetry, onRetry, onRetake }: { canRetry: boolean; onRetry: () => void; onRetake: () => void }) {
   return (
-    <div className="h-full w-full overflow-y-auto overflow-x-hidden">
-      <Split className="portrait:h-auto portrait:min-h-full portrait:justify-start portrait:pt-2">
-        <div className="relative landscape:h-full landscape:w-[50%] portrait:h-[58vh] portrait:w-full portrait:shrink-0">
-          <BoothReveal photo={photo} sticker={sticker} />
-        </div>
-        <div className="flex flex-col landscape:w-[42%] portrait:w-full portrait:items-center portrait:text-center" style={{ gap: u(1.8) }}>
-          <h2 className="t-h2">
-            Ta-da! <span className="pop">That&apos;s you.</span>
-          </h2>
-          <p className="t-lead">We made 3 whole sticker sheets from this photo, {STICKERS_PER_SHEET} stickers each.</p>
-          <button className="btn btn-lg btn-main w-fit" onClick={onNext}>
-            See my sticker sheets →
-          </button>
-          <div className="flex flex-wrap portrait:justify-center" style={{ gap: u(1) }}>
-            {canRetry && (
-              <button className="btn btn-soft" onClick={onRetry}>
-                🔄 Redo
-              </button>
-            )}
-            <button className="btn btn-soft" onClick={onRetake}>
-              📸 New photo
+    <Split>
+      <div className="flex items-center justify-center landscape:h-full landscape:w-[36%] portrait:w-full portrait:min-h-0 portrait:flex-1">
+        <Mascot className="h-[75%] max-h-full" />
+      </div>
+      <div className="flex flex-col landscape:w-[48%] portrait:items-center portrait:text-center" style={{ gap: u(2) }}>
+        <h2 className="t-h2">
+          Oops! That one <span className="pop">didn&apos;t develop.</span>
+        </h2>
+        <p className="t-lead">Let&apos;s try again. You haven&apos;t been charged.</p>
+        <div className="flex flex-wrap" style={{ gap: u(1.2) }}>
+          {canRetry && (
+            <button className="btn btn-lg btn-main" onClick={onRetry}>
+              Try again
             </button>
-          </div>
+          )}
+          <button className="btn btn-soft" onClick={onRetake}>
+            📸 New photo
+          </button>
         </div>
-      </Split>
-    </div>
+      </div>
+    </Split>
   );
 }
 
@@ -904,9 +853,10 @@ function bundleHint(count: number) {
 }
 
 /**
- * The three sheets, as they will print (rendered by the same code that makes
- * the print file, re-rendered as each pose / expression arrives). Tap to add
- * or remove; price by count; pay by QR.
+ * The moment the sticker lands: the finished sticker and the sheet it prints
+ * on, big and side by side, with the three sheets to pick from and the QR to
+ * pay beside them. Previews are rendered by the same code that makes the print
+ * file, re-rendered as each pose / expression arrives.
  */
 function SheetShop({
   sticker,
@@ -914,8 +864,10 @@ function SheetShop({
   picked,
   freeMode,
   sheetsLeft,
+  canRetry,
   onToggle,
-  onBack,
+  onRetry,
+  onRetake,
   onPaid,
   onCheckout,
 }: {
@@ -924,12 +876,15 @@ function SheetShop({
   picked: SheetKind[];
   freeMode: boolean;
   sheetsLeft: number;
+  canRetry: boolean;
   onToggle: (id: SheetKind) => void;
-  onBack: () => void;
+  onRetry: () => void;
+  onRetake: () => void;
   onPaid: (checkoutId?: string) => void;
   onCheckout: (checkoutId: string) => Promise<void>;
 }) {
   const [previews, setPreviews] = useState<Partial<Record<SheetKind, string>>>({});
+  const [focus, setFocus] = useState<SheetKind>(picked[0] ?? "pose");
   useEffect(() => {
     let alive = true;
     const t = setTimeout(() => {
@@ -948,47 +903,94 @@ function SheetShop({
   const pending = (["pose", "face"] as VariantKind[]).reduce((n, k) => n + variants[k].filter((v) => v === null).length, 0);
   const count = picked.length;
   const tooMany = count > sheetsLeft;
+  const shown = getSheet(focus);
+  const toggle = (id: SheetKind) => {
+    const adding = !picked.includes(id);
+    onToggle(id);
+    if (adding) setFocus(id);
+    else if (focus === id) setFocus(picked.find((x) => x !== id) ?? id);
+  };
+
+  const sheetImg = (id: SheetKind, alt: string) =>
+    previews[id] ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={previews[id]} alt={alt} className="h-full w-full rounded-[10px]" />
+    ) : (
+      <div className="h-full w-full animate-pulse rounded-[10px] bg-[var(--lav)]" />
+    );
 
   return (
-    <div className="flex h-full w-full flex-col overflow-y-auto overflow-x-hidden" style={{ gap: u(1), padding: `${u(1)} ${u(2)} ${u(1.4)}` }}>
-      <div className="flex shrink-0 flex-wrap items-end justify-between" style={{ gap: u(1) }}>
-        <h2 className="t-h2">
-          Pick your <span className="pop">sheets</span>
-        </h2>
-        <div className="t-body">
-          {pending > 0 ? `✨ Snap is still drawing ${pending} sticker${pending === 1 ? "" : "s"}: they pop in as they're ready` : `${STICKERS_PER_SHEET} stickers on every sheet`}
+    <div
+      className="grid h-full w-full overflow-y-auto overflow-x-hidden landscape:grid-cols-[1.05fr_0.85fr_minmax(250px,0.8fr)] landscape:grid-rows-1 portrait:grid-cols-2 portrait:auto-rows-min"
+      style={{ gap: u(1.4), padding: `${u(0.6)} ${u(2)} ${u(1.4)}` }}
+    >
+      {/* the finished sticker, big */}
+      <div className="card relative flex min-h-0 flex-col items-center justify-center overflow-hidden portrait:aspect-[3/4]" style={{ padding: u(1.2), gap: u(1) }}>
+        <motion.div className="flex min-h-0 w-full flex-1 items-center justify-center" initial={{ scale: 0.4, rotate: -10, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 190, damping: 14 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={sticker} alt="Your sticker" className="die-cut max-h-full max-w-full object-contain" />
+        </motion.div>
+        <div className="flex w-full flex-wrap items-center justify-between" style={{ gap: u(0.8) }}>
+          <div className="t-h3">
+            That&apos;s <span className="pop">you!</span>
+          </div>
+          <div className="flex flex-wrap" style={{ gap: u(0.6) }}>
+            {canRetry && (
+              <button className="btn btn-soft" onClick={onRetry}>
+                🔄 Redo
+              </button>
+            )}
+            <button className="btn btn-soft" onClick={onRetake}>
+              📸 New photo
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="grid min-h-[260px] flex-1 grid-cols-3" style={{ gap: u(1.6), containerType: "size" }}>
-        {SHEET_DESIGNS.map((d, i) => {
-          const on = picked.includes(d.id);
-          return (
-            <motion.button
-              key={d.id}
-              onClick={() => onToggle(d.id)}
-              className={cn(
-                "relative flex min-h-0 flex-col items-center rounded-3xl border-4 bg-white/70 transition-colors",
-                on ? "border-[var(--purple)] bg-white shadow-[0_14px_40px_rgba(91,63,214,0.28)]" : "border-transparent"
-              )}
-              style={{ padding: u(0.8), gap: u(0.5) }}
-              initial={{ y: 40, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: i * 0.1, type: "spring", stiffness: 200, damping: 18 }}
-              whileTap={{ scale: 0.97 }}
-            >
-              <div className="flex min-h-0 w-full flex-1 items-center justify-center">
-                <div className="relative h-full max-w-full bg-white shadow-md" style={{ aspectRatio: "3.9 / 6.7", borderRadius: 10 }}>
-                  {previews[d.id] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={previews[d.id]} alt={`${d.name} sheet`} className="h-full w-full rounded-[10px]" />
-                  ) : (
-                    <div className="h-full w-full animate-pulse rounded-[10px] bg-[var(--lav)]" />
-                  )}
+      {/* the sheet it prints on, big */}
+      <div className="card flex min-h-0 flex-col items-center portrait:aspect-[3/4]" style={{ padding: u(1.2), gap: u(0.8) }}>
+        <div className="flex min-h-0 w-full flex-1 items-center justify-center" style={{ containerType: "size" }}>
+          <motion.div
+            key={focus}
+            className="relative max-h-full max-w-full bg-white shadow-md"
+            style={{ aspectRatio: "3.9 / 6.7", height: "100cqh", borderRadius: 10 }}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            {sheetImg(focus, `${shown.name} sheet`)}
+          </motion.div>
+        </div>
+        <div className="t-body text-center">
+          {shown.emoji} <b>{shown.name}</b> ·{" "}
+          {pending > 0 ? `✨ drawing ${pending} more sticker${pending === 1 ? "" : "s"}…` : `${STICKERS_PER_SHEET} stickers`}
+        </div>
+      </div>
+
+      {/* pick sheets + pay */}
+      <div className="flex min-h-0 flex-col portrait:col-span-2" style={{ gap: u(1) }}>
+        <div className="flex flex-col" style={{ gap: u(0.7) }}>
+          {SHEET_DESIGNS.map((d) => {
+            const on = picked.includes(d.id);
+            return (
+              <motion.button
+                key={d.id}
+                onClick={() => {
+                  sounds.tap();
+                  toggle(d.id);
+                }}
+                className={cn(
+                  "flex items-center rounded-2xl border-4 bg-white/70 text-left transition-colors",
+                  on ? "border-[var(--purple)] bg-white shadow-[0_10px_28px_rgba(91,63,214,0.22)]" : "border-transparent",
+                  focus === d.id && !on && "border-[var(--lav)]"
+                )}
+                style={{ padding: u(0.6), gap: u(0.8) }}
+                whileTap={{ scale: 0.97 }}
+              >
+                <div className="shrink-0 bg-white shadow-sm" style={{ aspectRatio: "3.9 / 6.7", height: `max(56px, ${u(7)})`, borderRadius: 6 }}>
+                  {sheetImg(d.id, d.name)}
                 </div>
-              </div>
-              <div className="flex w-full items-center justify-between" style={{ gap: u(0.5) }}>
-                <div className="text-left">
+                <div className="min-w-0 flex-1">
                   <div className="t-h3">
                     {d.emoji} {d.name}
                   </div>
@@ -996,35 +998,29 @@ function SheetShop({
                 </div>
                 <span
                   className={cn("flex shrink-0 items-center justify-center rounded-full font-bold", on ? "bg-[var(--purple)] text-white" : "bg-[var(--lav)] text-[var(--ink)]")}
-                  style={{ width: u(3.2), height: u(3.2), fontSize: u(1.6) }}
+                  style={{ width: u(3), height: u(3), fontSize: u(1.5) }}
                 >
                   {on ? "✓" : "+"}
                 </span>
-              </div>
-            </motion.button>
-          );
-        })}
-      </div>
+              </motion.button>
+            );
+          })}
+        </div>
 
-      <div className="card flex shrink-0 flex-wrap items-center justify-between" style={{ gap: u(1.4), padding: u(1.2) }}>
-        <div className="flex flex-col" style={{ gap: u(0.3) }}>
-          <div className="t-h3">
-            {count ? `${count} sheet${count === 1 ? "" : "s"} · ${count * STICKERS_PER_SHEET} stickers` : "Tap a sheet to add it"}
-          </div>
+        <div className="card flex flex-1 flex-col justify-center" style={{ gap: u(0.8), padding: u(1.1) }}>
+          <div className="t-h3">{count ? `${count} sheet${count === 1 ? "" : "s"} · ${count * STICKERS_PER_SHEET} stickers` : "Tap a sheet to add it"}</div>
           <div className="t-body text-[#15803d]">{bundleHint(count)}</div>
           {tooMany && <div className="t-body text-[var(--pink)]">Only {sheetsLeft} sheet{sheetsLeft === 1 ? "" : "s"} of paper left — pick fewer</div>}
-          <button className="btn btn-soft mt-1 w-fit" onClick={onBack}>
-            ← Back
-          </button>
+          {count > 0 &&
+            !tooMany &&
+            (freeMode ? (
+              <button className="btn btn-lg btn-main" onClick={() => onPaid()}>
+                🖨️ Print {count === 1 ? "my sheet" : `my ${count} sheets`}
+              </button>
+            ) : (
+              <PayWithQr key={picked.join("+")} sheets={picked} onPaid={onPaid} onCheckout={onCheckout} />
+            ))}
         </div>
-        {count > 0 && !tooMany &&
-          (freeMode ? (
-            <button className="btn btn-lg btn-main" onClick={() => onPaid()}>
-              🖨️ Print {count === 1 ? "my sheet" : `my ${count} sheets`}
-            </button>
-          ) : (
-            <PayWithQr key={picked.join("+")} sheets={picked} onPaid={onPaid} onCheckout={onCheckout} />
-          ))}
       </div>
     </div>
   );
@@ -1100,8 +1096,8 @@ function PayWithQr({
   }
 
   return (
-    <div className="flex items-center" style={{ gap: u(1.4) }}>
-      <div className="flex flex-col text-right" style={{ gap: u(0.3) }}>
+    <div className="flex flex-wrap items-center justify-between" style={{ gap: u(1.2) }}>
+      <div className="flex flex-col" style={{ gap: u(0.3) }}>
         <div className="font-fun font-bold" style={{ fontSize: u(3.6), lineHeight: 1 }}>
           {priceLabel(price)}
         </div>
@@ -1110,11 +1106,11 @@ function PayWithQr({
         {payUrl &&
           (sentAhead ? (
             // already on your phone? pay in a new tab: the order is already at the print station
-            <a className="btn btn-soft mt-1 w-fit self-end" href={payUrl} target="_blank" rel="noopener noreferrer">
+            <a className="btn btn-soft mt-1 w-fit" href={payUrl} target="_blank" rel="noopener noreferrer">
               💳 Pay on this device
             </a>
           ) : (
-            <span className="t-body mt-1 self-end opacity-70">Getting your sheets ready…</span>
+            <span className="t-body mt-1 opacity-70">Getting your sheets ready…</span>
           ))}
         {state === "waiting" && (
           <motion.div className="t-body text-[#15803d]" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.6, repeat: Infinity }}>

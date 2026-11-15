@@ -6,6 +6,11 @@
  *   IMAGE_PROVIDER=gemini  — Google "Nano Banana 2" (Gemini Flash Image), needs GEMINI_API_KEY
  *   IMAGE_PROVIDER=fal     — FLUX Kontext on fal.ai, needs FAL_KEY
  *
+ * Fallback: if the active provider fails (out of credits, rate limited, down,
+ * slow), the same request goes to the next provider that has a key, and a
+ * failing provider is skipped for a few minutes so guests don't wait on it.
+ * Gemini uses GEMINI_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY.
+ *
  * Gemini and FLUX can't output transparent PNGs, so they're prompted for a
  * pure white background which is then removed (remove.bg if configured,
  * otherwise our own flood-fill cutout).
@@ -27,6 +32,30 @@ export interface ProviderResult {
 export function activeProvider(): ImageProvider {
   const p = (process.env.BOOTH_IMAGE_PROVIDER || process.env.IMAGE_PROVIDER || "openai").toLowerCase();
   return p === "gemini" || p === "fal" ? p : "openai";
+}
+
+const geminiKey = () => process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+
+function hasKey(p: ImageProvider) {
+  if (p === "openai") return !!process.env.OPENAI_API_KEY;
+  if (p === "gemini") return !!geminiKey();
+  return !!process.env.FAL_KEY;
+}
+
+/** Providers that failed recently, skipped until this time (per server instance). */
+const downUntil = new Map<ImageProvider, number>();
+const SKIP_MS = 3 * 60 * 1000;
+export const isDown = (p: ImageProvider) => (downUntil.get(p) ?? 0) > Date.now();
+
+/** Active provider first, then every other one with a key; recently failed ones last. */
+export function providerChain(): ImageProvider[] {
+  const first = activeProvider();
+  const all = [first, ...(["openai", "gemini", "fal"] as ImageProvider[]).filter((p) => p !== first)].filter(hasKey);
+  return [...all.filter((p) => !isDown(p)), ...all.filter(isDown)];
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([p, new Promise<T>((_, no) => setTimeout(() => no(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms))]);
 }
 
 function splitDataUrl(dataUrl: string) {
@@ -66,13 +95,15 @@ const GEMINI_MODELS = Array.from(
       "gemini-3.1-flash-image",
       "gemini-3.1-flash-image-preview",
       "gemini-nano-banana-2.1",
+      "gemini-2.5-flash-image",
+      "gemini-2.5-flash-image-preview",
     ].filter((m): m is string => !!m)
   )
 );
 let workingGeminiModel: string | null = null;
 
 async function generateGemini(image: string, prompt: string) {
-  const key = process.env.GEMINI_API_KEY;
+  const key = geminiKey();
   if (!key) throw new Error("GEMINI_API_KEY is not set");
   const { mime, data } = splitDataUrl(image);
   const models = workingGeminiModel
@@ -142,18 +173,38 @@ const quality = (v: string | undefined, fallback: Quality): Quality =>
  * Gemini / FLUX have no quality knob, so there is never a separate print copy.
  */
 export function hasPrintTier() {
-  return activeProvider() === "openai" && !!process.env.BOOTH_PRINT_QUALITY;
+  return activeProvider() === "openai" && !isDown("openai") && !!process.env.BOOTH_PRINT_QUALITY;
 }
 
+async function runProvider(provider: ImageProvider, image: string, prompt: string, tier: "preview" | "print") {
+  if (provider === "gemini") return generateGemini(image, prompt);
+  if (provider === "fal") return generateFal(image, prompt);
+  const q = tier === "print" ? quality(process.env.BOOTH_PRINT_QUALITY, "high") : quality(process.env.BOOTH_PREVIEW_QUALITY, "medium");
+  return { image: await generateAtQuality(image, prompt, q), model: `${process.env.OPENAI_IMAGE_MODEL || "gpt-image"} (${q})` };
+}
+
+/** A refusal for this photo would fail everywhere; anything else is worth another provider. */
+const isRefusal = (msg: string) => /safety|moderation|refus|policy/i.test(msg);
+
 export async function generateSticker(image: string, prompt: string, tier: "preview" | "print" = "preview"): Promise<ProviderResult> {
-  const provider = activeProvider();
-  const t0 = Date.now();
-  let out: { image: string; model: string };
-  if (provider === "gemini") out = await generateGemini(image, prompt);
-  else if (provider === "fal") out = await generateFal(image, prompt);
-  else {
-    const q = tier === "print" ? quality(process.env.BOOTH_PRINT_QUALITY, "high") : quality(process.env.BOOTH_PREVIEW_QUALITY, "medium");
-    out = { image: await generateAtQuality(image, prompt, q), model: `${process.env.OPENAI_IMAGE_MODEL || "gpt-image"} (${q})` };
+  const chain = providerChain();
+  if (!chain.length) throw new Error("No image provider is configured");
+  // keep the first try short enough that a backup still fits in the request
+  const budget = Number(process.env.BOOTH_PROVIDER_TIMEOUT_MS) || 40000;
+  let lastErr: unknown = null;
+  for (const [i, provider] of chain.entries()) {
+    const t0 = Date.now();
+    try {
+      const out = await withTimeout(runProvider(provider, image, prompt, tier), i < chain.length - 1 ? budget : 85000, provider);
+      downUntil.delete(provider);
+      return { ...out, provider, ms: Date.now() - t0 };
+    } catch (e) {
+      lastErr = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[image-providers] ${provider} failed: ${msg}`);
+      if (isRefusal(msg)) break;
+      downUntil.set(provider, Date.now() + SKIP_MS);
+    }
   }
-  return { ...out, provider, ms: Date.now() - t0 };
+  throw lastErr instanceof Error ? lastErr : new Error("Image generation failed");
 }
