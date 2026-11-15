@@ -30,7 +30,14 @@ const log = (...a) => console.error(new Date().toLocaleTimeString(), ...a);
 
 function fromQueue() {
   const { order } = JSON.parse(run("station.mjs", "next", ...(unverified ? ["--include-unverified"] : [])));
-  return order ? { id: order.id, checkoutId: null, sheets: order.sheets } : null;
+  if (!order) return null;
+  // already printed from Stripe recovery before the booth's copy arrived: don't print twice
+  if (order.checkoutId && handled().has(order.checkoutId)) {
+    run("station.mjs", "done", order.id);
+    log(`skipped ${order.id}: ${order.checkoutId} already printed`);
+    return null;
+  }
+  return { id: order.id, checkoutId: order.checkoutId, recovered: false };
 }
 
 function fromStripe() {
@@ -50,10 +57,10 @@ function fromStripe() {
       .filter((i) => Date.parse(i.uploadedAt) <= paidAt + 5000 && Date.parse(i.uploadedAt) > paidAt - 20 * 60_000)
       .sort((a, b) => Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt))[0];
     if (!img) continue;
-    if (Date.now() - paidAt < 90_000) continue; // give the booth 90s to send it the normal way
+    if (Date.now() - paidAt < 20_000) continue; // give the booth 20s to send it the normal way
     log(`recovering ${s.id} (${s.sheets}) from ${img.url}`);
     run("recover.mjs", "build", s.id, img.url);
-    return { id: s.id, checkoutId: s.id };
+    return { id: s.id, checkoutId: s.id, recovered: true };
   }
   return null;
 }
@@ -72,7 +79,7 @@ for (;;) {
     const healed = JSON.parse(run("heal.mjs", got.id));
     const sheets = JSON.parse(run("stixcut-layout.mjs", got.id));
     execFileSync("open", ["-a", "StixCut", sheets[0].path]);
-    console.log("READY " + JSON.stringify({ id: got.id, recovered: !!got.checkoutId, dir, healed, sheets: sheets.map((s) => s.path) }));
+    console.log("READY " + JSON.stringify({ id: got.id, recovered: got.recovered, dir, healed, sheets: sheets.map((s) => s.path) }));
     process.exit(0);
   }
   await new Promise((r) => setTimeout(r, 5000));

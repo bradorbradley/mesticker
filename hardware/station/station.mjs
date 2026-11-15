@@ -169,6 +169,7 @@ async function fetchOrder(order) {
     id: order.id,
     designs: order.productId,
     verified: order.verified,
+    checkoutId: order.checkoutId ?? null,
     attempts: order.attempts,
     kitUrl: order.kitUrl,
     dir,
