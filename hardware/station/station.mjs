@@ -196,7 +196,7 @@ switch (cmd) {
   case "list": {
     const status = args[0];
     const { orders } = await api(cfg, "GET", null, status ? `?status=${encodeURIComponent(status)}` : "");
-    console.log(JSON.stringify(orders.map((o) => ({ id: o.id, status: o.status, verified: o.verified, product: o.productId, created: o.createdAt, error: o.error })), null, 2));
+    console.log(JSON.stringify(orders.map((o) => ({ id: o.id, status: o.status, verified: o.verified, checkoutId: o.checkoutId, product: o.productId, created: o.createdAt, error: o.error })), null, 2));
     break;
   }
   case "next": {
