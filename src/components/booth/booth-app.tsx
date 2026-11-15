@@ -987,14 +987,14 @@ function SheetShop({
                 style={{ padding: u(0.6), gap: u(0.8) }}
                 whileTap={{ scale: 0.97 }}
               >
-                <div className="shrink-0 bg-white shadow-sm" style={{ aspectRatio: "3.9 / 6.7", height: `max(56px, ${u(7)})`, borderRadius: 6 }}>
+                <div className="shrink-0 bg-white shadow-sm" style={{ aspectRatio: "3.9 / 6.7", height: `max(48px, ${u(5.2)})`, borderRadius: 6 }}>
                   {sheetImg(d.id, d.name)}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="t-h3">
                     {d.emoji} {d.name}
                   </div>
-                  <div className="t-body">{d.blurb}</div>
+                  <div className="t-body truncate">{d.blurb}</div>
                 </div>
                 <span
                   className={cn("flex shrink-0 items-center justify-center rounded-full font-bold", on ? "bg-[var(--purple)] text-white" : "bg-[var(--lav)] text-[var(--ink)]")}
@@ -1096,8 +1096,8 @@ function PayWithQr({
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between" style={{ gap: u(1.2) }}>
-      <div className="flex flex-col" style={{ gap: u(0.3) }}>
+    <div className="flex items-center justify-between" style={{ gap: u(1) }}>
+      <div className="flex min-w-0 flex-col" style={{ gap: u(0.3) }}>
         <div className="font-fun font-bold" style={{ fontSize: u(3.6), lineHeight: 1 }}>
           {priceLabel(price)}
         </div>
@@ -1118,7 +1118,7 @@ function PayWithQr({
           </motion.div>
         )}
       </div>
-      <div className="flex shrink-0 items-center justify-center overflow-hidden bg-white" style={{ width: `max(110px, ${u(13)})`, height: `max(110px, ${u(13)})` }}>
+      <div className="flex aspect-square shrink-0 items-center justify-center overflow-hidden bg-white" style={{ width: `clamp(110px, ${u(12)}, 45%)` }}>
         {qr ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={qr} alt="Scan to pay" className="h-full w-full" />
