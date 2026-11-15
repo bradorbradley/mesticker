@@ -85,7 +85,8 @@ for (;;) {
       log("heal failed, printing as is:", healed.error);
     }
     const sheets = JSON.parse(run("stixcut-layout.mjs", got.id));
-    execFileSync("open", ["-a", "StixCut", sheets[0].path]);
+    // Mac: StixCut opens the arranged sheet. Other platforms: the station agent takes it from READY.
+    if (process.platform === "darwin") execFileSync("open", ["-a", "StixCut", sheets[0].path]);
     console.log("READY " + JSON.stringify({ id: got.id, recovered: got.recovered, dir, healed, sheets: sheets.map((s) => s.path) }));
     process.exit(0);
   }
