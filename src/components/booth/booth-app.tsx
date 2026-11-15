@@ -1107,7 +1107,7 @@ function PayWithQr({
           (sentAhead ? (
             // already on your phone? pay in a new tab: the order is already at the print station
             <a className="btn btn-soft mt-1 w-fit" href={payUrl} target="_blank" rel="noopener noreferrer">
-              💳 Pay on this device
+              💳 Pay here
             </a>
           ) : (
             <span className="t-body mt-1 opacity-70">Getting your sheets ready…</span>
