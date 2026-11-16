@@ -8,6 +8,7 @@
  *   node station.mjs done <orderId>
  *   node station.mjs failed <orderId> "<reason>"
  *   node station.mjs requeue <orderId>
+ *   node station.mjs progress <orderId> printing     the guest's screen shows "Printing…" (run it the moment Print & Cut is pressed)
  *
  * Config: ~/.mesticker-station/env (chmod 600) with
  *   MCP_SECRET=<station key, same as Vercel's MCP_SECRET>
@@ -215,6 +216,13 @@ switch (cmd) {
     }
     break;
   }
+  case "progress": {
+    const [id, stage] = args;
+    if (!id || !["preparing", "printing"].includes(stage)) fail("usage: station.mjs progress <orderId> preparing|printing");
+    const { ok } = await api(cfg, "POST", { action: "progress", id, stage });
+    console.log(JSON.stringify({ id, stage, ok }));
+    break;
+  }
   case "done":
   case "failed":
   case "requeue": {
@@ -225,5 +233,5 @@ switch (cmd) {
     break;
   }
   default:
-    fail("usage: station.mjs list|next [--include-unverified]|done <id>|failed <id> <reason>|requeue <id>", 2);
+    fail("usage: station.mjs list|next [--include-unverified]|progress <id> preparing|printing|done <id>|failed <id> <reason>|requeue <id>", 2);
 }

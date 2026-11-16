@@ -8,6 +8,10 @@ import { getDb } from "@/lib/db";
  *
  *   queued → printing (claimed by the station) → done | failed
  *
+ * While an order is "printing" the station reports a finer `stage`
+ * ("preparing" → "printing" once Print & Cut is pressed), which the guest's
+ * screen shows as a live progress bar (/api/booth/order-status).
+ *
  * A "printing" order that isn't finished within STALE_MINUTES goes back to
  * the front of the line, so a crashed station never loses an order.
  *
@@ -15,6 +19,8 @@ import { getDb } from "@/lib/db";
  */
 
 export type QueueStatus = "queued" | "printing" | "done" | "failed";
+export type QueueStage = "preparing" | "printing";
+export const QUEUE_STAGES: QueueStage[] = ["preparing", "printing"];
 
 /** One sticker placement: on which sheet (0-based), slot n, where and how big (inches from the printable area's top-left). */
 export interface QueueItem {
@@ -45,6 +51,8 @@ export interface QueueOrder {
   createdAt: string;
   claimedAt: string | null;
   doneAt: string | null;
+  stage: QueueStage | null;
+  stageAt: string | null;
 }
 
 export const STALE_MINUTES = 15;
@@ -91,6 +99,8 @@ function ensureTable() {
     `
       .then(() => sql`CREATE INDEX IF NOT EXISTS idx_booth_queue_status ON booth_queue(status, created_at)`)
       .then(() => sql`ALTER TABLE booth_queue ADD COLUMN IF NOT EXISTS guides JSONB`)
+      .then(() => sql`ALTER TABLE booth_queue ADD COLUMN IF NOT EXISTS stage TEXT`)
+      .then(() => sql`ALTER TABLE booth_queue ADD COLUMN IF NOT EXISTS stage_at TIMESTAMPTZ`)
       .catch((e) => {
         tableReady = null;
         throw e;
@@ -118,6 +128,8 @@ function fromRow(r: Row): QueueOrder {
     createdAt: iso(r.created_at)!,
     claimedAt: iso(r.claimed_at),
     doneAt: iso(r.done_at),
+    stage: (r.stage as QueueStage) ?? null,
+    stageAt: iso(r.stage_at),
   };
 }
 
@@ -132,7 +144,7 @@ export async function enqueue(o: Pick<QueueOrder, "id" | "boothId" | "productId"
     const m = memory();
     const had = m.get(o.id);
     if (had) had.verified ||= o.verified;
-    else m.set(o.id, { ...o, status: "queued", attempts: 0, error: null, createdAt: new Date().toISOString(), claimedAt: null, doneAt: null });
+    else m.set(o.id, { ...o, status: "queued", attempts: 0, error: null, createdAt: new Date().toISOString(), claimedAt: null, doneAt: null, stage: null, stageAt: null });
     return;
   }
   await ensureTable();
@@ -195,12 +207,13 @@ export async function claimNext(boothId: string | null, includeUnverified: boole
       .filter((o) => o.status === "queued" || (o.status === "printing" && Date.parse(o.claimedAt ?? "") < staleBefore))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
     if (!next) return null;
-    Object.assign(next, { status: "printing", claimedAt: new Date().toISOString(), attempts: next.attempts + 1 });
+    const now = new Date().toISOString();
+    Object.assign(next, { status: "printing", claimedAt: now, attempts: next.attempts + 1, stage: "preparing", stageAt: now });
     return { ...next };
   }
   await ensureTable();
   const rows = await getDb()`
-    UPDATE booth_queue SET status = 'printing', claimed_at = NOW(), attempts = attempts + 1
+    UPDATE booth_queue SET status = 'printing', claimed_at = NOW(), attempts = attempts + 1, stage = 'preparing', stage_at = NOW()
     WHERE id = (
       SELECT id FROM booth_queue
       WHERE (status = 'queued' OR (status = 'printing' AND claimed_at < NOW() - make_interval(mins => ${STALE_MINUTES})))
@@ -236,4 +249,61 @@ export async function finish(id: string, outcome: "done" | "failed" | "requeue",
     RETURNING *
   `;
   return rows.length ? fromRow(rows[0] as Row) : null;
+}
+
+/** Station reports progress on an order it's printing (see QueueStage). */
+export async function setStage(id: string, stage: QueueStage): Promise<boolean> {
+  if (inMemory()) {
+    const o = memory().get(id);
+    if (!o || o.status !== "printing") return false;
+    Object.assign(o, { stage, stageAt: new Date().toISOString() });
+    return true;
+  }
+  await ensureTable();
+  const rows = await getDb()`
+    UPDATE booth_queue SET stage = ${stage}, stage_at = NOW()
+    WHERE id = ${id} AND status = 'printing'
+    RETURNING id
+  `;
+  return rows.length > 0;
+}
+
+/** What the guest's screen needs, nothing more: where their order is and how many are ahead. */
+export interface OrderProgress {
+  status: QueueStatus;
+  stage: QueueStage | null;
+  stageAt: string | null;
+  verified: boolean;
+  /** paid orders still in line before this one */
+  ahead: number;
+  sheets: number;
+  serverTime: string;
+}
+
+export async function orderProgress(id: string): Promise<OrderProgress | null> {
+  const sheetsOf = (productId: string) => Math.max(1, productId.split("+").filter(Boolean).length);
+  if (inMemory()) {
+    const o = memory().get(id);
+    if (!o) return null;
+    const ahead = [...memory().values()].filter((x) => x.verified && (x.status === "queued" || x.status === "printing") && x.createdAt < o.createdAt).length;
+    return { status: o.status, stage: o.stage, stageAt: o.stageAt, verified: o.verified, ahead, sheets: sheetsOf(o.productId), serverTime: new Date().toISOString() };
+  }
+  await ensureTable();
+  const rows = await getDb()`
+    SELECT o.status, o.stage, o.stage_at, o.verified, o.product_id,
+      (SELECT COUNT(*) FROM booth_queue x
+        WHERE x.verified AND x.status IN ('queued', 'printing') AND x.created_at < o.created_at AND x.booth_id = o.booth_id) AS ahead
+    FROM booth_queue o WHERE o.id = ${id}
+  `;
+  if (!rows.length) return null;
+  const r = rows[0] as Row;
+  return {
+    status: r.status as QueueStatus,
+    stage: (r.stage as QueueStage) ?? null,
+    stageAt: iso(r.stage_at),
+    verified: Boolean(r.verified),
+    ahead: Number(r.ahead) || 0,
+    sheets: sheetsOf(String(r.product_id)),
+    serverTime: new Date().toISOString(),
+  };
 }

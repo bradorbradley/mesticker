@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { awaitingPayment, claimNext, finish, listOrders, markVerified, stationAuthorized, type QueueStatus } from "@/lib/booth-queue";
+import { awaitingPayment, claimNext, finish, listOrders, markVerified, setStage, stationAuthorized, QUEUE_STAGES, type QueueStage, type QueueStatus } from "@/lib/booth-queue";
 import { checkoutPaid } from "@/lib/booth-payment";
 
 /**
@@ -9,6 +9,7 @@ import { checkoutPaid } from "@/lib/booth-payment";
  *   GET  ?status=queued|printing|done|failed   → { orders }   (no status: latest 50)
  *   POST { action: "claim", boothId?, includeUnverified? } → { order | null }
  *   POST { action: "done" | "failed" | "requeue", id, error? } → { order }
+ *   POST { action: "progress", id, stage: "preparing" | "printing" } → { ok }  (shown live on the guest's screen)
  *
  * Orders are added by /api/booth/kit as soon as the booth has a checkout
  * (unpaid), and "claim" asks Stripe whether those have been paid since. It
@@ -52,13 +53,18 @@ export async function POST(request: NextRequest) {
       await Promise.all(pending.map(async (o) => o.checkoutId && (await checkoutPaid(o.checkoutId, o.productId)) && markVerified(o.id)));
       return NextResponse.json({ order: await claimNext(boothId, body.includeUnverified === true) });
     }
+    if (action === "progress") {
+      const stage = String(body.stage ?? "") as QueueStage;
+      if (!body.id || !QUEUE_STAGES.includes(stage)) return NextResponse.json({ error: "progress needs id and stage (preparing|printing)" }, { status: 400 });
+      return NextResponse.json({ ok: await setStage(String(body.id), stage) });
+    }
     if (action === "done" || action === "failed" || action === "requeue") {
       if (!body.id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
       const order = await finish(String(body.id), action, body.error ? String(body.error) : undefined);
       if (!order) return NextResponse.json({ error: "No such order" }, { status: 404 });
       return NextResponse.json({ order });
     }
-    return NextResponse.json({ error: "action must be claim, done, failed or requeue" }, { status: 400 });
+    return NextResponse.json({ error: "action must be claim, progress, done, failed or requeue" }, { status: 400 });
   } catch (e) {
     console.error("[booth/queue] failed:", e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "Queue failed" }, { status: 500 });

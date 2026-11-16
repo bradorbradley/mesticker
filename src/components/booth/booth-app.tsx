@@ -142,15 +142,6 @@ function loadSettings(): BoothSettings {
   }
 }
 
-// Same lines as the web app's loading screen
-const LOADING_LINES = [
-  "Analyzing your photo...",
-  "Teaching AI to draw you...",
-  "Adding cartoon energy...",
-  "Perfecting the details...",
-  "Making you sticker-ready...",
-];
-
 /** Two-panel screen: side by side in landscape, stacked in portrait. */
 function Split({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
@@ -732,8 +723,6 @@ function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOf
 // ================================================================ generating
 
 function Generating({ photo, ready }: { photo: string | null; ready: boolean }) {
-  const [game, setGame] = useState<WaitGameId>(() => WAIT_GAMES[Math.floor(Math.random() * WAIT_GAMES.length)].id);
-  const [line, setLine] = useState(0);
   const [progress, setProgress] = useState(0);
   useEffect(() => {
     let expected = 25000;
@@ -744,12 +733,31 @@ function Generating({ photo, ready }: { photo: string | null; ready: boolean }) 
     const id = setInterval(() => {
       const t = (Date.now() - t0) / expected;
       setProgress(Math.min(0.95, 1 - Math.exp(-2.2 * t)));
-      setLine(Math.min(LOADING_LINES.length - 1, Math.floor(t * LOADING_LINES.length)));
     }, 200);
     return () => clearInterval(id);
   }, []);
-  const Game = WAIT_GAMES.find((g) => g.id === game)!.Comp;
 
+  // ~20 s: just the loading animation. The games come after paying, while the sheet prints.
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center" style={{ gap: u(1.2), padding: u(2) }}>
+      <LoadingState photo={photo} className="!py-2" />
+      <div className="flex w-full max-w-md flex-col items-center" style={{ gap: u(0.6) }}>
+        {ready && <span className="t-body font-bold text-[var(--ink)]">🎉 Ready!</span>}
+        <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--lav)]">
+          <motion.div className="h-full rounded-full bg-gradient-to-r from-[var(--purple)] to-[var(--pink)]" animate={{ width: `${(ready ? 1 : progress) * 100}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Snap's mini-games with a status panel beside them (laptop) or above them
+ * (phone). Used while the sheet prints.
+ */
+function PlayWhileYouWait({ status }: { status: React.ReactNode }) {
+  const [game, setGame] = useState<WaitGameId>(() => WAIT_GAMES[Math.floor(Math.random() * WAIT_GAMES.length)].id);
+  const Game = WAIT_GAMES.find((g) => g.id === game)!.Comp;
   const tabs = (
     <nav className="flex flex-wrap justify-center" style={{ gap: u(0.5) }}>
       {WAIT_GAMES.map((g) => (
@@ -767,42 +775,13 @@ function Generating({ photo, ready }: { photo: string | null; ready: boolean }) 
       ))}
     </nav>
   );
-
   return (
     <div className="relative flex h-full w-full flex-col landscape:flex-row short:!flex-col" style={{ padding: `0 ${u(3)} ${u(1)}`, gap: u(1) }}>
-      {/* Laptop/booth: the web app's "generating" animation, with the game picker under it */}
-      <div className="card hidden shrink-0 flex-col items-center justify-center overflow-hidden landscape:flex landscape:w-[30%] short:!hidden" style={{ padding: u(1) }}>
-        <LoadingState photo={photo} className="!py-2" />
-        <div className="t-body" style={{ marginBottom: u(0.8) }}>
-          Play a game while you wait 👉
-        </div>
+      <div className="card flex shrink-0 flex-col landscape:w-[32%] landscape:justify-center short:!w-full" style={{ padding: u(1.2), gap: u(1) }}>
+        {status}
+        <div className="t-body text-center short:hidden">Play a game while it prints 👇</div>
         {tabs}
       </div>
-
-      {/* Phones: compact strip with the spinning photo ring */}
-      <div className="card flex shrink-0 flex-wrap items-center landscape:hidden short:!flex" style={{ gap: `${u(0.6)} ${u(1.2)}`, padding: `${u(0.5)} ${u(1)}` }}>
-        {photo && (
-          <div className="relative shrink-0" style={{ width: `max(40px, ${u(4.4)})`, height: `max(40px, ${u(4.4)})` }}>
-            <motion.div
-              className="absolute inset-0 rounded-full"
-              style={{ background: "conic-gradient(from 0deg, #7C5CFC, #FF6B9D, #FF9F43, #7C5CFC)" }}
-              animate={{ rotate: 360 }}
-              transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-            />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photo} alt="" className="absolute inset-[3px] h-[calc(100%-6px)] w-[calc(100%-6px)] rounded-full object-cover" />
-          </div>
-        )}
-        <div className="flex min-w-[160px] flex-1 items-center" style={{ gap: u(1) }}>
-          <span className="t-body shrink-0 font-bold text-[var(--ink)]">{ready ? "🎉 Ready!" : LOADING_LINES[line]}</span>
-          <div className="h-3 flex-1 overflow-hidden rounded-full bg-[var(--lav)]">
-            <motion.div className="h-full rounded-full bg-gradient-to-r from-[var(--purple)] to-[var(--pink)]" animate={{ width: `${(ready ? 1 : progress) * 100}%` }} />
-          </div>
-        </div>
-        {tabs}
-      </div>
-
-      {/* play while you wait */}
       <div className="relative min-h-0 flex-1">
         <AnimatePresence mode="wait">
           <motion.div key={game} className="absolute inset-0" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
@@ -810,7 +789,6 @@ function Generating({ photo, ready }: { photo: string | null; ready: boolean }) 
           </motion.div>
         </AnimatePresence>
       </div>
-
     </div>
   );
 }
@@ -1173,8 +1151,47 @@ async function sendKit(guides: string[], kit: KitItem[], order: PrintOrder): Pro
   return !!data.queued;
 }
 
+/** What /api/booth/order-status returns. */
+type OrderProgress = {
+  status: "queued" | "printing" | "done" | "failed";
+  stage: "preparing" | "printing" | null;
+  stageAt: string | null;
+  verified: boolean;
+  ahead: number;
+  sheets: number;
+  serverTime: string;
+};
+const SHEET_SECONDS = 130; // print + cut, per sheet
+
+/** Turn the order's live status into a bar position (0–1) and a line of text. */
+function printPhase(sent: "sending" | "queued" | "error", p: OrderProgress | null, clockSkew: number): { pct: number; label: string; detail?: string } {
+  if (sent === "error") return { pct: 0.02, label: "Couldn't reach the printer", detail: "Please tell staff: your payment went through." };
+  if (sent === "sending" || !p) return { pct: 0.04, label: "Sending to the printer…" };
+  const since = (iso: string | null) => (iso ? Math.max(0, (Date.now() + clockSkew - Date.parse(iso)) / 1000) : 0);
+  if (p.status === "failed") return { pct: 0.5, label: "The printer hit a snag", detail: "Staff have been told and will sort it out." };
+  if (p.status === "done") return { pct: 1, label: "Done! Grab your stickers 🎉" };
+  if (p.status === "queued") {
+    if (!p.verified) return { pct: 0.08, label: "Confirming your payment…" };
+    return p.ahead > 0
+      ? { pct: 0.12, label: `In line: ${p.ahead} ${p.ahead === 1 ? "sheet" : "orders"} ahead of you`, detail: `About ${Math.ceil((p.ahead * SHEET_SECONDS) / 60)} min` }
+      : { pct: 0.16, label: "You're up next!" };
+  }
+  if (p.stage !== "printing") return { pct: Math.min(0.3, 0.2 + since(p.stageAt) / 300), label: "Laying out your sheet…" };
+  const total = SHEET_SECONDS * p.sheets;
+  const t = since(p.stageAt);
+  const left = Math.max(5, Math.round(total - t));
+  return {
+    pct: Math.min(0.97, 0.3 + 0.67 * (t / total)),
+    label: t < total * 0.55 ? "Printing your stickers…" : "Cutting them out…",
+    detail: `About ${left >= 60 ? `${Math.ceil(left / 60)} min` : `${left} s`} left`,
+  };
+}
+
 function PrintKit({ guides, kit, order, onDone }: { guides: string[] | null; kit: KitItem[] | null; order: PrintOrder | null; onDone: () => void }) {
   const [sent, setSent] = useState<"sending" | "queued" | "error">("sending");
+  const [progress, setProgress] = useState<OrderProgress | null>(null);
+  const [skew, setSkew] = useState(0);
+  const [, tick] = useState(0);
 
   useEffect(() => {
     if (!kit || !guides || !order) return;
@@ -1192,45 +1209,71 @@ function PrintKit({ guides, kit, order, onDone }: { guides: string[] | null; kit
     };
   }, [kit, guides, order]);
 
+  // live status from the print station, every 2 s until it's done
+  useEffect(() => {
+    if (sent !== "queued" || !order) return;
+    let alive = true;
+    const poll = async () => {
+      try {
+        const r = await fetch(`/api/booth/order-status?id=${encodeURIComponent(order.id)}`, { cache: "no-store" });
+        if (!r.ok) return;
+        const p = (await r.json()) as OrderProgress;
+        if (!alive) return;
+        setSkew(Date.parse(p.serverTime) - Date.now());
+        setProgress((prev) => {
+          if (p.status === "done" && prev?.status !== "done") sounds.success();
+          return p;
+        });
+      } catch {}
+    };
+    poll();
+    const id = setInterval(poll, 2000);
+    const t = setInterval(() => tick((n) => n + 1), 1000); // smooth countdown between polls
+    return () => {
+      alive = false;
+      clearInterval(id);
+      clearInterval(t);
+    };
+  }, [sent, order]);
+
+  const phase = printPhase(sent, progress, skew);
+  const done = progress?.status === "done";
   const n = order?.sheets.length ?? 1;
-  return (
-    <div className="flex h-full w-full flex-col items-center justify-center" style={{ gap: u(1.4), padding: u(2) }}>
-      <h2 className="t-h2 text-center">
-        Printing your <span className="pop">{n === 1 ? "sheet" : `${n} sheets`}…</span>
-      </h2>
-      <div className="flex min-h-0 w-full flex-1 items-center justify-center" style={{ gap: u(2), containerType: "size" }}>
-        {(order?.sheets ?? ["pose"]).map((kind, i) => (
-          <motion.div
-            key={kind}
-            className="relative bg-white shadow-[0_14px_40px_rgba(91,63,214,0.22)]"
-            style={{
-              height: `min(100cqh, calc((100cqw - ${(n - 1) * 32}px) / ${n} * 6.7 / 3.9))`,
-              aspectRatio: "3.9 / 6.7",
-              borderRadius: 12,
-              rotate: n > 1 ? (i - (n - 1) / 2) * 4 : -2,
-            }}
-            initial={{ y: 40, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: i * 0.12, type: "spring", stiffness: 200, damping: 18 }}
-          >
-            {guides?.[i] ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={guides[i]} alt={`${getSheet(kind).name} sheet`} className="h-full w-full rounded-[12px]" />
-            ) : (
-              <div className="h-full w-full animate-pulse rounded-[12px] bg-[var(--lav)]" />
-            )}
-          </motion.div>
-        ))}
+
+  const status = (
+    <div className="flex flex-col items-center text-center" style={{ gap: u(0.8) }}>
+      <div className="flex items-center" style={{ gap: u(1) }}>
+        {guides?.[0] && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={guides[0]} alt="Your sheet" className="shrink-0 rounded-md bg-white shadow short:hidden" style={{ height: `max(72px, ${u(11)})`, aspectRatio: "3.9 / 6.7" }} />
+        )}
+        <div className="flex flex-col text-left" style={{ gap: 2 }}>
+          <div className="t-h3">{n === 1 ? "Your sheet" : `Your ${n} sheets`}</div>
+          <div className={cn("t-body font-bold", done ? "text-[#15803d]" : sent === "error" || progress?.status === "failed" ? "text-[var(--pink)]" : "text-[var(--ink)]")}>{phase.label}</div>
+          {phase.detail && <div className="t-body">{phase.detail}</div>}
+        </div>
       </div>
-      <div className={cn("t-body font-semibold", sent === "queued" ? "text-[#15803d]" : sent === "error" ? "text-[var(--pink)]" : "")}>
-        {sent === "queued" ? "✓ Sent to the print station" : sent === "error" ? "⚠️ Couldn't reach the print station — please tell staff" : "Sending to the print station…"}
+      <div className="h-4 w-full overflow-hidden rounded-full bg-[var(--lav)]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(phase.pct * 100)}>
+        <motion.div
+          className={cn("h-full rounded-full bg-gradient-to-r", done ? "from-[var(--cyan)] to-[var(--green)]" : "from-[var(--purple)] to-[var(--pink)]")}
+          animate={{ width: `${phase.pct * 100}%` }}
+          transition={{ duration: 0.8 }}
+        />
       </div>
-      <p className="t-body text-center">Print + cut takes about 2 minutes a sheet. Snap&apos;s on it!</p>
-      <button className="btn btn-lg btn-main" onClick={onDone}>
-        Got them! 🎉
+      <div className="t-body flex w-full justify-between opacity-70" style={{ fontSize: `max(11px, ${u(1)})` }}>
+        <span>Sent</span>
+        <span>In line</span>
+        <span>Printing</span>
+        <span>Cut ✂️</span>
+      </div>
+      {/* always there, so staff can move on if the station is offline; loud once it's done */}
+      <button className={done ? "btn btn-lg btn-main" : "btn btn-soft"} onClick={onDone}>
+        {done ? "Got them! 🎉" : "I've got my stickers"}
       </button>
     </div>
   );
+
+  return <PlayWhileYouWait status={status} />;
 }
 
 // ================================================================ done
