@@ -15,7 +15,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, basename } from "node:path";
+import { pathToFileURL } from "node:url";
 import sharp from "sharp";
 
 const U = 96; // file units per inch
@@ -109,7 +110,7 @@ function rdp(points, eps) {
 async function stickerEntry(file) {
   const buf = readFileSync(file);
   const meta = await sharp(buf).metadata();
-  const name = file.split("/").pop().replace(/\.png$/, "");
+  const name = basename(file).replace(/\.png$/, "");
   return {
     borderColorHex: "#000000",
     cutLayers: [
@@ -182,7 +183,7 @@ export async function buildLayouts(orderDir) {
   return out;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const id = process.argv[2];
   if (!id) {
     console.error("usage: stixcut-layout.mjs <orderId>");

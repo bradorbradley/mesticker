@@ -34,6 +34,7 @@
     "sharp": "^0.34.5",
     "stripe": "^17.5.0",
     "tailwind-merge": "^2.6.0",
+    "usb": "^2.19.1",
     "zod": "^4.2.1"
   },
   "devDependencies": {
