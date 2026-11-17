@@ -9,7 +9,7 @@ import { recordGeneration, recordError, isThrottled } from "@/lib/spend-tracker"
 const RATE_LIMIT_PER_IP = 240;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 export async function POST(request: NextRequest) {
   const rate = checkRateLimit(`booth:${getClientIP(request)}`, RATE_LIMIT_PER_IP, RATE_LIMIT_WINDOW_MS);

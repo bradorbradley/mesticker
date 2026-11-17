@@ -40,6 +40,17 @@ export const LAYOUTS = {
     [40, 40, 660, 740, 0], [730, 40, 400, 360, 0], [730, 420, 400, 360, 0], [40, 820, 525, 560, 0],
     [605, 820, 525, 560, 0], [40, 1420, 350, 560, 0], [410, 1420, 350, 560, 0], [780, 1420, 350, 560, 0],
   ] as Slot[],
+  /**
+   * 12 stickers, no tilt (the booth's sheets): a ~2.2" hero top-left, two
+   * ~1.1" beside it, then three rows of three (~1.1–1.3"). Every gap ≥ 30px
+   * (2.5mm) so the cutter has room, and placement in StixCut is by numbers.
+   */
+  pack12: [
+    [30, 30, 700, 700, 0], [760, 30, 380, 335, 0], [760, 395, 380, 335, 0],
+    [30, 760, 350, 420, 0], [410, 760, 350, 420, 0], [790, 760, 350, 420, 0],
+    [30, 1210, 350, 380, 0], [410, 1210, 350, 380, 0], [790, 1210, 350, 380, 0],
+    [30, 1620, 350, 360, 0], [410, 1620, 350, 360, 0], [790, 1620, 350, 360, 0],
+  ] as Slot[],
   /** one big sticker (~3.6") */
   big1: [[35, 335, 1100, 1340, 0]] as Slot[],
 };
@@ -50,6 +61,7 @@ export const LAYOUT_INFO: Record<LayoutId, string> = {
   hero5: "5 slots: a big hero (~3\") on top + 4 varied minis (1.2–1.8\"). Best for 5 different stickers (poses/styles).",
   grid6: "6 slots of ~1.8×2\", 2 columns × 3 rows, gently tilted. Best for 6 different stickers of equal importance.",
   kit8: "8 slots, no tilt (easy to copy by hand in the Liene app): a big #1 (~2.2\") top-left, #2–3 beside it, #4–5 medium, #6–8 small. Best for you + 7 poses.",
+  pack12: "12 slots, no tilt: a ~2.2\" hero top-left, two ~1.1\" beside it, then three rows of three (~1.1–1.3\"). Best for 12 stickers: you + 7 poses + repeats.",
   big1: "1 slot: a single ~3.6\" sticker.",
 };
 

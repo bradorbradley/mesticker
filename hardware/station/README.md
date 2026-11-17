@@ -30,19 +30,55 @@ node hardware/station/station.mjs next                       # paid (Stripe-veri
 node hardware/station/station.mjs next --include-unverified  # also free mode / cash
 ```
 
-This claims the oldest order and saves `1.png … 8.png`, `guide.png` and `order.json` (sizes in
-inches) to `~/MeSticker Orders/<orderId>/`. Then, in StixCut:
+This claims the oldest order and saves it to `~/MeSticker Orders/<orderId>/`:
 
-1. New 4×7 sheet, media **4.00 × 7.00 in Cut**. Use kiss-cut, not perf-cut, which wears the cutting strip.
-2. Import the 8 images, remove backgrounds, size each one to its `w × h` and place it like `guide.png`.
-3. **Print & Cut**.
-4. Check the sheet against `guide.png`, then report back:
-   - `node hardware/station/station.mjs done <orderId>`
-   - `node hardware/station/station.mjs failed <orderId> "paper jam"`
-   - `node hardware/station/station.mjs requeue <orderId>` (puts it back in line)
+- `stickers/s01.png …`: each distinct sticker once. They're already transparent with a white die-cut
+  border, so **no background removal is needed**.
+- `sheet-N-guide.png`: the sheet exactly as the guest saw it, with numbered spots.
+- `order.json`: `sheets[].placements[]` = `{ n, file, x, y, w, h }`, in inches from the top-left of
+  the **printable area** (3.9 × 6.7", which starts 0.05" in from the left and 0.15" down on 4 × 7" paper).
+
+## Station agent playbook (StixCut)
+
+The goal is a fast, accurate sheet every time: 12 stickers per sheet (`pack12`: a ~2.2" hero, two
+~1.1" beside it, three rows of three), at least 2.5 mm of paper between cut lines, nothing off the
+printable area. Budget about 2 minutes of arranging per sheet; print + cut is another ~2.
+
+For each sheet in `order.json`, in order:
+
+0. **Heal missing stickers.** If `order.json` shows fewer distinct stickers than the design needs (Pose Party
+   and Big Feelings need 8, Best Of needs 11), the extras never arrived. This happens when a guest pays on
+   their phone and Safari pauses the booth tab. Run `node hardware/station/heal.mjs <orderId>`: it
+   regenerates them from the hero sticker, borders and places them. Never print a sheet of 12 identical stickers.
+1. **Build the layout (seconds, exact).**
+   `node hardware/station/stixcut-layout.mjs <orderId>` writes `sheet-N.stixcut`: every sticker at its
+   spot and size, kiss cut (perf off), a 0.4 mm cut margin just outside the white border, and each
+   sticker's cut line traced from its outline. Don't drag stickers by hand.
+2. **Open it.** `open -a StixCut "~/MeSticker Orders/<orderId>/sheet-N.stixcut"`. The sheet appears fully
+   arranged ("sheet-N · 12 stickers").
+3. **Printer.** It must say "1 READY · PixCut S1-…". If it says NOT CONNECTED, check the USB-C cable
+   and that the printer is on, then click Connect Printer → Add.
+4. **Quality check.** Screenshot the sheet and compare it against `sheet-N-guide.png` before printing:
+   - 12 stickers, each in its numbered spot, none missing, none duplicated by mistake
+   - every face crisp and recognizable, nothing clipped at an edge, no stray background boxes
+   - the hero is the guest's main sticker; nothing upside down or mirrored
+   - every pink cut line is closed and separate from its neighbours; nothing within ~0.1" of the paper edge
+   If anything fails, fix it. If a sticker image itself is bad (wrong person, broken), stop and
+   `failed` the order with the reason instead of printing it.
+5. **Print & Cut**, then a quick look at the printed sheet: colours present, cuts aligned with the
+   print. Misaligned cuts mean a recalibration (StixCut → Printer → Cut Calibration) before the next order.
+
+`station.mjs next` already cleans every sticker (drops AI haze and specks the cutter would trace).
+`station.mjs clean <orderId>` re-cleans an order that's already on disk.
+
+When every sheet is printed:
+
+- `node hardware/station/station.mjs done <orderId>`
+- `node hardware/station/station.mjs failed <orderId> "paper jam"` (with what went wrong)
+- `node hardware/station/station.mjs requeue <orderId>` (puts it back in line)
 
 An order claimed but not finished within 15 minutes goes back in line automatically.
-
-The exact StixCut click path gets recorded here after the first sheet is done by hand.
-
 `node hardware/station/station.mjs list [queued|printing|done|failed]` shows the queue.
+
+**Cost per sheet:** 15 AI images per guest (~$0.60 at medium quality), made whether or not they buy,
+plus paper and ink of about $0.60 per sheet. Layout file format: see the header of `stixcut-layout.mjs` (JSON, schemaVersion 4, 96 units/inch, centred positions).

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
-import { DEFAULT_PRODUCT_ID, getProduct } from "@/lib/booth-config";
+import { BOOTH_STYLE, STICKERS_PER_SHEET, bundlePrice, getSheet, parseSheets } from "@/lib/booth-config";
 
 /**
  * QR-code payment for the booth.
@@ -26,11 +26,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ free: true });
   }
   try {
-    const { styleId, productId } = await request.json().catch(() => ({ styleId: "", productId: "" }));
+    const { sheets: requested } = await request.json().catch(() => ({ sheets: [] }));
     // Price always comes from the server-side menu, never from the client.
-    const product = getProduct(productId) ?? getProduct(DEFAULT_PRODUCT_ID)!;
+    const sheets = parseSheets(requested);
+    if (!sheets.length) return NextResponse.json({ error: "Pick at least one sheet" }, { status: 400 });
     const origin = appOrigin(request);
     const boothId = process.env.BOOTH_ID || "booth-1";
+    const names = sheets.map((s) => getSheet(s).name).join(" + ");
     const session = await getStripe().checkout.sessions.create({
       mode: "payment",
       line_items: [
@@ -38,15 +40,15 @@ export async function POST(request: NextRequest) {
           quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: product.priceCents,
+            unit_amount: bundlePrice(sheets.length),
             product_data: {
-              name: `MeSticker ${product.name}`,
-              description: `${product.blurb}, printed right now at the booth`,
+              name: `MeSticker · ${sheets.length} sticker sheet${sheets.length === 1 ? "" : "s"}`,
+              description: `${names} · ${sheets.length * STICKERS_PER_SHEET} chibi stickers, printed right now at the booth`,
             },
           },
         },
       ],
-      metadata: { source: "booth", boothId, styleId: String(styleId || ""), productId: product.id },
+      metadata: { source: "booth", boothId, styleId: BOOTH_STYLE, sheets: sheets.join("+") },
       payment_intent_data: { metadata: { source: "booth", boothId } },
       success_url: `${origin}/booth/paid`,
       cancel_url: `${origin}/booth/paid?canceled=1`,

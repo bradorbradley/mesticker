@@ -3,55 +3,60 @@
 /** Skip payment entirely (demos, free events). Staff can also toggle it in the operator panel. */
 export const BOOTH_FREE_MODE = process.env.NEXT_PUBLIC_BOOTH_FREE_MODE === "1";
 
-/** Sheets per Liene PixCut S1 cassette. */
+/** Sheets per PixCut S1 cassette. */
 export const SHEETS_PER_CASSETTE = 36;
 
-/**
- * What a guest can buy. Every sheet is the PixCut S1's 4×7" sticker paper
- * (3.9×6.7" printable) holding 8 stickers in the hand-arrangeable kit8
- * layout; paper + ribbon is ~$0.60/sheet. What changes is what goes on it:
- *   pose — their sticker + 7 new poses in the same style (poses designed for
- *          this person by the web app's variations engine). Started the moment
- *          the photo is taken, so they're ready by the reveal.
- *   same — their sticker 8 times, in different sizes
- *   mix  — their sticker + 7 that change pose AND style (made only if picked)
- * Staff then upload the 8 images one by one into the Liene app (which removes
- * each background) and arrange them like the numbered guide.
- * Prices can be overridden with NEXT_PUBLIC_BOOTH_PRICES="pose:2500,sheet:2000,mix:2500".
- */
-export type SheetKind = "same" | "pose" | "mix";
+/** Every booth sticker is chibi for now (no style picker). */
+export const BOOTH_STYLE = "chibi";
 
-export interface BoothProduct {
-  id: "sheet" | "pose" | "mix";
+/**
+ * The menu: three different 4×7" sheets (3.9×6.7" printable on the PixCut S1),
+ * 12 stickers each, all made from the guest's one photo. Guests pick 1, 2 or 3.
+ *   pose — their sticker + 7 new poses (designed for this person by the vision engine)
+ *   face — their sticker + 7 expressions (laughing, wink, heart eyes…)
+ *   best — a big hero + the best of both, mixed sizes
+ * Poses and expressions both start the moment the photo is taken, so all
+ * three sheets fill in during the reveal (15 image generations per guest).
+ */
+export type SheetKind = "pose" | "face" | "best";
+
+export interface SheetDesign {
+  id: SheetKind;
   name: string;
   blurb: string;
-  priceCents: number;
-  sheets: SheetKind[];
-  tag?: string;
   emoji: string;
 }
 
-const PRICE_OVERRIDES = Object.fromEntries(
-  (process.env.NEXT_PUBLIC_BOOTH_PRICES || "")
-    .split(",")
-    .map((p) => p.split(":").map((s) => s.trim()))
-    .filter(([id, cents]) => id && Number(cents) > 0)
-    .map(([id, cents]) => [id, Math.round(Number(cents))])
-) as Record<string, number>;
+export const SHEET_DESIGNS: SheetDesign[] = [
+  { id: "pose", name: "Pose Party", blurb: "You + 7 poses", emoji: "🤸" },
+  { id: "face", name: "Big Feelings", blurb: "You + 7 expressions", emoji: "😆" },
+  { id: "best", name: "Best Of", blurb: "Big you + the best of both", emoji: "⭐" },
+];
 
-export const BOOTH_PRODUCTS: BoothProduct[] = (
-  [
-    { id: "pose", name: "Pose Sheet", blurb: "You + 7 new poses · 8 stickers", priceCents: 2500, sheets: ["pose"], tag: "Most fun", emoji: "🤸" },
-    { id: "sheet", name: "Sticker Sheet", blurb: "8 of your sticker, all sizes", priceCents: 2000, sheets: ["same"], emoji: "✨" },
-    { id: "mix", name: "Mix Sheet", blurb: "7 poses, each a new style", priceCents: 2500, sheets: ["mix"], emoji: "🎨" },
-  ] as BoothProduct[]
-).map((p) => ({ ...p, priceCents: PRICE_OVERRIDES[p.id] ?? p.priceCents }));
+/** Stickers on every sheet (see LAYOUTS.pack12). */
+export const STICKERS_PER_SHEET = 12;
 
-export const DEFAULT_PRODUCT_ID: BoothProduct["id"] = "pose";
+/**
+ * Price by how many sheets: 1 / 2 / 3. Override with
+ * NEXT_PUBLIC_BOOTH_BUNDLE_PRICES="1000,1800,2400" (cents).
+ */
+const DEFAULT_BUNDLE = [1000, 1800, 2400];
+export const BUNDLE_PRICES: number[] = (() => {
+  const parts = (process.env.NEXT_PUBLIC_BOOTH_BUNDLE_PRICES || "").split(",").map((s) => Math.round(Number(s.trim())));
+  return parts.length === 3 && parts.every((c) => c > 0) ? parts : DEFAULT_BUNDLE;
+})();
 
-export const getProduct = (id: string | null | undefined) => BOOTH_PRODUCTS.find((p) => p.id === id);
+export const bundlePrice = (count: number) => BUNDLE_PRICES[Math.min(Math.max(count, 1), 3) - 1];
+
+/** Validate a guest's picks: known sheets, no repeats, 1–3, in menu order. */
+export function parseSheets(input: unknown): SheetKind[] {
+  const picked = new Set(Array.isArray(input) ? input.map(String) : []);
+  return SHEET_DESIGNS.map((d) => d.id).filter((id) => picked.has(id));
+}
+
+export const getSheet = (id: SheetKind) => SHEET_DESIGNS.find((d) => d.id === id)!;
 
 export const priceLabel = (cents: number) => `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`;
 
-/** Lowest price, for the attract screen ("from $12"). */
-export const BOOTH_FROM_LABEL = priceLabel(Math.min(...BOOTH_PRODUCTS.map((p) => p.priceCents)));
+/** For the attract screen ("from $10"). */
+export const BOOTH_FROM_LABEL = priceLabel(BUNDLE_PRICES[0]);

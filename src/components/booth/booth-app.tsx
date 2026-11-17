@@ -4,8 +4,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "qrcode";
 import { stylePresets } from "@/lib/presets";
-import { BOOTH_FREE_MODE, BOOTH_FROM_LABEL, BOOTH_PRODUCTS, DEFAULT_PRODUCT_ID, SHEETS_PER_CASSETTE, getProduct, priceLabel, type BoothProduct, type SheetKind } from "@/lib/booth-config";
-import { addStickerBorder, composePrintSheet, downloadDataUrl, slotInches, stickerForLiene, trimmedAspect } from "@/lib/booth-print";
+import {
+  BOOTH_FREE_MODE,
+  BOOTH_FROM_LABEL,
+  BOOTH_STYLE,
+  SHEET_DESIGNS,
+  SHEETS_PER_CASSETTE,
+  STICKERS_PER_SHEET,
+  bundlePrice,
+  getSheet,
+  priceLabel,
+  type SheetKind,
+} from "@/lib/booth-config";
+import { addStickerBorder, composePrintSheet, slotPlacement, trimmedAspect } from "@/lib/booth-print";
 import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import Mascot from "./mascot";
@@ -13,24 +24,59 @@ import BoothCamera from "./booth-camera";
 import OperatorPanel, { type BoothSettings, type GenStats } from "./operator-panel";
 import { u } from "./units";
 import LoadingState from "@/components/loading-state";
-import BoothReveal from "./booth-reveal";
-import { WAIT_GAMES, ReadyTakeover, type WaitGameId } from "./games/wait-games";
+import { WAIT_GAMES, type WaitGameId } from "./games/wait-games";
 
-type Step = "attract" | "style" | "camera" | "generating" | "reveal" | "printing" | "done";
+type Step = "attract" | "camera" | "generating" | "reveal" | "sheets" | "printing" | "done";
 
-type VariantKind = Exclude<SheetKind, "same">;
-/** 7 extra stickers per sheet: null = still making, false = failed */
+/** The two sets of extra stickers made from the photo. */
+type VariantKind = "pose" | "face";
+/** 7 extras per set: null = still making, false = failed */
 type Variants = Record<VariantKind, (string | null | false)[]>;
 const EXTRAS = 7;
 const SLOTS = Array.from({ length: EXTRAS }, (_, i) => i);
-const EMPTY_VARIANTS: Variants = { pose: SLOTS.map(() => null), mix: SLOTS.map(() => null) };
-const SHEET_LAYOUT = "kit8" as const;
+const EMPTY_VARIANTS: Variants = { pose: SLOTS.map(() => null), face: SLOTS.map(() => null) };
+const SHEET_LAYOUT = "pack12" as const;
 
-/** One image for the Liene app: number on the guide, where it goes, how big. */
+/** Expressions for the Big Feelings sheet (same pose ideas engine isn't needed). */
+const EXPRESSIONS = [
+  "laughing out loud, eyes squeezed shut, huge open-mouth smile",
+  "winking with a finger-gun and a cheeky grin",
+  "heart eyes, hands clasped, totally in love",
+  "shocked and surprised, mouth wide open, hands on cheeks",
+  "too cool, wearing dark sunglasses, smug smirk, arms crossed",
+  "happy tears of joy, crying-laughing",
+  "pouty grumpy face, arms crossed, cheeks puffed (cute, not mean)",
+];
+
+/**
+ * What goes in each of a sheet's 12 slots (pack12 order: hero, 2 beside it,
+ * then 3 rows of 3). "main" = their sticker; [kind, i] = extra i of that set.
+ * Big slots get the strongest stickers; the small last row repeats favourites.
+ */
+type Src = "main" | [VariantKind, number];
+const SHEET_RECIPES: Record<SheetKind, Src[]> = {
+  pose: ["main", ["pose", 0], ["pose", 1], ["pose", 2], ["pose", 3], ["pose", 4], ["pose", 5], ["pose", 6], "main", ["pose", 0], ["pose", 3], ["pose", 5]],
+  face: ["main", ["face", 0], ["face", 1], ["face", 2], ["face", 3], ["face", 4], ["face", 5], ["face", 6], "main", ["face", 0], ["face", 2], ["face", 4]],
+  best: ["main", ["face", 0], ["pose", 0], ["pose", 1], ["face", 1], ["pose", 2], ["face", 2], ["pose", 3], ["face", 3], ["pose", 4], ["face", 4], "main"],
+};
+
+/** Raw sticker per slot: null while an extra is still being made (preview only); failed extras fall back to the main sticker. */
+function sheetSources(kind: SheetKind, main: string, variants: Variants, preview: boolean): (string | null)[] {
+  return SHEET_RECIPES[kind].map((s) => {
+    if (s === "main") return main;
+    const v = variants[s[0]][s[1]];
+    return v ? v : v === null && preview ? null : main;
+  });
+}
+
+/** One sticker placement for the print station: which sheet, which slot, where (inches from the printable area's top-left). */
 export interface KitItem {
-  n: number;
-  src: string; // transparent sticker (raw, no border)
-  w: number; // inches
+  sheet: number; // 0-based, in order of the guest's picks
+  n: number; // slot number on that sheet's guide (1–12)
+  src: string; // the sticker as it prints: transparent, with its white die-cut border
+  x: number;
+  y: number;
+  w: number;
   h: number;
 }
 
@@ -38,50 +84,47 @@ export interface KitItem {
 const borderCache = new Map<string, Promise<string>>();
 const bordered = (src: string) => {
   if (!borderCache.has(src)) {
-    if (borderCache.size > 40) borderCache.clear();
+    if (borderCache.size > 60) borderCache.clear();
     borderCache.set(src, addStickerBorder(src));
   }
   return borderCache.get(src)!;
 };
 
-/**
- * The sheet(s) for a product, exactly as they will print. Pending extras are
- * null (drawn as placeholders) when previewing; failed ones use the main sticker.
- */
-async function buildSheets(product: BoothProduct, main: string, variants: Variants, preview: boolean, numbers = false) {
-  const mainB = await bordered(main);
-  return Promise.all(
-    product.sheets.map(async (kind) => {
-      if (kind === "same") return composePrintSheet([mainB], SHEET_LAYOUT, { numbers });
-      const extras = await Promise.all(
-        variants[kind].map((v) => (v ? bordered(v) : v === null && preview ? Promise.resolve(null) : Promise.resolve(mainB)))
-      );
-      return composePrintSheet([mainB, ...extras], SHEET_LAYOUT, { numbers });
-    })
-  );
+/** One sheet exactly as it will print (pending extras drawn as placeholders when previewing). */
+async function buildSheet(kind: SheetKind, main: string, variants: Variants, preview: boolean, numbers = false) {
+  const srcs = await Promise.all(sheetSources(kind, main, variants, preview).map((s) => (s ? bordered(s) : Promise.resolve(null))));
+  return composePrintSheet(srcs, SHEET_LAYOUT, { numbers });
 }
 
-/** The 8 images staff upload into the Liene app, in guide order (failed poses fall back to the main sticker). */
-async function buildKit(product: BoothProduct, main: string, variants: Variants): Promise<KitItem[]> {
-  const kind = product.sheets[0];
-  const srcs = [main, ...SLOTS.map((i) => (kind === "same" ? main : variants[kind][i] || main))];
-  return Promise.all(
-    srcs.map(async (src, i) => {
-      // the guide's sizes include the white border the Liene app adds
-      const { w, h } = slotInches(SHEET_LAYOUT, i, await trimmedAspect(src));
-      return { n: i + 1, src, w, h };
-    })
+/** Every sticker placement for the guest's sheets, for the print station. */
+async function buildKit(sheets: SheetKind[], main: string, variants: Variants): Promise<KitItem[]> {
+  const aspects = new Map<string, Promise<number>>();
+  const aspect = (src: string) => {
+    if (!aspects.has(src)) aspects.set(src, trimmedAspect(src));
+    return aspects.get(src)!;
+  };
+  const perSheet = await Promise.all(
+    sheets.map((kind, sheet) =>
+      Promise.all(
+        sheetSources(kind, main, variants, false).map(async (raw, i) => {
+          const src = await bordered(raw!);
+          return { sheet, n: i + 1, src, ...slotPlacement(SHEET_LAYOUT, i, await aspect(src)) };
+        })
+      )
+    )
   );
+  return perSheet.flat();
 }
 
+/** Style examples on the attract screen. */
 const BOOTH_STYLES = stylePresets.filter((p) => p.id !== "custom");
 const MAX_TRIES = 3; // generations per guest
 
 /** Seconds of no touches before a screen gives up and returns to attract. */
 const IDLE_SECONDS: Partial<Record<Step, number>> = {
-  style: 60,
   camera: 75,
   reveal: 180,
+  sheets: 180,
   done: 60,
 };
 
@@ -122,13 +165,13 @@ function Split({ children, className }: { children: React.ReactNode; className?:
 
 export default function BoothApp() {
   const [step, setStep] = useState<Step>("attract");
-  const [styleId, setStyleId] = useState<string | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [sticker, setSticker] = useState<string | null>(null);
   const [tries, setTries] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
   const [lastGen, setLastGen] = useState<GenStats | null>(null);
-  const [printFile, setPrintFile] = useState<string | null>(null);
+  // numbered guide per picked sheet, shown while printing
+  const [guides, setGuides] = useState<string[] | null>(null);
   const [kit, setKit] = useState<KitItem[] | null>(null);
   // one id per paid order, so reopening the kit never queues it twice
   const [printOrder, setPrintOrder] = useState<PrintOrder | null>(null);
@@ -138,7 +181,8 @@ export default function BoothApp() {
   const [paid, setPaid] = useState(false);
   // Sticker is done but the guest is mid-game: the "It's ready!" takeover plays first.
   const [stickerReady, setStickerReady] = useState(false);
-  const [productId, setProductId] = useState<BoothProduct["id"]>(DEFAULT_PRODUCT_ID);
+  // the guest's cart: which of the three sheets (1–3)
+  const [picked, setPicked] = useState<SheetKind[]>(["pose"]);
   const [emailOn, setEmailOn] = useState(false);
   const [autoEmailedTo, setAutoEmailedTo] = useState<string | null>(null);
   useEffect(() => {
@@ -147,7 +191,6 @@ export default function BoothApp() {
       .then((d) => setEmailOn(!!d.email))
       .catch(() => {});
   }, []);
-  const showReveal = useCallback(() => setStep("reveal"), []);
 
   // ---- Pose / Mix packs: 8 extra stickers, started the moment the photo is taken
   const [variants, setVariantsState] = useState<Variants>(EMPTY_VARIANTS);
@@ -181,18 +224,17 @@ export default function BoothApp() {
 
   const reset = useCallback(() => {
     setStep("attract");
-    setStyleId(null);
     setPhoto(null);
     setSticker(null);
     setTries(0);
     setError(null);
-    setPrintFile(null);
+    setGuides(null);
     setKit(null);
     setPrintOrder(null);
     setDigitalUrl(null);
     setPaid(false);
     setStickerReady(false);
-    setProductId(DEFAULT_PRODUCT_ID);
+    setPicked(["pose"]);
     setAutoEmailedTo(null);
     resetVariants();
     setOperatorOpen(false);
@@ -249,18 +291,17 @@ export default function BoothApp() {
       .catch(() => null);
 
   /**
-   * Make 7 extra stickers from the original photo, in parallel with the main
-   * one: "pose" = 7 poses in the chosen style (started at capture), "mix" = 7
-   * that change pose AND style (only once a guest picks the Mix Sheet). Pose
-   * ideas come from the vision engine once per photo. Each request retries once.
+   * Make the 14 extra stickers from the original photo, in parallel with the
+   * main one (all chibi): "pose" = 7 poses designed for this person by the
+   * vision engine, "face" = 7 expressions. Both start at capture so all three
+   * sheets fill in during the reveal. Each request retries once.
    */
   const ideasJob = useRef<Promise<string[]> | null>(null);
-  const variantPhoto = useRef<{ image: string; style: string } | null>(null);
+  const variantPhoto = useRef<string | null>(null);
   const variantJobs = useRef<Partial<Record<VariantKind, Promise<unknown>>>>({});
   const startVariants = (kind: VariantKind) => {
-    const src = variantPhoto.current;
-    if (!src || variantJobs.current[kind]) return;
-    const { image, style } = src;
+    const image = variantPhoto.current;
+    if (!image || variantJobs.current[kind]) return;
     const id = genId.current;
     const post = (body: object) =>
       fetch("/api/booth/pose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) =>
@@ -268,20 +309,18 @@ export default function BoothApp() {
       );
     const retry = <T,>(fn: () => Promise<T>) => fn().catch(() => new Promise<T>((ok, no) => setTimeout(() => fn().then(ok, no), 3000)));
     const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-    const otherStyles = BOOTH_STYLES.filter((p) => p.id !== "random" && p.id !== style).map((p) => p.id);
-    ideasJob.current ??= retry(() => post({ photo: image })).then((d: { ideas: string[] }) => d.ideas);
-    variantJobs.current[kind] = ideasJob.current
-      .then((ideas) =>
-        // small stagger so 8 image requests don't all land in the same instant
+    const ideas: Promise<string[]> =
+      kind === "face" ? Promise.resolve(EXPRESSIONS) : (ideasJob.current ??= retry(() => post({ photo: image })).then((d: { ideas: string[] }) => d.ideas));
+    variantJobs.current[kind] = ideas
+      .then((list) =>
+        // stagger so 14 image requests don't all land in the same instant
         Promise.allSettled(
-          SLOTS.map((i) => {
-            const idea = kind === "pose" ? ideas[i % ideas.length] : ideas[(i + 2) % ideas.length];
-            const styleId = kind === "pose" ? style : otherStyles[i % otherStyles.length];
-            return wait(i * 350)
-              .then(() => retry(() => post({ photo: image, styleId, idea })))
+          SLOTS.map((i) =>
+            wait(i * 350 + (kind === "face" ? 175 : 0))
+              .then(() => retry(() => post({ photo: image, styleId: BOOTH_STYLE, idea: list[i % list.length] })))
               .then((d) => setVariant(kind, i, d.image, id))
-              .catch(() => setVariant(kind, i, false, id));
-          })
+              .catch(() => setVariant(kind, i, false, id))
+          )
         )
       )
       .catch(() => SLOTS.forEach((i) => variantsRef.current[kind][i] === null && setVariant(kind, i, false, id)));
@@ -290,26 +329,24 @@ export default function BoothApp() {
   const startVariantsRef = useRef(startVariants);
   startVariantsRef.current = startVariants;
 
-  const generate = useCallback(async (image: string, style: string) => {
+  const generate = useCallback(async (image: string) => {
     printCopy.current = null;
     resetVariants();
     setStickerReady(false);
     setStep("generating");
     setError(null);
     setSticker(null);
-    setPrintFile(null);
+    setGuides(null);
     setTries((t) => t + 1);
-    // pick "Surprise me" here, so the pose stickers can share the main sticker's style
-    const real = BOOTH_STYLES.filter((p) => p.id !== "random");
-    const resolved = style === "random" ? real[Math.floor(Math.random() * real.length)].id : style;
-    // main sticker first, then the 8 pack stickers right behind it
+    // main sticker first, then the 14 sheet stickers right behind it
     const main = fetch("/api/booth/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image, styleId: resolved }),
+      body: JSON.stringify({ image, styleId: BOOTH_STYLE }),
     });
-    variantPhoto.current = { image, style: resolved };
+    variantPhoto.current = image;
     startVariantsRef.current("pose");
+    startVariantsRef.current("face");
     try {
       const res = await main;
       const data = await res.json();
@@ -321,6 +358,8 @@ export default function BoothApp() {
         localStorage.setItem("mesticker-booth-gen-ms", String(data.ms));
       } catch {}
       setStickerReady(true);
+      setStep("sheets");
+      sounds.success();
       uploadDigital(data.generatedImage);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -328,34 +367,62 @@ export default function BoothApp() {
     }
   }, []);
 
-  // ---- printing: build file(s), hand them to the printer workflow, send the digital copy
+  // ---- printing: build the sheets, hand them to the print station, send the digital copy
+  /**
+   * The print files for these sheets: the sharp main sticker (≤30s wait), the
+   * extras (≤60s for stragglers; any that failed print as the main sticker),
+   * a numbered guide per sheet and every sticker's placement.
+   */
+  const buildPrintFiles = useCallback(
+    async (sheets: SheetKind[]) => {
+      if (!sticker) throw new Error("no sticker");
+      const pending = printCopy.current;
+      const hq = pending ? await Promise.race([pending, new Promise<null>((r) => setTimeout(() => r(null), 30000))]) : null;
+      const main = hq || sticker;
+      const needs = new Set<VariantKind>(sheets.flatMap((k) => (k === "best" ? ["pose", "face"] : [k])) as VariantKind[]);
+      await Promise.race([Promise.all([...needs].map((k) => variantJobs.current[k])), new Promise((r) => setTimeout(r, 60000))]);
+      const v = variantsRef.current;
+      const sheetGuides = await Promise.all(sheets.map((k) => buildSheet(k, main, v, false, true)));
+      return { main, guides: sheetGuides, kit: await buildKit(sheets, main, v) };
+    },
+    [sticker]
+  );
+
+  /**
+   * As soon as a Stripe checkout exists, send the complete order to the print
+   * queue (unpaid). The server checks Stripe itself, so the order prints once
+   * paid even if this tab never sees the payment (a phone paying in another
+   * tab pauses this one).
+   */
+  const prepared = useRef<{ checkoutId: string; orderId: string } | null>(null);
+  const prepareOrder = useCallback(
+    async (checkoutId: string) => {
+      if (!sticker || !picked.length) return;
+      const sheets = picked;
+      const orderId = newOrderId();
+      prepared.current = { checkoutId, orderId };
+      const files = await buildPrintFiles(sheets);
+      await sendKit(files.guides, files.kit, { id: orderId, sheets, checkoutId });
+    },
+    [sticker, picked, buildPrintFiles]
+  );
+
   const startPrint = useCallback(
     async (checkoutId?: string) => {
-      if (!sticker) return;
-      const product = getProduct(productId) ?? BOOTH_PRODUCTS[0];
+      if (!sticker || !picked.length) return;
+      const sheets = picked;
       setPaid(true);
-      setPrintOrder({ id: newOrderId(), productId: product.id, checkoutId: checkoutId ?? null });
+      // same order id as the one already sent unpaid, so it's one order, now paid
+      const orderId = checkoutId && prepared.current?.checkoutId === checkoutId ? prepared.current.orderId : newOrderId();
+      setPrintOrder({ id: orderId, sheets, checkoutId: checkoutId ?? null });
       setStep("printing");
       try {
-        // Prefer the sharper print copy; don't hold the printer more than 30s for it.
-        const pending = printCopy.current;
-        const hq = pending ? await Promise.race([pending, new Promise<null>((r) => setTimeout(() => r(null), 30000))]) : null;
-        const main = hq || sticker;
-        // pack sheets: the extras started with the photo; give stragglers up to 60s,
-        // and any that failed print as the main sticker so the sheet still prints
-        const kind = product.sheets[0];
-        if (kind !== "same") {
-          startVariantsRef.current(kind);
-          const job = variantJobs.current[kind];
-          if (job) await Promise.race([job, new Promise((r) => setTimeout(r, 60000))]);
-        }
-        // the numbered guide + the 8 images staff upload one by one into the Liene app
-        const [guide] = await buildSheets(product, main, variantsRef.current, false, true);
-        setPrintFile(guide);
-        setKit(await buildKit(product, main, variantsRef.current));
+        const { main, guides: sheetGuides, kit: sheetKit } = await buildPrintFiles(sheets);
+        setGuides(sheetGuides);
+        setKit(sheetKit);
         setSettings((s) => {
           if (!s) return s;
-          const next = { ...s, sheetsLeft: Math.max(0, s.sheetsLeft - product.sheets.length), salesToday: s.salesToday + 1 };
+          const next = { ...s, sheetsLeft: Math.max(0, s.sheetsLeft - sheets.length), salesToday: s.salesToday + 1 };
           try {
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
           } catch {}
@@ -377,7 +444,7 @@ export default function BoothApp() {
         console.error("print file failed", e);
       }
     },
-    [sticker, productId, emailOn]
+    [sticker, picked, emailOn, buildPrintFiles]
   );
 
   const outOfPaper = settings !== null && settings.sheetsLeft <= 0;
@@ -389,7 +456,7 @@ export default function BoothApp() {
         step={step}
         canJump={(s) =>
           step !== "generating" && step !== "printing" && step !== "done" && step !== s &&
-          (s === "style" || (s === "camera" && !!styleId) || (s === "reveal" && !!sticker))
+          (s === "camera" || (s === "sheets" && !!sticker))
         }
         onJump={(s) => {
           sounds.tap();
@@ -418,57 +485,52 @@ export default function BoothApp() {
                   sounds.unlock();
                   sounds.tap();
                   document.documentElement.requestFullscreen?.().catch(() => {});
-                  setStep("style");
-                }}
-              />
-            )}
-            {step === "style" && (
-              <StylePicker
-                selected={styleId}
-                onPick={(id) => {
-                  sounds.tap();
-                  setStyleId(id);
-                  if (photo) generate(photo, id);
-                  else setTimeout(() => setStep("camera"), 250);
+                  setStep("camera");
                 }}
               />
             )}
             {step === "camera" && (
               <BoothCamera
-                onBack={() => setStep("style")}
+                onBack={() => setStep("attract")}
                 onCapture={(p) => {
                   setPhoto(p);
-                  generate(p, styleId || "random");
+                  generate(p);
                 }}
               />
             )}
-            {step === "generating" && <Generating photo={photo} ready={stickerReady} onReveal={showReveal} />}
+            {step === "generating" && <Generating photo={photo} ready={stickerReady} />}
             {step === "reveal" && (
               <Reveal
-                photo={photo}
-                sticker={sticker}
-                error={error}
-                freeMode={freeMode}
                 canRetry={tries < MAX_TRIES}
-                styleId={styleId}
-                onRetry={() => (photo && styleId ? generate(photo, styleId) : setStep("camera"))}
-                onOtherStyle={() => setStep("style")}
+                onRetry={() => (photo ? generate(photo) : setStep("camera"))}
                 onRetake={() => {
                   setPhoto(null);
                   setStep("camera");
                 }}
-                product={getProduct(productId) ?? BOOTH_PRODUCTS[0]}
-                sheetsLeft={settings?.sheetsLeft ?? SHEETS_PER_CASSETTE}
-                variants={variants}
-                onProduct={(id) => {
-                  sounds.tap();
-                  setProductId(id);
-                  if (id === "mix") startVariantsRef.current("mix");
-                }}
-                onPaid={startPrint}
               />
             )}
-            {step === "printing" && <PrintKit guide={printFile} kit={kit} order={printOrder} onDone={() => setStep("done")} />}
+            {step === "sheets" && sticker && (
+              <SheetShop
+                sticker={sticker}
+                variants={variants}
+                picked={picked}
+                freeMode={freeMode}
+                sheetsLeft={settings?.sheetsLeft ?? SHEETS_PER_CASSETTE}
+                onToggle={(id) => {
+                  sounds.tap();
+                  setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : SHEET_DESIGNS.map((d) => d.id).filter((x) => x === id || p.includes(x))));
+                }}
+                canRetry={tries < MAX_TRIES}
+                onRetry={() => photo && generate(photo)}
+                onRetake={() => {
+                  setPhoto(null);
+                  setStep("camera");
+                }}
+                onPaid={startPrint}
+                onCheckout={prepareOrder}
+              />
+            )}
+            {step === "printing" && <PrintKit guides={guides} kit={kit} order={printOrder} onDone={() => setStep("done")} />}
             {step === "done" && <Done sticker={sticker} digitalUrl={digitalUrl} emailOn={emailOn} autoEmailedTo={autoEmailedTo} onFinish={reset} />}
           </motion.div>
         </AnimatePresence>
@@ -480,7 +542,7 @@ export default function BoothApp() {
           update={updateSettings}
           lastGen={lastGen}
           canReprint={!!kit && step === "done"}
-          canMarkPaid={step === "reveal" && !!sticker && !paid}
+          canMarkPaid={(step === "reveal" || step === "sheets") && !!sticker && !paid && picked.length > 0}
           onReprint={() => kit && setStep("printing")}
           onMarkPaid={() => {
             setOperatorOpen(false);
@@ -497,9 +559,8 @@ export default function BoothApp() {
 // ================================================================ top bar
 
 const STEP_LABELS: { label: string; target: Step; steps: Step[] }[] = [
-  { label: "Style", target: "style", steps: ["style"] },
-  { label: "Pose", target: "camera", steps: ["camera"] },
-  { label: "Pay", target: "reveal", steps: ["generating", "reveal"] },
+  { label: "Snap", target: "camera", steps: ["camera"] },
+  { label: "Your stickers", target: "sheets", steps: ["generating", "reveal", "sheets"] },
   { label: "Print", target: "printing", steps: ["printing", "done"] },
 ];
 
@@ -668,61 +729,9 @@ function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOf
   );
 }
 
-// ================================================================ style picker
-
-const CARD_TINTS = ["#ffe4ef", "#e6f9ff", "#fff3d1", "#efe9ff", "#dcfce7", "#ffe9d6"];
-
-function StylePicker({ selected, onPick }: { selected: string | null; onPick: (id: string) => void }) {
-  return (
-    <div className="flex h-full flex-col" style={{ padding: `0 ${u(3)} ${u(2.5)}`, gap: u(1.6) }}>
-      <h2 className="t-h2 shrink-0">
-        Pick your <span className="pop">look!</span>
-      </h2>
-      <div className="grid min-h-0 flex-1 landscape:grid-cols-3 landscape:grid-rows-2 short:!grid-cols-6 short:!grid-rows-1 portrait:grid-cols-2 portrait:grid-rows-3" style={{ gap: u(1.6) }}>
-        {BOOTH_STYLES.map((s, i) => (
-          <motion.button
-            key={s.id}
-            className={cn("card relative block min-h-0 min-w-0 overflow-hidden text-left", selected === s.id && "outline outline-[6px] outline-[var(--purple)]")}
-            style={{ padding: u(0.6), rotate: i % 2 ? 1.2 : -1.2 }}
-            initial={{ opacity: 0, y: 30, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ delay: i * 0.05, type: "spring", stiffness: 260, damping: 20 }}
-            whileTap={{ scale: 0.94, rotate: 0 }}
-            onClick={() => onPick(s.id)}
-          >
-            {/* inner wrapper: some older browsers won't lay out a <button> as a flex box */}
-            <div className="flex h-full w-full flex-col">
-            <div className="relative min-h-0 w-full flex-1 overflow-hidden" style={{ borderRadius: u(1.5), background: CARD_TINTS[i % CARD_TINTS.length] }}>
-              {s.id === "random" ? (
-                <div className="flex h-full items-center justify-center">
-                  <motion.span
-                    className="leading-none"
-                    style={{ fontSize: u(5) }}
-                    animate={{ rotate: [0, 12, -12, 0] }}
-                    transition={{ duration: 1.6, repeat: Infinity }}
-                  >
-                    🎲
-                  </motion.span>
-                </div>
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={s.previewImage} alt={s.name} className="absolute left-0 top-0 h-full w-full object-cover object-[center_25%]" />
-              )}
-            </div>
-            <div className="t-h3 w-full truncate text-center" style={{ padding: `${u(0.6)} ${u(0.4)} ${u(0.2)}` }}>
-              {s.id === "random" ? "Surprise me!" : s.name}
-            </div>
-            </div>
-          </motion.button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ================================================================ generating
 
-function Generating({ photo, ready, onReveal }: { photo: string | null; ready: boolean; onReveal: () => void }) {
+function Generating({ photo, ready }: { photo: string | null; ready: boolean }) {
   const [game, setGame] = useState<WaitGameId>(() => WAIT_GAMES[Math.floor(Math.random() * WAIT_GAMES.length)].id);
   const [line, setLine] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -802,137 +811,28 @@ function Generating({ photo, ready, onReveal }: { photo: string | null; ready: b
         </AnimatePresence>
       </div>
 
-      <AnimatePresence>{ready && <ReadyTakeover onGo={onReveal} />}</AnimatePresence>
     </div>
   );
 }
 
-// ================================================================ reveal + pay
+// ================================================================ reveal
 
-function Reveal({
-  photo,
-  sticker,
-  error,
-  freeMode,
-  canRetry,
-  styleId,
-  onRetry,
-  onOtherStyle,
-  onRetake,
-  product,
-  sheetsLeft,
-  variants,
-  onProduct,
-  onPaid,
-}: {
-  photo: string | null;
-  sticker: string | null;
-  error: string | null;
-  freeMode: boolean;
-  canRetry: boolean;
-  styleId: string | null;
-  onRetry: () => void;
-  onOtherStyle: () => void;
-  onRetake: () => void;
-  product: BoothProduct;
-  sheetsLeft: number;
-  variants: Variants;
-  onProduct: (id: BoothProduct["id"]) => void;
-  onPaid: (checkoutId?: string) => void;
-}) {
-  // left panel: the before/after reveal, or a live preview of the sheet they're buying
-  const [view, setView] = useState<"sticker" | "sheet">("sticker");
-  if (error || !sticker) {
-    return (
-      <Split>
-        <div className="flex items-center justify-center landscape:h-full landscape:w-[36%] portrait:w-full portrait:min-h-0 portrait:flex-1">
-          <Mascot className="h-[75%] max-h-full" />
-        </div>
-        <div className="flex flex-col landscape:w-[48%] portrait:items-center portrait:text-center" style={{ gap: u(2) }}>
-          <h2 className="t-h2">
-            Oops! That one <span className="pop">didn&apos;t develop.</span>
-          </h2>
-          <p className="t-lead">Let&apos;s try again. You haven&apos;t been charged.</p>
-          <div className="flex flex-wrap" style={{ gap: u(1.2) }}>
-            {canRetry && (
-              <button className="btn btn-lg btn-main" onClick={onRetry}>
-                Try again
-              </button>
-            )}
-            <button className="btn btn-soft" onClick={onRetake}>
-              📸 New photo
-            </button>
-          </div>
-        </div>
-      </Split>
-    );
-  }
-
+function Reveal({ canRetry, onRetry, onRetake }: { canRetry: boolean; onRetry: () => void; onRetake: () => void }) {
   return (
-    // phones held upright scroll, so the reveal gets real height instead of being squeezed
-    <div className="h-full w-full overflow-y-auto overflow-x-hidden">
-    <Split className="portrait:h-auto portrait:min-h-full portrait:justify-start portrait:pt-2">
-      <div className="relative flex flex-col items-center landscape:h-full landscape:w-[46%] portrait:h-[58vh] portrait:w-full portrait:shrink-0" style={{ gap: u(0.8) }}>
-        <div className="flex shrink-0 rounded-full bg-white/80 p-1 shadow" style={{ gap: 4 }}>
-          {(["sticker", "sheet"] as const).map((v) => (
-            <button
-              key={v}
-              className={cn("chip min-h-[36px]", view === v ? "bg-[var(--purple)] text-white" : "text-[var(--ink)]")}
-              onClick={() => {
-                sounds.tap();
-                setView(v);
-              }}
-            >
-              {v === "sticker" ? "😎 Your sticker" : `📄 Your ${product.name}`}
-            </button>
-          ))}
-        </div>
-        <div className="relative min-h-0 w-full flex-1">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={view}
-              className="absolute inset-0"
-              initial={{ opacity: 0, rotateY: -25, scale: 0.94 }}
-              animate={{ opacity: 1, rotateY: 0, scale: 1 }}
-              exit={{ opacity: 0, rotateY: 25, scale: 0.94 }}
-              transition={{ duration: 0.3 }}
-            >
-              {view === "sticker" ? <BoothReveal photo={photo} sticker={sticker} /> : <SheetPreviews product={product} sticker={sticker} variants={variants} />}
-            </motion.div>
-          </AnimatePresence>
-        </div>
+    <Split>
+      <div className="flex items-center justify-center landscape:h-full landscape:w-[36%] portrait:w-full portrait:min-h-0 portrait:flex-1">
+        <Mascot className="h-[75%] max-h-full" />
       </div>
-
-      <div className="flex flex-col landscape:w-[48%] portrait:w-full portrait:items-center portrait:text-center" style={{ gap: u(1.6) }}>
-        <h2 className="t-h2 short:hidden">
-          Ta-da! <span className="pop">Love it?</span>
+      <div className="flex flex-col landscape:w-[48%] portrait:items-center portrait:text-center" style={{ gap: u(2) }}>
+        <h2 className="t-h2">
+          Oops! That one <span className="pop">didn&apos;t develop.</span>
         </h2>
-        <ProductMenu
-          selected={product.id}
-          sheetsLeft={sheetsLeft}
-          freeMode={freeMode}
-          onPick={(id) => {
-            onProduct(id);
-            setView("sheet");
-          }}
-        />
-        {freeMode ? (
-          <button className="btn btn-lg btn-main w-fit" onClick={() => onPaid()}>
-            🖨️ Print my {product.name}
-          </button>
-        ) : (
-          <PayWithQr key={product.id} styleId={styleId} product={product} onPaid={onPaid} />
-        )}
-        <div className="flex flex-wrap portrait:justify-center" style={{ gap: u(1) }}>
+        <p className="t-lead">Let&apos;s try again. You haven&apos;t been charged.</p>
+        <div className="flex flex-wrap" style={{ gap: u(1.2) }}>
           {canRetry && (
-            <>
-              <button className="btn btn-soft" onClick={onRetry}>
-                🔄 Redo
-              </button>
-              <button className="btn btn-soft" onClick={onOtherStyle}>
-                🎨 New style
-              </button>
-            </>
+            <button className="btn btn-lg btn-main" onClick={onRetry}>
+              Try again
+            </button>
           )}
           <button className="btn btn-soft" onClick={onRetake}>
             📸 New photo
@@ -940,138 +840,230 @@ function Reveal({
         </div>
       </div>
     </Split>
-    </div>
   );
 }
 
+// ================================================================ sheets + pay
+
+/** "Add 1 more for $8" — what the next sheet costs at the bundle price. */
+function bundleHint(count: number) {
+  if (count >= 3) return `Best deal: ${priceLabel(bundlePrice(1) * 3 - bundlePrice(3))} off`;
+  if (count === 0) return `1 for ${priceLabel(bundlePrice(1))} · 2 for ${priceLabel(bundlePrice(2))} · 3 for ${priceLabel(bundlePrice(3))}`;
+  return `Add ${count === 1 ? "another" : "the last one"} for just ${priceLabel(bundlePrice(count + 1) - bundlePrice(count))}`;
+}
+
 /**
- * What the sheet(s) will look like: rendered by the same code that makes the
- * print file, re-rendered as each pose / mix sticker arrives.
+ * The moment the sticker lands: the finished sticker and the sheet it prints
+ * on, big and side by side, with the three sheets to pick from and the QR to
+ * pay beside them. Previews are rendered by the same code that makes the print
+ * file, re-rendered as each pose / expression arrives.
  */
-function SheetPreviews({ product, sticker, variants }: { product: BoothProduct; sticker: string; variants: Variants }) {
-  const [sheets, setSheets] = useState<string[]>([]);
+function SheetShop({
+  sticker,
+  variants,
+  picked,
+  freeMode,
+  sheetsLeft,
+  canRetry,
+  onToggle,
+  onRetry,
+  onRetake,
+  onPaid,
+  onCheckout,
+}: {
+  sticker: string;
+  variants: Variants;
+  picked: SheetKind[];
+  freeMode: boolean;
+  sheetsLeft: number;
+  canRetry: boolean;
+  onToggle: (id: SheetKind) => void;
+  onRetry: () => void;
+  onRetake: () => void;
+  onPaid: (checkoutId?: string) => void;
+  onCheckout: (checkoutId: string) => Promise<void>;
+}) {
+  const [previews, setPreviews] = useState<Partial<Record<SheetKind, string>>>({});
+  const [focus, setFocus] = useState<SheetKind>(picked[0] ?? "pose");
   useEffect(() => {
     let alive = true;
     const t = setTimeout(() => {
-      buildSheets(product, sticker, variants, true)
-        .then((s) => alive && setSheets(s))
-        .catch(() => {});
+      SHEET_DESIGNS.forEach((d) =>
+        buildSheet(d.id, sticker, variants, true)
+          .then((img) => alive && setPreviews((p) => ({ ...p, [d.id]: img })))
+          .catch(() => {})
+      );
     }, 120);
     return () => {
       alive = false;
       clearTimeout(t);
     };
-  }, [product, sticker, variants]);
+  }, [sticker, variants]);
 
-  const n = product.sheets.length;
-  const pending = product.sheets.some((k) => k !== "same" && variants[k].some((v) => v === null));
+  const pending = (["pose", "face"] as VariantKind[]).reduce((n, k) => n + variants[k].filter((v) => v === null).length, 0);
+  const count = picked.length;
+  const tooMany = count > sheetsLeft;
+  const shown = getSheet(focus);
+  const toggle = (id: SheetKind) => {
+    const adding = !picked.includes(id);
+    onToggle(id);
+    if (adding) setFocus(id);
+    else if (focus === id) setFocus(picked.find((x) => x !== id) ?? id);
+  };
+
+  const sheetImg = (id: SheetKind, alt: string) =>
+    previews[id] ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={previews[id]} alt={alt} className="h-full w-full rounded-[10px]" />
+    ) : (
+      <div className="h-full w-full animate-pulse rounded-[10px] bg-[var(--lav)]" />
+    );
+
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center" style={{ gap: u(0.6) }}>
-      <div className="flex min-h-0 w-full flex-1 items-center justify-center" style={{ containerType: "size", gap: u(1.6) }}>
-        {product.sheets.map((kind, i) => (
-          <motion.div
-            key={kind + i}
-            className="relative bg-white shadow-[0_14px_40px_rgba(91,63,214,0.22)]"
-            // a 3.9×6.7" sheet that fits the panel
-            style={{
-              height: `min(100cqh, calc((100cqw - ${(n - 1) * 24}px) / ${n} * 6.7 / 3.9))`,
-              aspectRatio: "3.9 / 6.7",
-              borderRadius: 12,
-              rotate: n > 1 ? (i ? 3 : -3) : -2,
-            }}
-            initial={{ y: 40, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: i * 0.12, type: "spring", stiffness: 200, damping: 18 }}
-          >
-            {sheets[i] ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={sheets[i]} alt="Sheet preview" className="h-full w-full rounded-[12px]" />
-            ) : (
-              <div className="h-full w-full animate-pulse rounded-[12px] bg-[var(--lav)]" />
+    <div
+      className="grid h-full w-full overflow-y-auto overflow-x-hidden landscape:grid-cols-[1.05fr_0.85fr_minmax(250px,0.8fr)] landscape:grid-rows-1 portrait:grid-cols-2 portrait:auto-rows-min"
+      style={{ gap: u(1.4), padding: `${u(0.6)} ${u(2)} ${u(1.4)}` }}
+    >
+      {/* the finished sticker, big */}
+      <div className="card relative flex min-h-0 flex-col items-center justify-center overflow-hidden portrait:aspect-[3/4]" style={{ padding: u(1.2), gap: u(1) }}>
+        <motion.div className="flex min-h-0 w-full flex-1 items-center justify-center" initial={{ scale: 0.4, rotate: -10, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 190, damping: 14 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={sticker} alt="Your sticker" className="die-cut max-h-full max-w-full object-contain" />
+        </motion.div>
+        <div className="flex w-full flex-wrap items-center justify-between" style={{ gap: u(0.8) }}>
+          <div className="t-h3">
+            That&apos;s <span className="pop">you!</span>
+          </div>
+          <div className="flex flex-wrap" style={{ gap: u(0.6) }}>
+            {canRetry && (
+              <button className="btn btn-soft" onClick={onRetry}>
+                🔄 Redo
+              </button>
             )}
-            <span className="chip absolute -bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-[var(--ink)] text-white" style={{ fontSize: `max(11px, ${u(1)})` }}>
-              {kind === "same" ? "8 stickers" : `${kind === "pose" ? "🤸" : "🎨"} you + ${variants[kind].filter(Boolean).length}/${EXTRAS} ${kind === "pose" ? "poses" : "styles"}`}
-            </span>
-          </motion.div>
-        ))}
+            <button className="btn btn-soft" onClick={onRetake}>
+              📸 New photo
+            </button>
+          </div>
+        </div>
       </div>
-      {pending && <div className="t-body shrink-0">✨ Snap is still drawing the poses: they pop in as they&apos;re ready</div>}
-    </div>
-  );
-}
 
-/** The menu: what the PixCut S1 can make from a sheet. */
-function ProductMenu({
-  selected,
-  sheetsLeft,
-  freeMode,
-  onPick,
-}: {
-  selected: BoothProduct["id"];
-  sheetsLeft: number;
-  freeMode: boolean;
-  onPick: (id: BoothProduct["id"]) => void;
-}) {
-  return (
-    <div className="grid w-full grid-cols-4 portrait:grid-cols-2" style={{ gap: `${u(1.4)} ${u(1)}`, paddingTop: 8 }}>
-      {BOOTH_PRODUCTS.map((p) => {
-        const soldOut = p.sheets.length > sheetsLeft;
-        const on = p.id === selected;
-        return (
-          <motion.button
-            key={p.id}
-            disabled={soldOut}
-            className={cn("card relative block text-center disabled:opacity-40", on && "outline outline-[5px] outline-[var(--purple)]")}
-            style={{ padding: `${u(1)} ${u(0.6)} ${u(0.8)}` }}
-            animate={{ scale: on ? 1.04 : 1 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => onPick(p.id)}
+      {/* the sheet it prints on, big */}
+      <div className="card flex min-h-0 flex-col items-center portrait:aspect-[3/4]" style={{ padding: u(1.2), gap: u(0.8) }}>
+        <div className="flex min-h-0 w-full flex-1 items-center justify-center" style={{ containerType: "size" }}>
+          <motion.div
+            key={focus}
+            className="relative max-h-full max-w-full bg-white shadow-md"
+            style={{ aspectRatio: "3.9 / 6.7", height: "100cqh", borderRadius: 10 }}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
           >
-            {p.tag && (
-              <span className="chip absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap bg-[var(--yellow)] text-[var(--ink)]" style={{ fontSize: `max(11px, ${u(1)})` }}>
-                {p.tag}
-              </span>
-            )}
-            <div className="short:hidden" style={{ fontSize: u(2.6), lineHeight: 1.1 }}>{p.emoji}</div>
-            <div className="t-h3" style={{ fontSize: `max(14px, ${u(1.6)})` }}>
-              {p.name}
-            </div>
-            <div className="t-body short:hidden" style={{ fontSize: `max(11px, ${u(1.05)})` }}>
-              {soldOut ? "Not enough paper" : p.blurb}
-            </div>
-            {!freeMode && (
-              <div className="font-fun font-bold text-[var(--purple)]" style={{ fontSize: `max(16px, ${u(2.2)})` }}>
-                {priceLabel(p.priceCents)}
-              </div>
-            )}
-          </motion.button>
-        );
-      })}
+            {sheetImg(focus, `${shown.name} sheet`)}
+          </motion.div>
+        </div>
+        <div className="t-body text-center">
+          {shown.emoji} <b>{shown.name}</b> ·{" "}
+          {pending > 0 ? `✨ drawing ${pending} more sticker${pending === 1 ? "" : "s"}…` : `${STICKERS_PER_SHEET} stickers`}
+        </div>
+      </div>
+
+      {/* pick sheets + pay */}
+      <div className="flex min-h-0 flex-col portrait:col-span-2" style={{ gap: u(1) }}>
+        <div className="flex flex-col" style={{ gap: u(0.7) }}>
+          {SHEET_DESIGNS.map((d) => {
+            const on = picked.includes(d.id);
+            return (
+              <motion.button
+                key={d.id}
+                onClick={() => {
+                  sounds.tap();
+                  toggle(d.id);
+                }}
+                className={cn(
+                  "flex items-center rounded-2xl border-4 bg-white/70 text-left transition-colors",
+                  on ? "border-[var(--purple)] bg-white shadow-[0_10px_28px_rgba(91,63,214,0.22)]" : "border-transparent",
+                  focus === d.id && !on && "border-[var(--lav)]"
+                )}
+                style={{ padding: u(0.6), gap: u(0.8) }}
+                whileTap={{ scale: 0.97 }}
+              >
+                <div className="shrink-0 bg-white shadow-sm" style={{ aspectRatio: "3.9 / 6.7", height: `max(48px, ${u(5.2)})`, borderRadius: 6 }}>
+                  {sheetImg(d.id, d.name)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="t-h3">
+                    {d.emoji} {d.name}
+                  </div>
+                  <div className="t-body truncate">{d.blurb}</div>
+                </div>
+                <span
+                  className={cn("flex shrink-0 items-center justify-center rounded-full font-bold", on ? "bg-[var(--purple)] text-white" : "bg-[var(--lav)] text-[var(--ink)]")}
+                  style={{ width: u(3), height: u(3), fontSize: u(1.5) }}
+                >
+                  {on ? "✓" : "+"}
+                </span>
+              </motion.button>
+            );
+          })}
+        </div>
+
+        <div className="card flex flex-1 flex-col justify-center" style={{ gap: u(0.8), padding: u(1.1) }}>
+          <div className="t-h3">{count ? `${count} sheet${count === 1 ? "" : "s"} · ${count * STICKERS_PER_SHEET} stickers` : "Tap a sheet to add it"}</div>
+          <div className="t-body text-[#15803d]">{bundleHint(count)}</div>
+          {tooMany && <div className="t-body text-[var(--pink)]">Only {sheetsLeft} sheet{sheetsLeft === 1 ? "" : "s"} of paper left — pick fewer</div>}
+          {count > 0 &&
+            !tooMany &&
+            (freeMode ? (
+              <button className="btn btn-lg btn-main" onClick={() => onPaid()}>
+                🖨️ Print {count === 1 ? "my sheet" : `my ${count} sheets`}
+              </button>
+            ) : (
+              <PayWithQr key={picked.join("+")} sheets={picked} onPaid={onPaid} onCheckout={onCheckout} />
+            ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-function PayWithQr({ styleId, product, onPaid }: { styleId: string | null; product: BoothProduct; onPaid: (checkoutId?: string) => void }) {
+function PayWithQr({
+  sheets,
+  onPaid,
+  onCheckout,
+}: {
+  sheets: SheetKind[];
+  onPaid: (checkoutId?: string) => void;
+  onCheckout: (checkoutId: string) => Promise<void>;
+}) {
   const [qr, setQr] = useState<string | null>(null);
+  // paying on this same phone pauses this tab: only offer it once the order is safely sent
+  const [sentAhead, setSentAhead] = useState(false);
+  const [payUrl, setPayUrl] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "waiting" | "free" | "error">("loading");
   const paidRef = useRef(false);
+  const price = bundlePrice(sheets.length);
 
   useEffect(() => {
     let alive = true;
     let poll: ReturnType<typeof setInterval> | undefined;
-    (async () => {
+    // guests often tap 2–3 sheets in a row: wait a beat before making a checkout
+    const start = setTimeout(async () => {
       try {
         const res = await fetch("/api/booth/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ styleId, productId: product.id }),
+          body: JSON.stringify({ sheets }),
         });
         const data = await res.json();
         if (!alive) return;
         if (data.free) return setState("free");
         if (!res.ok || !data.url) throw new Error(data.error);
         setQr(await QRCode.toDataURL(data.url, { width: 560, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } }));
+        setPayUrl(data.url);
         setState("waiting");
+        onCheckout(data.id)
+          .catch((e) => console.error("order pre-send failed", e))
+          .finally(() => alive && setSentAhead(true));
         poll = setInterval(async () => {
           try {
             const r = await fetch(`/api/booth/checkout?id=${data.id}`);
@@ -1087,24 +1079,46 @@ function PayWithQr({ styleId, product, onPaid }: { styleId: string | null; produ
       } catch {
         if (alive) setState("error");
       }
-    })();
+    }, 600);
     return () => {
       alive = false;
+      clearTimeout(start);
       if (poll) clearInterval(poll);
     };
-  }, [styleId, product.id, onPaid]);
+  }, [sheets, onPaid, onCheckout]);
 
   if (state === "free") {
     return (
       <button className="btn btn-lg btn-main w-fit" onClick={() => onPaid()}>
-        🖨️ Print my {product.name}
+        🖨️ Print my sheets
       </button>
     );
   }
 
   return (
-    <div className="card flex w-fit items-center" style={{ gap: u(1.8), padding: `${u(1.2)} ${u(2)} ${u(1.2)} ${u(1.2)}` }}>
-      <div className="flex shrink-0 items-center justify-center overflow-hidden bg-white" style={{ width: `max(120px, ${u(15)})`, height: `max(120px, ${u(15)})` }}>
+    <div className="flex items-center justify-between" style={{ gap: u(1) }}>
+      <div className="flex min-w-0 flex-col" style={{ gap: u(0.3) }}>
+        <div className="font-fun font-bold" style={{ fontSize: u(3.6), lineHeight: 1 }}>
+          {priceLabel(price)}
+        </div>
+        <div className="t-h3">📱 Scan to pay</div>
+        <div className="t-body">Apple Pay, Google Pay, card</div>
+        {payUrl &&
+          (sentAhead ? (
+            // already on your phone? pay in a new tab: the order is already at the print station
+            <a className="btn btn-soft mt-1 w-fit" href={payUrl} target="_blank" rel="noopener noreferrer">
+              💳 Pay here
+            </a>
+          ) : (
+            <span className="t-body mt-1 opacity-70">Getting your sheets ready…</span>
+          ))}
+        {state === "waiting" && (
+          <motion.div className="t-body text-[#15803d]" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.6, repeat: Infinity }}>
+            ● Printing starts automatically
+          </motion.div>
+        )}
+      </div>
+      <div className="flex aspect-square shrink-0 items-center justify-center overflow-hidden bg-white" style={{ width: `clamp(110px, ${u(12)}, 45%)` }}>
         {qr ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={qr} alt="Scan to pay" className="h-full w-full" />
@@ -1116,18 +1130,6 @@ function PayWithQr({ styleId, product, onPaid }: { styleId: string | null; produ
           </motion.span>
         )}
       </div>
-      <div className="flex flex-col text-left" style={{ gap: u(0.5) }}>
-        <div className="font-fun font-bold" style={{ fontSize: u(4.2), lineHeight: 1 }}>
-          {priceLabel(product.priceCents)}
-        </div>
-        <div className="t-h3">📱 Scan to pay</div>
-        <div className="t-body">{product.name} · Apple Pay, Google Pay, card</div>
-        {state === "waiting" && (
-          <motion.div className="t-body text-[#15803d]" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.6, repeat: Infinity }}>
-            ● Printing starts automatically
-          </motion.div>
-        )}
-      </div>
     </div>
   );
 }
@@ -1135,145 +1137,98 @@ function PayWithQr({ styleId, product, onPaid }: { styleId: string | null; produ
 // ================================================================ printing
 
 /**
- * Printing = the Liene hand-off. The Liene app wants each image uploaded on
- * its own (then "Remove background" on each), so this screen gives staff the
- * numbered guide, the 8 images (download here, or scan to get them on the
- * phone running the Liene app) and the steps, while the guest watches Snap.
+ * Printing = the hand-off to the print station (the Mac running StixCut).
+ * Uploads each sticker once plus a numbered guide per sheet, and puts the
+ * order on the print queue with every sticker's exact spot, while the guest
+ * watches their sheets.
  */
-type PrintOrder = { id: string; productId: string; checkoutId: string | null };
+type PrintOrder = { id: string; sheets: SheetKind[]; checkoutId: string | null };
 
 const newOrderId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `o-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-function PrintKit({ guide, kit, order, onDone }: { guide: string | null; kit: KitItem[] | null; order: PrintOrder | null; onDone: () => void }) {
-  const [files, setFiles] = useState<string[] | null>(null);
-  const [phoneQr, setPhoneQr] = useState<string | null>(null);
-  const [queued, setQueued] = useState(false);
-  const [got, setGot] = useState<Set<number>>(new Set());
+/** Upload each sticker once plus the guides, and put the order on the print queue. */
+async function sendKit(guides: string[], kit: KitItem[], order: PrintOrder): Promise<boolean> {
+  const up = (image: string) =>
+    fetch("/api/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image }) })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.url) throw new Error("upload failed");
+        return d.url as string;
+      });
+  const unique = Array.from(new Set(kit.map((k) => k.src)));
+  const [guideUrls, imageUrls] = await Promise.all([Promise.all(guides.map(up)), Promise.all(unique.map(up))]);
+  const urlOf = new Map(unique.map((s, i) => [s, imageUrls[i]]));
+  const res = await fetch("/api/booth/kit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      guide: guideUrls[0],
+      guides: guideUrls,
+      items: kit.map((k) => ({ sheet: k.sheet, n: k.n, url: urlOf.get(k.src), x: k.x, y: k.y, w: k.w, h: k.h })),
+      order,
+    }),
+  });
+  const data = await res.json();
+  return !!data.queued;
+}
 
-  // white-background copies for the Liene app, then a phone link for staff
+function PrintKit({ guides, kit, order, onDone }: { guides: string[] | null; kit: KitItem[] | null; order: PrintOrder | null; onDone: () => void }) {
+  const [sent, setSent] = useState<"sending" | "queued" | "error">("sending");
+
   useEffect(() => {
-    if (!kit) return;
+    if (!kit || !guides || !order) return;
     let alive = true;
     (async () => {
-      const imgs = await Promise.all(kit.map((k) => stickerForLiene(k.src)));
-      if (!alive) return;
-      setFiles(imgs);
       try {
-        const up = (image: string) =>
-          fetch("/api/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image }) })
-            .then((r) => r.json())
-            .then((d) => d.url as string);
-        const [guideUrl, ...urls] = await Promise.all([guide ? up(guide) : Promise.resolve(""), ...imgs.map(up)]);
-        const res = await fetch("/api/booth/kit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ guide: guideUrl, items: kit.map((k, i) => ({ n: k.n, url: urls[i], w: k.w, h: k.h })), order }),
-        });
-        const { url, queued: inQueue } = await res.json();
-        if (alive && inQueue) setQueued(true);
-        if (alive && url) setPhoneQr(await QRCode.toDataURL(url, { width: 480, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } }));
-      } catch {}
+        const queued = await sendKit(guides, kit, order);
+        if (alive) setSent(queued ? "queued" : "error");
+      } catch {
+        if (alive) setSent("error");
+      }
     })();
     return () => {
       alive = false;
     };
-  }, [kit, guide, order]);
+  }, [kit, guides, order]);
 
-  const stamp = useRef(Date.now()).current;
-  const save = (i: number) => {
-    if (!files) return;
-    downloadDataUrl(files[i], `mesticker-${stamp}-${i + 1}of${files.length}.png`);
-    setGot((g) => new Set(g).add(i));
-  };
-  const saveAll = () => files?.forEach((_, i) => setTimeout(() => save(i), i * 300));
-
+  const n = order?.sheets.length ?? 1;
   return (
-    <div className="h-full w-full overflow-y-auto overflow-x-hidden">
-      <div className="mx-auto flex min-h-full w-full max-w-[1400px] landscape:flex-row portrait:flex-col" style={{ gap: u(2), padding: u(2) }}>
-        <div className="flex shrink-0 flex-col items-center landscape:w-[28%]" style={{ gap: u(1) }}>
-          <h2 className="t-h2 text-center">
-            Making your <span className="pop">stickers…</span>
-          </h2>
-          <div
-            className="relative w-full bg-white shadow-[0_14px_40px_rgba(91,63,214,0.22)]"
-            // fits beside the kit on a laptop without pushing "Got them" off screen
-            style={{ aspectRatio: "3.9 / 6.7", borderRadius: 12, maxWidth: "min(340px, calc((100dvh - 300px) * 3.9 / 6.7))", minWidth: 150 }}
+    <div className="flex h-full w-full flex-col items-center justify-center" style={{ gap: u(1.4), padding: u(2) }}>
+      <h2 className="t-h2 text-center">
+        Printing your <span className="pop">{n === 1 ? "sheet" : `${n} sheets`}…</span>
+      </h2>
+      <div className="flex min-h-0 w-full flex-1 items-center justify-center" style={{ gap: u(2), containerType: "size" }}>
+        {(order?.sheets ?? ["pose"]).map((kind, i) => (
+          <motion.div
+            key={kind}
+            className="relative bg-white shadow-[0_14px_40px_rgba(91,63,214,0.22)]"
+            style={{
+              height: `min(100cqh, calc((100cqw - ${(n - 1) * 32}px) / ${n} * 6.7 / 3.9))`,
+              aspectRatio: "3.9 / 6.7",
+              borderRadius: 12,
+              rotate: n > 1 ? (i - (n - 1) / 2) * 4 : -2,
+            }}
+            initial={{ y: 40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: i * 0.12, type: "spring", stiffness: 200, damping: 18 }}
           >
-            {guide ? (
+            {guides?.[i] ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={guide} alt="Where each sticker goes" className="h-full w-full rounded-[12px]" />
+              <img src={guides[i]} alt={`${getSheet(kind).name} sheet`} className="h-full w-full rounded-[12px]" />
             ) : (
               <div className="h-full w-full animate-pulse rounded-[12px] bg-[var(--lav)]" />
             )}
-          </div>
-          <p className="t-body text-center">Printing + cutting takes about 2 minutes. Snap&apos;s on it!</p>
-          <button className="btn btn-lg btn-main" onClick={onDone}>
-            Got them! 🎉
-          </button>
-        </div>
-
-        <div className="card flex min-w-0 flex-1 flex-col" style={{ gap: u(1.2), padding: u(1.6) }}>
-          <div className="flex flex-wrap items-center justify-between" style={{ gap: u(1) }}>
-            <div>
-              <div className="t-h3">🖨️ Staff: Liene kit</div>
-              <div className="t-body">Upload these one at a time. The number shows where each goes on the sheet.</div>
-              {queued && <div className="t-body font-semibold text-[#15803d]">✓ Sent to the print station</div>}
-            </div>
-            <button className="btn btn-soft" disabled={!files} onClick={saveAll}>
-              ⬇️ Download all 8
-            </button>
-          </div>
-
-          <div className="grid grid-cols-4 portrait:grid-cols-2" style={{ gap: u(1) }}>
-            {(kit ?? Array.from({ length: 8 }, () => null)).map((k, i) => (
-              <button
-                key={i}
-                disabled={!files}
-                onClick={() => save(i)}
-                className={cn("relative flex flex-col items-center rounded-2xl border-2 bg-white", got.has(i) ? "border-[#22c55e]" : "border-[#eee8ff]")}
-                style={{ padding: u(0.6), gap: u(0.3) }}
-              >
-                <span className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--ink)] font-fun font-bold text-white">{i + 1}</span>
-                {got.has(i) && <span className="absolute right-2 top-2 text-xl">✅</span>}
-                <div className="flex aspect-square w-full items-center justify-center">
-                  {files?.[i] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={files[i]} alt={`Sticker ${i + 1}`} className="max-h-full max-w-full object-contain" />
-                  ) : (
-                    <div className="h-3/4 w-3/4 animate-pulse rounded-xl bg-[var(--lav)]" />
-                  )}
-                </div>
-                <div className="t-body font-semibold">{k ? `${k.w}" × ${k.h}"` : "…"}</div>
-              </button>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-start" style={{ gap: u(1.6) }}>
-            <ol className="t-body min-w-[260px] flex-1 list-decimal pl-5" style={{ lineHeight: 1.6 }}>
-              <li>Liene app → <b>Sticker</b> → new <b>4×7</b> canvas.</li>
-              <li>
-                For <b>1 → 8</b>: add the image → tap <b>Remove background</b> → resize to the size shown → drag it to its numbered spot.
-              </li>
-              <li>Keep a little gap between stickers so the cutter has room.</li>
-              <li>
-                Tap <b>Print</b> (print + cut ≈ 2 min).
-              </li>
-            </ol>
-            <div className="flex flex-col items-center" style={{ gap: 6 }}>
-              <div className="flex items-center justify-center overflow-hidden bg-white" style={{ width: `max(120px, ${u(13)})`, height: `max(120px, ${u(13)})` }}>
-                {phoneQr ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={phoneQr} alt="Open the kit on your phone" className="h-full w-full" />
-                ) : (
-                  <div className="h-full w-full animate-pulse bg-[var(--lav)]" />
-                )}
-              </div>
-              <div className="t-body text-center">📱 Liene on a phone?<br />Scan to save all 8 to Photos</div>
-            </div>
-          </div>
-        </div>
+          </motion.div>
+        ))}
       </div>
+      <div className={cn("t-body font-semibold", sent === "queued" ? "text-[#15803d]" : sent === "error" ? "text-[var(--pink)]" : "")}>
+        {sent === "queued" ? "✓ Sent to the print station" : sent === "error" ? "⚠️ Couldn't reach the print station — please tell staff" : "Sending to the print station…"}
+      </div>
+      <p className="t-body text-center">Print + cut takes about 2 minutes a sheet. Snap&apos;s on it!</p>
+      <button className="btn btn-lg btn-main" onClick={onDone}>
+        Got them! 🎉
+      </button>
     </div>
   );
 }

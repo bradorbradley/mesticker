@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { claimNext, finish, listOrders, stationAuthorized, type QueueStatus } from "@/lib/booth-queue";
+import { awaitingPayment, claimNext, finish, listOrders, markVerified, stationAuthorized, type QueueStatus } from "@/lib/booth-queue";
+import { checkoutPaid } from "@/lib/booth-payment";
 
 /**
  * Print queue for the booth's print station (the Mac next to the PixCut).
@@ -9,9 +10,10 @@ import { claimNext, finish, listOrders, stationAuthorized, type QueueStatus } fr
  *   POST { action: "claim", boothId?, includeUnverified? } → { order | null }
  *   POST { action: "done" | "failed" | "requeue", id, error? } → { order }
  *
- * Orders are added by /api/booth/kit when the booth shows a paid order's kit.
- * "claim" only returns Stripe-verified orders unless includeUnverified is true
- * (free mode / cash orders), so a stranger posting kits can't burn paper.
+ * Orders are added by /api/booth/kit as soon as the booth has a checkout
+ * (unpaid), and "claim" asks Stripe whether those have been paid since. It
+ * only returns Stripe-verified orders, plus no-checkout ones (free mode / cash)
+ * when includeUnverified is true, so a stranger posting kits can't burn paper.
  */
 
 export const dynamic = "force-dynamic";
@@ -45,6 +47,9 @@ export async function POST(request: NextRequest) {
     const action = String(body.action ?? "");
     if (action === "claim") {
       const boothId = body.boothId ? String(body.boothId) : null;
+      // orders sent before payment: ask Stripe whether they've been paid since
+      const pending = await awaitingPayment();
+      await Promise.all(pending.map(async (o) => o.checkoutId && (await checkoutPaid(o.checkoutId, o.productId)) && markVerified(o.id)));
       return NextResponse.json({ order: await claimNext(boothId, body.includeUnverified === true) });
     }
     if (action === "done" || action === "failed" || action === "requeue") {

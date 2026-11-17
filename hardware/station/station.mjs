@@ -13,13 +13,14 @@
  *   MCP_SECRET=<station key, same as Vercel's MCP_SECRET>
  *   BOOTH_URL=https://mesticker.fun        (optional)
  *
- * Orders land in ~/MeSticker Orders/<orderId>/  as 1.png … 8.png, guide.png
- * and order.json (sizes in inches). Prints a JSON summary on stdout so an
- * agent (Claude) can read it and drive StixCut.
+ * Orders land in ~/MeSticker Orders/<orderId>/ (stickers/, a guide per sheet,
+ * order.json with every placement in inches). Prints the JSON summary on
+ * stdout so an agent (Claude) can read it and drive StixCut.
  */
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, mkdirSync, writeFileSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import sharp from "sharp";
 
 const HOME = homedir();
 const CONFIG = process.env.STATION_CONFIG || join(HOME, ".mesticker-station", "env");
@@ -84,21 +85,98 @@ async function download(url, path) {
   return buf.length;
 }
 
+/**
+ * Download an order: each distinct sticker once (stickers repeat across
+ * slots and sheets), one guide per sheet, and a placement plan per sheet.
+ *   ~/MeSticker Orders/<id>/stickers/s01.png …
+ *   ~/MeSticker Orders/<id>/sheet-1-guide.png …
+ *   ~/MeSticker Orders/<id>/order.json  → sheets[].placements[] { n, file, x, y, w, h } (inches)
+ */
+/**
+ * Clean a sticker for the cutter: AI images leave faint haze and tiny
+ * specks around the border, and StixCut's auto-trace would cut each speck
+ * as its own sticker (messy, and paper bits can jam). Drops near-invisible
+ * alpha and any blob smaller than 0.3% of the sticker. Real detached bits
+ * (music notes, hearts) are far bigger and stay. Returns specks removed.
+ */
+async function cleanSticker(path) {
+  const img = sharp(path).ensureAlpha();
+  const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
+  const W = info.width, H = info.height, C = info.channels;
+  const solid = (i) => data[i * C + 3] > 48;
+  const label = new Int32Array(W * H).fill(-1);
+  const sizes = [];
+  for (let i = 0; i < W * H; i++) {
+    if (label[i] !== -1 || !solid(i)) continue;
+    const id = sizes.length, stack = [i];
+    let n = 0;
+    label[i] = id;
+    while (stack.length) {
+      const p = stack.pop();
+      n++;
+      const x = p % W, y = (p / W) | 0;
+      for (const q of [x > 0 ? p - 1 : -1, x < W - 1 ? p + 1 : -1, y > 0 ? p - W : -1, y < H - 1 ? p + W : -1]) {
+        if (q >= 0 && label[q] === -1 && solid(q)) {
+          label[q] = id;
+          stack.push(q);
+        }
+      }
+    }
+    sizes.push(n);
+  }
+  const min = Math.max(200, Math.max(0, ...sizes) * 0.003);
+  let removed = 0;
+  sizes.forEach((s) => s < min && removed++);
+  for (let i = 0; i < W * H; i++) {
+    const l = label[i];
+    if (l === -1 || sizes[l] < min) data[i * C + 3] = 0;
+  }
+  await sharp(data, { raw: { width: W, height: H, channels: C } }).png().toFile(path + ".tmp");
+  renameSync(path + ".tmp", path);
+  return removed;
+}
+
 async function fetchOrder(order) {
   const dir = join(ORDERS, order.id);
-  mkdirSync(dir, { recursive: true });
-  const files = [];
-  for (const it of [...order.items].sort((a, b) => a.n - b.n)) {
-    const path = join(dir, `${it.n}.png`);
+  const stickerDir = join(dir, "stickers");
+  mkdirSync(stickerDir, { recursive: true });
+  const fileOf = new Map();
+  let specks = 0;
+  for (const it of order.items) {
+    if (fileOf.has(it.url)) continue;
+    const path = join(stickerDir, `s${String(fileOf.size + 1).padStart(2, "0")}.png`);
     await download(it.url, path);
-    files.push({ n: it.n, path, w: it.w, h: it.h });
+    fileOf.set(it.url, path);
+    specks += await cleanSticker(path);
   }
-  let guide = null;
-  if (order.guideUrl) {
-    guide = join(dir, "guide.png");
-    await download(order.guideUrl, guide).catch(() => (guide = null));
+  const guideUrls = order.guides?.length ? order.guides : order.guideUrl ? [order.guideUrl] : [];
+  const sheetNames = String(order.productId || "").split("+");
+  const count = Math.max(guideUrls.length, ...order.items.map((it) => (it.sheet ?? 0) + 1));
+  const sheets = [];
+  for (let s = 0; s < count; s++) {
+    let guide = null;
+    if (guideUrls[s]) {
+      guide = join(dir, `sheet-${s + 1}-guide.png`);
+      await download(guideUrls[s], guide).catch(() => (guide = null));
+    }
+    const placements = order.items
+      .filter((it) => (it.sheet ?? 0) === s)
+      .sort((a, b) => a.n - b.n)
+      .map((it) => ({ n: it.n, file: fileOf.get(it.url), x: it.x ?? null, y: it.y ?? null, w: it.w, h: it.h }));
+    sheets.push({ sheet: s + 1, design: sheetNames[s] ?? null, guide, stickers: placements.length, placements });
   }
-  const summary = { id: order.id, product: order.productId, verified: order.verified, attempts: order.attempts, kitUrl: order.kitUrl, dir, guide, files };
+  const summary = {
+    id: order.id,
+    designs: order.productId,
+    verified: order.verified,
+    checkoutId: order.checkoutId ?? null,
+    attempts: order.attempts,
+    kitUrl: order.kitUrl,
+    dir,
+    uniqueStickers: fileOf.size,
+    specksRemoved: specks,
+    sheets,
+  };
   writeFileSync(join(dir, "order.json"), JSON.stringify(summary, null, 2));
   return summary;
 }
@@ -107,10 +185,19 @@ const [cmd, ...args] = process.argv.slice(2);
 const cfg = loadConfig();
 
 switch (cmd) {
+  case "clean": {
+    // re-clean an order that's already downloaded
+    const { readdirSync } = await import("node:fs");
+    const dir = join(ORDERS, String(args[0] ?? ""), "stickers");
+    const out = {};
+    for (const f of readdirSync(dir).filter((x) => x.endsWith(".png")).sort()) out[f] = await cleanSticker(join(dir, f));
+    console.log(JSON.stringify({ specksRemoved: out }));
+    break;
+  }
   case "list": {
     const status = args[0];
     const { orders } = await api(cfg, "GET", null, status ? `?status=${encodeURIComponent(status)}` : "");
-    console.log(JSON.stringify(orders.map((o) => ({ id: o.id, status: o.status, verified: o.verified, product: o.productId, created: o.createdAt, error: o.error })), null, 2));
+    console.log(JSON.stringify(orders.map((o) => ({ id: o.id, status: o.status, verified: o.verified, checkoutId: o.checkoutId, product: o.productId, created: o.createdAt, error: o.error })), null, 2));
     break;
   }
   case "next": {
