@@ -38,6 +38,26 @@ This claims the oldest order and saves it to `~/MeSticker Orders/<orderId>/`:
 - `order.json`: `sheets[].placements[]` = `{ n, file, x, y, w, h }`, in inches from the top-left of
   the **printable area** (3.9 × 6.7", which starts 0.05" in from the left and 0.15" down on 4 × 7" paper).
 
+## Hands-off mode (recommended)
+
+```bash
+node hardware/station/autopilot.mjs --auto-print            # paid orders
+node hardware/station/autopilot.mjs --auto-print --include-unverified
+```
+
+No agent in the loop: claim (≤2.5 s after payment) → download + clean → layout → StixCut opens the
+sheet → code QC → `print-mac.mjs` presses **Print & Cut** through macOS accessibility (~2 s) → the
+guest's screen switches to "Printing" with a live bar → next sheet → `done`, and it keeps waiting.
+If anything fails (button not found, QC problem) it falls back to `READY` for the agent below.
+
+One-time: System Settings → Privacy & Security → **Accessibility** → allow Terminal (or whatever
+runs the loop). Then check the button match with StixCut open on a sheet:
+`node hardware/station/print-mac.mjs --inspect`. If Print & Cut has another name, set
+`STIXCUT_PRINT_BUTTON=<name>` in the environment.
+
+The guest's progress bar comes from `station.mjs progress <id> printing` (sent automatically in
+hands-off mode; the agent must run it the moment it presses Print & Cut).
+
 ## Station agent playbook (StixCut)
 
 The goal is a fast, accurate sheet every time: 12 stickers per sheet (`pack12`: a ~2.2" hero, two
@@ -65,7 +85,8 @@ For each sheet in `order.json`, in order:
    - every pink cut line is closed and separate from its neighbours; nothing within ~0.1" of the paper edge
    If anything fails, fix it. If a sticker image itself is bad (wrong person, broken), stop and
    `failed` the order with the reason instead of printing it.
-5. **Print & Cut**, then a quick look at the printed sheet: colours present, cuts aligned with the
+5. **Print & Cut**, then immediately `node hardware/station/station.mjs progress <orderId> printing`
+   (the guest's screen switches to the printing countdown), then a quick look at the printed sheet: colours present, cuts aligned with the
    print. Misaligned cuts mean a recalibration (StixCut → Printer → Cut Calibration) before the next order.
 
 `station.mjs next` already cleans every sticker (drops AI haze and specks the cutter would trace).
