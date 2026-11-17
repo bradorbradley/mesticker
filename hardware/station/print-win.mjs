@@ -14,7 +14,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const PS1 = join(dirname(fileURLToPath(import.meta.url)), "windows", "stixcut-print.ps1");
 
-export function stixcut(args, timeoutMs = 420_000) {
+export function stixcut(args, timeoutMs = 600_000) {
   return new Promise((resolve) => {
     execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", PS1, ...args], { windowsHide: true, timeout: timeoutMs }, (err, stdout, stderr) => {
       const line = String(stdout).trim().split(/\r?\n/).filter((l) => l.startsWith("{")).pop();

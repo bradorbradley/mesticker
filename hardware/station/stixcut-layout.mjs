@@ -107,8 +107,15 @@ function rdp(points, eps) {
   return [...simplify(points.slice(0, half + 1)).slice(0, -1), ...simplify([...points.slice(half), points[0]]).slice(0, -1)];
 }
 
-async function stickerEntry(file) {
-  const buf = readFileSync(file);
+async function stickerEntry(file, maxInches = 2.5) {
+  // embed at print resolution (300 dpi of the largest spot it fills), not camera resolution:
+  // a sheet file drops from ~9 MB to ~1–2 MB and StixCut prepares + uploads it much faster
+  const px = Math.round(maxInches * 300);
+  const src = readFileSync(file);
+  const m0 = await sharp(src).metadata();
+  const buf = Math.max(m0.width, m0.height) > px * 1.05
+    ? await sharp(src).resize(px, px, { fit: "inside", kernel: "lanczos3" }).png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer()
+    : src;
   const meta = await sharp(buf).metadata();
   const name = basename(file).replace(/\.png$/, "");
   return {
@@ -145,7 +152,9 @@ export async function buildLayouts(orderDir) {
   const out = [];
   for (const sheet of order.sheets) {
     const byFile = new Map();
-    for (const pl of sheet.placements) if (!byFile.has(pl.file)) byFile.set(pl.file, await stickerEntry(pl.file));
+    const biggest = new Map(); // largest spot (inches) each sticker file fills on this sheet
+    for (const pl of sheet.placements) biggest.set(pl.file, Math.max(biggest.get(pl.file) ?? 0, pl.w, pl.h));
+    for (const pl of sheet.placements) if (!byFile.has(pl.file)) byFile.set(pl.file, await stickerEntry(pl.file, biggest.get(pl.file)));
     const placements = sheet.placements.map((pl) => ({
       id: randomUUID().toUpperCase(),
       positionX: (OFFSET_X + pl.x + pl.w / 2) * U,

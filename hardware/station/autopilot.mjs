@@ -196,6 +196,13 @@ async function printAllWindows(got, sheets) {
   }
   for (let i = 0; i < sheets.length; i++) {
     const r = await pressPrint(sheets[i].path);
+    if (!r.ok && r.stage === "press") {
+      // Print & Cut was pressed but the job wasn't confirmed: it may still start late. Never retry
+      // automatically (that could print twice); a person checks the printer.
+      if (!got.recovered) try { run("station.mjs", "failed", got.id, `sheet ${i + 1}: Print & Cut pressed, job not confirmed (${r.error}); check the printer before reprinting`.slice(0, 300)); } catch {}
+      alert(`print-${got.id}`, `CHECK THE PRINTER: order ${got.id} sheet ${i + 1} was sent but StixCut didn't confirm it (${r.error}). If nothing prints, reprint it by hand.`);
+      return;
+    }
     if (!r.ok) {
       if (i === 0) {
         if (!got.recovered) {
@@ -222,6 +229,16 @@ async function printAllWindows(got, sheets) {
   appendFileSync(join(ORDERS, "timings.jsonl"), JSON.stringify({ at: new Date().toISOString(), ...timing }) + "\n");
 }
 
+/** Is the PixCut plugged in and on? Enumerates USB only; never opens the device. */
+async function usbPresent() {
+  try {
+    const { findByIds } = await import("usb");
+    return Boolean(findByIds(0x302c, 0x3101));
+  } catch {
+    return true; // can't tell: don't block orders on it
+  }
+}
+
 /** The PixCut powers itself off after 20 min idle by default. Set its auto-off to Never (0). Needs StixCut closed. */
 async function keepPrinterOn() {
   try {
@@ -246,6 +263,7 @@ async function stixcutLoop() {
     if (usb && !(await stixcutStatus()).ok) await keepPrinterOn(usb);
   }
   let queueFails = 0;
+  let wasPresent = true;
   for (;;) {
     if (WIN) {
       // don't claim while the printer is missing or in error (a running job is fine: we wait for it)
@@ -253,10 +271,13 @@ async function stixcutLoop() {
       let problem = null;
       if (s.ok) {
         if (!s.ready && !s.busy) problem = `${s.printer || "not connected"}${s.message && typeof s.message === "string" ? ` (${s.message})` : ""}`;
-      } else if (usb) {
-        // StixCut closed: ask the printer itself over USB (also keeps it awake)
-        const pr = await usb.printerReady();
-        if (!pr.ready && !/busy/.test(pr.reason ?? "")) problem = pr.reason;
+      } else {
+        // StixCut closed: only ask Windows whether the printer is plugged in. Never open the
+        // device here: that would block StixCut from connecting when it next starts.
+        const present = await usbPresent();
+        if (!present) problem = "PixCut S1 not found on USB (switched off or unplugged?)";
+        else if (!wasPresent) await keepPrinterOn(); // it just came back (power cycle): re-apply auto-off = Never
+        wasPresent = present;
       }
       if (problem) {
         alert("printer", `PRINTER NOT READY: ${problem}. Turn it on / check paper and USB. Orders wait in the queue.`);
