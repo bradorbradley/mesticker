@@ -17,6 +17,8 @@ import {
   type SheetKind,
 } from "@/lib/booth-config";
 import { addStickerBorder, composePrintSheet, slotPlacement, trimmedAspect } from "@/lib/booth-print";
+import { LAYOUTS, SHEET_H, SHEET_W } from "@/lib/sheet-layouts";
+import BoothReveal from "./booth-reveal";
 import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import Mascot from "./mascot";
@@ -502,6 +504,7 @@ export default function BoothApp() {
             )}
             {step === "sheets" && sticker && (
               <SheetShop
+                photo={photo}
                 sticker={sticker}
                 variants={variants}
                 picked={picked}
@@ -723,30 +726,11 @@ function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOf
 // ================================================================ generating
 
 function Generating({ photo, ready }: { photo: string | null; ready: boolean }) {
-  const [progress, setProgress] = useState(0);
-  useEffect(() => {
-    let expected = 25000;
-    try {
-      expected = Math.max(8000, Number(localStorage.getItem("mesticker-booth-gen-ms")) || 25000);
-    } catch {}
-    const t0 = Date.now();
-    const id = setInterval(() => {
-      const t = (Date.now() - t0) / expected;
-      setProgress(Math.min(0.95, 1 - Math.exp(-2.2 * t)));
-    }, 200);
-    return () => clearInterval(id);
-  }, []);
-
-  // ~20 s: just the loading animation. The games come after paying, while the sheet prints.
+  // ~10–20 s: the web app's loading animation and countdown, nothing else to compete with it
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center" style={{ gap: u(1.2), padding: u(2) }}>
+    <div className="flex h-full w-full flex-col items-center justify-center" style={{ gap: u(1), padding: u(2) }}>
       <LoadingState photo={photo} className="!py-2" />
-      <div className="flex w-full max-w-md flex-col items-center" style={{ gap: u(0.6) }}>
-        {ready && <span className="t-body font-bold text-[var(--ink)]">🎉 Ready!</span>}
-        <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--lav)]">
-          <motion.div className="h-full rounded-full bg-gradient-to-r from-[var(--purple)] to-[var(--pink)]" animate={{ width: `${(ready ? 1 : progress) * 100}%` }} />
-        </div>
-      </div>
+      {ready && <span className="t-h3">🎉 Ready!</span>}
     </div>
   );
 }
@@ -830,13 +814,19 @@ function bundleHint(count: number) {
   return `Add ${count === 1 ? "another" : "the last one"} for just ${priceLabel(bundlePrice(count + 1) - bundlePrice(count))}`;
 }
 
+/** Where each sticker sits on a pack12 sheet, as % of the sheet (for the loading spinners). */
+const SLOT_CENTERS = LAYOUTS[SHEET_LAYOUT].map(([x, y, w, h]) => ({ left: ((x + w / 2) / SHEET_W) * 100, top: ((y + h / 2) / SHEET_H) * 100, size: (Math.min(w, h) / SHEET_W) * 100 }));
+
 /**
- * The moment the sticker lands: the finished sticker and the sheet it prints
- * on, big and side by side, with the three sheets to pick from and the QR to
- * pay beside them. Previews are rendered by the same code that makes the print
- * file, re-rendered as each pose / expression arrives.
+ * The moment the sticker lands, in two parts on one scrolling screen:
+ *   1. the before/after slider, big; dragging it all the way (or tapping
+ *      "See my sheets") scrolls down to
+ *   2. all three 12-sticker sheets side by side, a spinner on every sticker
+ *      that's still being drawn, tap to add/remove, and the order with a big
+ *      pay QR (Pose Party is picked from the start, so the QR is already up).
  */
 function SheetShop({
+  photo,
   sticker,
   variants,
   picked,
@@ -849,6 +839,7 @@ function SheetShop({
   onPaid,
   onCheckout,
 }: {
+  photo: string | null;
   sticker: string;
   variants: Variants;
   picked: SheetKind[];
@@ -862,7 +853,19 @@ function SheetShop({
   onCheckout: (checkoutId: string) => Promise<void>;
 }) {
   const [previews, setPreviews] = useState<Partial<Record<SheetKind, string>>>({});
-  const [focus, setFocus] = useState<SheetKind>(picked[0] ?? "pose");
+  const scroller = useRef<HTMLDivElement>(null);
+  const sheetsRef = useRef<HTMLElement>(null);
+  const scrolled = useRef(false);
+  const showSheets = useCallback(() => {
+    scrolled.current = true;
+    sheetsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+  // not everyone drags the slider: move on by itself after a while
+  useEffect(() => {
+    const t = setTimeout(() => !scrolled.current && showSheets(), 12000);
+    return () => clearTimeout(t);
+  }, [showSheets]);
+
   useEffect(() => {
     let alive = true;
     const t = setTimeout(() => {
@@ -878,116 +881,123 @@ function SheetShop({
     };
   }, [sticker, variants]);
 
-  const pending = (["pose", "face"] as VariantKind[]).reduce((n, k) => n + variants[k].filter((v) => v === null).length, 0);
   const count = picked.length;
   const tooMany = count > sheetsLeft;
-  const shown = getSheet(focus);
-  const toggle = (id: SheetKind) => {
-    const adding = !picked.includes(id);
-    onToggle(id);
-    if (adding) setFocus(id);
-    else if (focus === id) setFocus(picked.find((x) => x !== id) ?? id);
-  };
-
-  const sheetImg = (id: SheetKind, alt: string) =>
-    previews[id] ? (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={previews[id]} alt={alt} className="h-full w-full rounded-[10px]" />
-    ) : (
-      <div className="h-full w-full animate-pulse rounded-[10px] bg-[var(--lav)]" />
-    );
 
   return (
-    <div
-      className="grid h-full w-full overflow-y-auto overflow-x-hidden landscape:grid-cols-[1.05fr_0.85fr_minmax(250px,0.8fr)] landscape:grid-rows-1 portrait:grid-cols-2 portrait:auto-rows-min"
-      style={{ gap: u(1.4), padding: `${u(0.6)} ${u(2)} ${u(1.4)}` }}
-    >
-      {/* the finished sticker, big */}
-      <div className="card relative flex min-h-0 flex-col items-center justify-center overflow-hidden portrait:aspect-[3/4]" style={{ padding: u(1.2), gap: u(1) }}>
-        <motion.div className="flex min-h-0 w-full flex-1 items-center justify-center" initial={{ scale: 0.4, rotate: -10, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 190, damping: 14 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={sticker} alt="Your sticker" className="die-cut max-h-full max-w-full object-contain" />
-        </motion.div>
-        <div className="flex w-full flex-wrap items-center justify-between" style={{ gap: u(0.8) }}>
-          <div className="t-h3">
-            That&apos;s <span className="pop">you!</span>
-          </div>
-          <div className="flex flex-wrap" style={{ gap: u(0.6) }}>
-            {canRetry && (
-              <button className="btn btn-soft" onClick={onRetry}>
-                🔄 Redo
-              </button>
-            )}
-            <button className="btn btn-soft" onClick={onRetake}>
-              📸 New photo
+    <div ref={scroller} className="h-full w-full overflow-y-auto overflow-x-hidden scroll-smooth">
+      {/* 1 — the reveal */}
+      <section className="flex h-full flex-col items-center" style={{ gap: u(0.8), padding: `${u(0.4)} ${u(2)} ${u(1)}` }}>
+        <h2 className="t-h2 text-center short:hidden">
+          Ta-da! <span className="pop">That&apos;s you.</span>
+        </h2>
+        <div className="relative min-h-0 w-full flex-1">
+          <BoothReveal photo={photo} sticker={sticker} onRevealed={() => setTimeout(showSheets, 700)} />
+        </div>
+        <div className="t-body text-center">👈 Drag the slider to see the whole sticker</div>
+        <div className="flex flex-wrap justify-center" style={{ gap: u(0.8) }}>
+          <button className="btn btn-lg btn-main" onClick={showSheets}>
+            See my sticker sheets ↓
+          </button>
+          {canRetry && (
+            <button className="btn btn-soft" onClick={onRetry}>
+              🔄 Redo
             </button>
-          </div>
+          )}
+          <button className="btn btn-soft" onClick={onRetake}>
+            📸 New photo
+          </button>
         </div>
-      </div>
+      </section>
 
-      {/* the sheet it prints on, big */}
-      <div className="card flex min-h-0 flex-col items-center portrait:aspect-[3/4]" style={{ padding: u(1.2), gap: u(0.8) }}>
-        <div className="flex min-h-0 w-full flex-1 items-center justify-center" style={{ containerType: "size" }}>
-          <motion.div
-            key={focus}
-            className="relative max-h-full max-w-full bg-white shadow-md"
-            style={{ aspectRatio: "3.9 / 6.7", height: "100cqh", borderRadius: 10 }}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25 }}
-          >
-            {sheetImg(focus, `${shown.name} sheet`)}
-          </motion.div>
-        </div>
-        <div className="t-body text-center">
-          {shown.emoji} <b>{shown.name}</b> ·{" "}
-          {pending > 0 ? `✨ drawing ${pending} more sticker${pending === 1 ? "" : "s"}…` : `${STICKERS_PER_SHEET} stickers`}
-        </div>
-      </div>
-
-      {/* pick sheets + pay */}
-      <div className="flex min-h-0 flex-col portrait:col-span-2" style={{ gap: u(1) }}>
-        <div className="flex flex-col" style={{ gap: u(0.7) }}>
-          {SHEET_DESIGNS.map((d) => {
-            const on = picked.includes(d.id);
-            return (
-              <motion.button
-                key={d.id}
-                onClick={() => {
-                  sounds.tap();
-                  toggle(d.id);
-                }}
-                className={cn(
-                  "flex items-center rounded-2xl border-4 bg-white/70 text-left transition-colors",
-                  on ? "border-[var(--purple)] bg-white shadow-[0_10px_28px_rgba(91,63,214,0.22)]" : "border-transparent",
-                  focus === d.id && !on && "border-[var(--lav)]"
-                )}
-                style={{ padding: u(0.6), gap: u(0.8) }}
-                whileTap={{ scale: 0.97 }}
-              >
-                <div className="shrink-0 bg-white shadow-sm" style={{ aspectRatio: "3.9 / 6.7", height: `max(48px, ${u(5.2)})`, borderRadius: 6 }}>
-                  {sheetImg(d.id, d.name)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="t-h3">
+      {/* 2 — the sheets + the order */}
+      <section
+        ref={sheetsRef}
+        className="flex min-h-full flex-col landscape:flex-row short:!flex-col"
+        style={{ gap: u(1.4), padding: `${u(1.2)} ${u(2)} ${u(1.6)}` }}
+      >
+        <div className="flex min-w-0 flex-1 flex-col" style={{ gap: u(0.8) }}>
+          <h2 className="t-h2">
+            Pick your <span className="pop">sheets</span>
+          </h2>
+          <div className="t-body">12 stickers on every sheet. Tap to add or remove.</div>
+          <div className="grid grid-cols-3" style={{ gap: u(1.2) }}>
+            {SHEET_DESIGNS.map((d) => {
+              const on = picked.includes(d.id);
+              const srcs = sheetSources(d.id, sticker, variants, true);
+              const loading = srcs.flatMap((src, i) => (src ? [] : [i]));
+              return (
+                <motion.button
+                  key={d.id}
+                  onClick={() => onToggle(d.id)}
+                  className={cn(
+                    "relative flex flex-col items-center rounded-3xl border-[5px] bg-white/80 text-center transition-colors",
+                    on ? "border-[var(--purple)] bg-white shadow-[0_12px_32px_rgba(91,63,214,0.25)]" : "border-transparent opacity-80"
+                  )}
+                  style={{ padding: u(0.8), gap: u(0.5) }}
+                  whileTap={{ scale: 0.97 }}
+                  aria-pressed={on}
+                >
+                  <span
+                    className={cn("absolute right-2 top-2 z-10 rounded-full font-bold shadow", on ? "bg-[var(--purple)] text-white" : "bg-white text-[var(--ink)]")}
+                    style={{ padding: `${u(0.2)} ${u(0.8)}`, fontSize: `max(12px, ${u(1.2)})` }}
+                  >
+                    {on ? "✓ Added" : "+ Add"}
+                  </span>
+                  <div className="relative w-full bg-white shadow-sm" style={{ aspectRatio: "3.9 / 6.7", borderRadius: 10 }}>
+                    {previews[d.id] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={previews[d.id]} alt={`${d.name} sheet`} className="h-full w-full rounded-[10px]" />
+                    ) : (
+                      <div className="h-full w-full rounded-[10px] bg-[var(--lav)]" />
+                    )}
+                    {/* a spinner on every sticker still being drawn */}
+                    {loading.map((i) => (
+                      <span
+                        key={i}
+                        className="absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
+                        style={{ left: `${SLOT_CENTERS[i].left}%`, top: `${SLOT_CENTERS[i].top}%`, width: `${SLOT_CENTERS[i].size * 0.5}%`, aspectRatio: "1" }}
+                      >
+                        <motion.span
+                          className="block h-full w-full rounded-full border-[3px] border-[var(--purple)] border-t-transparent"
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
+                        />
+                      </span>
+                    ))}
+                  </div>
+                  <div className="t-h3" style={{ fontSize: `max(13px, ${u(1.6)})` }}>
                     {d.emoji} {d.name}
                   </div>
-                  <div className="t-body truncate">{d.blurb}</div>
-                </div>
-                <span
-                  className={cn("flex shrink-0 items-center justify-center rounded-full font-bold", on ? "bg-[var(--purple)] text-white" : "bg-[var(--lav)] text-[var(--ink)]")}
-                  style={{ width: u(3), height: u(3), fontSize: u(1.5) }}
-                >
-                  {on ? "✓" : "+"}
-                </span>
-              </motion.button>
-            );
-          })}
+                  <div className="t-body short:hidden" style={{ fontSize: `max(11px, ${u(1.05)})` }}>
+                    {loading.length ? `✨ drawing ${loading.length} more…` : d.blurb}
+                  </div>
+                </motion.button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="card flex flex-1 flex-col justify-center" style={{ gap: u(0.8), padding: u(1.1) }}>
-          <div className="t-h3">{count ? `${count} sheet${count === 1 ? "" : "s"} · ${count * STICKERS_PER_SHEET} stickers` : "Tap a sheet to add it"}</div>
-          <div className="t-body text-[#15803d]">{bundleHint(count)}</div>
+        {/* the order: what's in it, the price, the QR */}
+        <div className="card flex shrink-0 flex-col landscape:w-[34%] landscape:self-center short:!w-full" style={{ gap: u(0.9), padding: u(1.4) }}>
+          <div className="t-h3">Your order</div>
+          {count ? (
+            <div className="flex flex-wrap" style={{ gap: u(0.5) }}>
+              {picked.map((id) => (
+                <span key={id} className="chip bg-[var(--lav)] text-[var(--ink)]">
+                  {getSheet(id).emoji} {getSheet(id).name}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="t-body">Tap a sheet to add it</div>
+          )}
+          <div className="t-body">
+            <b>
+              {count} sheet{count === 1 ? "" : "s"} · {count * STICKERS_PER_SHEET} stickers
+            </b>{" "}
+            · <span className="text-[#15803d]">{bundleHint(count)}</span>
+          </div>
           {tooMany && <div className="t-body text-[var(--pink)]">Only {sheetsLeft} sheet{sheetsLeft === 1 ? "" : "s"} of paper left — pick fewer</div>}
           {count > 0 &&
             !tooMany &&
@@ -999,7 +1009,7 @@ function SheetShop({
               <PayWithQr key={picked.join("+")} sheets={picked} onPaid={onPaid} onCheckout={onCheckout} />
             ))}
         </div>
-      </div>
+      </section>
     </div>
   );
 }
@@ -1096,7 +1106,7 @@ function PayWithQr({
           </motion.div>
         )}
       </div>
-      <div className="flex aspect-square shrink-0 items-center justify-center overflow-hidden bg-white" style={{ width: `clamp(110px, ${u(12)}, 45%)` }}>
+      <div className="flex aspect-square shrink-0 items-center justify-center overflow-hidden bg-white" style={{ width: `clamp(140px, ${u(17)}, 50%)` }}>
         {qr ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={qr} alt="Scan to pay" className="h-full w-full" />

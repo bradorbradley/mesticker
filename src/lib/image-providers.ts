@@ -34,6 +34,17 @@ export function activeProvider(): ImageProvider {
   return p === "gemini" || p === "fal" ? p : "openai";
 }
 
+/**
+ * The 14 small sheet stickers (poses / expressions, ~1.1" printed) can use a
+ * faster provider than the hero: BOOTH_EXTRAS_PROVIDER=gemini|fal|openai
+ * (default: same as the hero). On OpenAI they use BOOTH_EXTRA_QUALITY
+ * (default "low": roughly twice as fast, plenty for a 1" sticker).
+ */
+export function extrasProvider(): ImageProvider {
+  const p = (process.env.BOOTH_EXTRAS_PROVIDER || "").toLowerCase();
+  return p === "gemini" || p === "fal" || p === "openai" ? p : activeProvider();
+}
+
 const geminiKey = () => process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
 function hasKey(p: ImageProvider) {
@@ -48,8 +59,7 @@ const SKIP_MS = 3 * 60 * 1000;
 export const isDown = (p: ImageProvider) => (downUntil.get(p) ?? 0) > Date.now();
 
 /** Active provider first, then every other one with a key; recently failed ones last. */
-export function providerChain(): ImageProvider[] {
-  const first = activeProvider();
+export function providerChain(first: ImageProvider = activeProvider()): ImageProvider[] {
   const all = [first, ...(["openai", "gemini", "fal"] as ImageProvider[]).filter((p) => p !== first)].filter(hasKey);
   return [...all.filter((p) => !isDown(p)), ...all.filter(isDown)];
 }
@@ -176,18 +186,25 @@ export function hasPrintTier() {
   return activeProvider() === "openai" && !isDown("openai") && !!process.env.BOOTH_PRINT_QUALITY;
 }
 
-async function runProvider(provider: ImageProvider, image: string, prompt: string, tier: "preview" | "print") {
+export type Tier = "preview" | "print" | "extra";
+
+async function runProvider(provider: ImageProvider, image: string, prompt: string, tier: Tier) {
   if (provider === "gemini") return generateGemini(image, prompt);
   if (provider === "fal") return generateFal(image, prompt);
-  const q = tier === "print" ? quality(process.env.BOOTH_PRINT_QUALITY, "high") : quality(process.env.BOOTH_PREVIEW_QUALITY, "medium");
+  const q =
+    tier === "print"
+      ? quality(process.env.BOOTH_PRINT_QUALITY, "high")
+      : tier === "extra"
+        ? quality(process.env.BOOTH_EXTRA_QUALITY, "low")
+        : quality(process.env.BOOTH_PREVIEW_QUALITY, "medium");
   return { image: await generateAtQuality(image, prompt, q), model: `${process.env.OPENAI_IMAGE_MODEL || "gpt-image"} (${q})` };
 }
 
 /** A refusal for this photo would fail everywhere; anything else is worth another provider. */
 const isRefusal = (msg: string) => /safety|moderation|refus|policy/i.test(msg);
 
-export async function generateSticker(image: string, prompt: string, tier: "preview" | "print" = "preview"): Promise<ProviderResult> {
-  const chain = providerChain();
+export async function generateSticker(image: string, prompt: string, tier: Tier = "preview"): Promise<ProviderResult> {
+  const chain = providerChain(tier === "extra" ? extrasProvider() : activeProvider());
   if (!chain.length) throw new Error("No image provider is configured");
   // keep the first try short enough that a backup still fits in the request
   const budget = Number(process.env.BOOTH_PROVIDER_TIMEOUT_MS) || 40000;

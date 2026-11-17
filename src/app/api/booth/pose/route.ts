@@ -37,7 +37,8 @@ export async function POST(request: NextRequest) {
     const pose = String(idea).slice(0, 300);
     const result = await generateSticker(
       photo,
-      `${prompt} Pose and expression for this sticker: ${pose}. Same person, same hairstyle and outfit, fully recognizable. No text, captions or letters anywhere.`
+      `${prompt} Pose and expression for this sticker: ${pose}. Same person, same hairstyle and outfit, fully recognizable. No text, captions or letters anywhere.`,
+      "extra" // small sheet stickers: faster tier (see extrasProvider)
     );
     recordGeneration("preview");
     return NextResponse.json({ image: result.image, ms: result.ms });

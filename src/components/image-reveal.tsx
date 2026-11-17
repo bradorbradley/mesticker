@@ -54,6 +54,8 @@ interface ImageRevealSliderProps {
   initial?: number;
   height?: number;
   className?: string;
+  /** called once, when the guest drags the slider (nearly) all the way to the sticker side */
+  onRevealed?: () => void;
 }
 
 export default function ImageRevealSlider({
@@ -64,8 +66,10 @@ export default function ImageRevealSlider({
   initial = 0,
   height = 420,
   className,
+  onRevealed,
 }: ImageRevealSliderProps) {
   const [position, setPosition] = useState(initial);
+
   const [isDragging, setIsDragging] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [imagesLoaded, setImagesLoaded] = useState({
@@ -77,6 +81,15 @@ export default function ImageRevealSlider({
   const rafRef = useRef<number>(null);
 
   const allImagesLoaded = imagesLoaded.before && imagesLoaded.after;
+
+  // position 0 = all sticker; fire once when a drag gets there
+  const revealedRef = useRef(false);
+  useEffect(() => {
+    if (isDragging && position <= 8 && !revealedRef.current && onRevealed) {
+      revealedRef.current = true;
+      onRevealed();
+    }
+  }, [isDragging, position, onRevealed]);
 
   useEffect(() => {
     const beforeImg = new Image();
