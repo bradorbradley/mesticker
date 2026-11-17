@@ -8,7 +8,7 @@ import ImageRevealSlider from "@/components/image-reveal";
  * The web app's before/after reveal slider, sized to fill whatever square
  * fits the booth panel, with a pop-in burst like the web app's sticker reveal.
  */
-export default function BoothReveal({ photo, sticker }: { photo: string | null; sticker: string }) {
+export default function BoothReveal({ photo, sticker, onRevealed }: { photo: string | null; sticker: string; onRevealed?: () => void }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [side, setSide] = useState(0);
 
@@ -47,7 +47,7 @@ export default function BoothReveal({ photo, sticker }: { photo: string | null; 
           transition={{ type: "spring", stiffness: 180, damping: 14 }}
         >
           {photo ? (
-            <ImageRevealSlider beforeSrc={photo} afterSrc={sticker} altBefore="You" altAfter="Sticker" height={side} className="!rounded-[28px] border-[6px] border-white" />
+            <ImageRevealSlider beforeSrc={photo} afterSrc={sticker} altBefore="You" altAfter="Sticker" height={side} className="!rounded-[28px] border-[6px] border-white" onRevealed={onRevealed} />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={sticker} alt="Your sticker" className="die-cut w-full" />
