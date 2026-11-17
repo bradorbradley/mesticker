@@ -99,7 +99,7 @@ async function printAll(id, sheets) {
       await sleep(2500); // let the sheet load
     } else await sleep(1500);
     try {
-      execFileSync("node", [join(HERE, "print-mac.mjs")], { encoding: "utf8", timeout: 40_000 });
+      execFileSync("node", [join(HERE, "print-mac.mjs")], { encoding: "utf8", timeout: 60_000 });
     } catch (e) {
       log(`couldn't press Print & Cut on sheet ${i + 1} of ${id}: ${String(e.stdout || e.message).slice(0, 200)}`);
       return i === 0 ? false : (run("station.mjs", "failed", id, `auto-print stopped at sheet ${i + 1}`), true);

@@ -44,10 +44,16 @@ function buttons(root, depth, out) {
   return out;
 }
 function find(list, test) { return list.find((b) => b.enabled && test((b.name + " " + b.desc).toLowerCase().trim())); }
-const wins = proc.windows();
+// StixCut may still be opening the sheet: wait up to ~12 s for a window with a Print button
+let wins = [], all = [];
+for (let i = 0; i < 12; i++) {
+  wins = proc.windows();
+  all = wins.length ? buttons(wins[0], 0, []) : [];
+  if (inspect ? wins.length : all.some((b) => /print/i.test(b.name + " " + b.desc))) break;
+  delay(1);
+}
 if (!wins.length) { JSON.stringify({ ok: false, error: "StixCut has no open window" }); }
 else {
-  const all = buttons(wins[0], 0, []);
   if (inspect) { JSON.stringify({ ok: true, buttons: all.map((b) => ({ name: b.name, description: b.desc, enabled: b.enabled })) }); }
   else {
     const print = wanted ? find(all, (t) => t.includes(wanted)) : (find(all, (t) => /print\\s*(&|and)\\s*cut/.test(t)) || find(all, (t) => /^print\\b/.test(t)));
@@ -69,7 +75,7 @@ else {
 `;
 
 try {
-  const out = execFileSync("osascript", ["-l", "JavaScript", "-e", jxa], { encoding: "utf8", timeout: 30_000 }).trim();
+  const out = execFileSync("osascript", ["-l", "JavaScript", "-e", jxa], { encoding: "utf8", timeout: 45_000 }).trim();
   const res = JSON.parse(out || "{}");
   console.log(JSON.stringify(res, null, inspect ? 2 : 0));
   process.exit(res.ok ? 0 : 1);
