@@ -27,7 +27,15 @@ export async function GET(request: NextRequest) {
       out.errors.push(`stripe: ${e instanceof Error ? e.message : e}`);
     }
   }
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
+  if (process.env.DATABASE_URL) {
+    try {
+      const { listRecent } = await import("@/lib/image-store");
+      out.images = await listRecent("sticker", since);
+    } catch (e) {
+      out.errors.push(`images: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+  if (process.env.BLOB_READ_WRITE_TOKEN && !out.images.length) {
     try {
       const { list } = await import("@vercel/blob");
       const res = await list({ prefix: "sticker-", limit: 1000, token: process.env.BLOB_READ_WRITE_TOKEN });

@@ -45,7 +45,7 @@ if (cmd === "list") {
   console.log(res.ok ? JSON.stringify(await res.json(), null, 2) : `recover ${res.status} ${(await res.text()).slice(0, 200)}`);
 } else if (cmd === "build" && a && b) {
   const u = new URL(b);
-  if (u.protocol !== "https:" || !u.hostname.endsWith(".public.blob.vercel-storage.com")) throw new Error("sticker must be a Vercel Blob URL");
+  if (u.protocol !== "https:" || !(u.hostname.endsWith(".public.blob.vercel-storage.com") || u.hostname === "mesticker.fun")) throw new Error("sticker must be a mesticker.fun or Vercel Blob URL");
   const { sessions = [] } = await (await fetch(`${base}/api/booth/recover?minutes=1440`, { headers })).json();
   const session = sessions.find((s) => s.id === a);
   if (!session) throw new Error(`${a} is not a paid booth checkout`);

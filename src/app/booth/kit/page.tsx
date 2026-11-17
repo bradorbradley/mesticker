@@ -6,7 +6,7 @@ export default async function BoothKitPage({ searchParams }: { searchParams: Pro
   let kit: Kit | null = null;
   try {
     const u = new URL(m ?? "");
-    const hosted = u.protocol === "https:" && u.hostname.endsWith(".public.blob.vercel-storage.com");
+    const hosted = u.protocol === "https:" && (u.hostname.endsWith(".public.blob.vercel-storage.com") || u.hostname === "mesticker.fun");
     const local = process.env.NODE_ENV !== "production" && u.hostname === "localhost";
     if (hosted || local) {
       const data = await (await fetch(u, { cache: "no-store" })).json();
