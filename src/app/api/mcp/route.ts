@@ -209,7 +209,16 @@ const handler = createMcpHandler(
       }
     );
   },
-  { serverInfo: { name: "mesticker", version: "1.0.0" } }
+  {
+    serverInfo: { name: "mesticker", version: "1.0.0" },
+    // The tool list never changes at runtime, so don't advertise listChanged.
+    // When it's advertised, MCP clients (Claude) open a `subscriptions/listen`
+    // POST that the SDK holds open as an SSE stream forever. On Vercel that
+    // runs until the 300s limit and logs a timeout every time a client is
+    // connected. With listChanged off, the listen stream acknowledges and
+    // closes right away, and tool calls are untouched.
+    capabilities: { tools: { listChanged: false } },
+  }
 );
 
 function authorized(req: Request) {
