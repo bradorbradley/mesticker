@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { modelOverride } from "@/lib/model-override";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Check, RefreshCw, Loader2, ShoppingCart } from "lucide-react";
@@ -84,6 +85,7 @@ export default function VariationsGrid({
           body: JSON.stringify({
             image: originalImage,
             stylePrompt,
+            provider: modelOverride(),
           }),
         });
 
@@ -150,6 +152,7 @@ export default function VariationsGrid({
           body: JSON.stringify({
             image: originalImage,
             stylePrompt,
+            provider: modelOverride(),
           }),
         });
 

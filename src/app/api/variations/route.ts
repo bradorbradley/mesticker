@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateVariationPreview } from "@/lib/generation";
+import { generateForApp } from "@/lib/image-providers";
 import { buildVariationPrompt } from "@/lib/presets";
 import { generateVariationDescriptors } from "@/lib/vision";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     // The image we receive is the FIRST cartoon. The original photo (if
     // provided) drives the creative vision pass that composes 9 unique
     // sticker prompts tailored to this specific person.
-    const { image, originalPhoto } = await request.json();
+    const { image, originalPhoto, provider } = await request.json();
 
     if (!image) {
       return NextResponse.json(
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       descriptors.map(async (variation, index) => {
         const prompt = buildVariationPrompt(variation);
         const startTime = Date.now();
-        const result = await generateVariationPreview(image, prompt);
+        const { image: result } = await generateForApp(image, prompt, "low", provider);
         recordGeneration("preview");
         return {
           index,

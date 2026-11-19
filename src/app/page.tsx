@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { modelOverride } from "@/lib/model-override";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -132,6 +133,8 @@ export default function Home() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<StylePreset | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  // Previews only: which model made the sticker and how long it took.
+  const [genInfo, setGenInfo] = useState<{ provider: string; model: string; ms: number } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
@@ -274,6 +277,8 @@ export default function Home() {
 
       try {
         const body: Record<string, string> = { image: imageToUse };
+        const requestedModel = modelOverride();
+        if (requestedModel) body.provider = requestedModel;
         if (customPrompt) body.customPrompt = customPrompt;
         else body.styleId = styleId;
 
@@ -290,6 +295,7 @@ export default function Home() {
         }
 
         const data = await res.json();
+        setGenInfo(data.debug ?? null);
         setGeneratedImage(data.generatedImage);
         incrementLocalGenCount();
         trackGenerateComplete(data.stylePreset || styleId);
@@ -362,7 +368,7 @@ export default function Home() {
     fetch("/api/variations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: generatedImage, originalPhoto: capturedImage }),
+      body: JSON.stringify({ image: generatedImage, originalPhoto: capturedImage, provider: modelOverride() }),
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (data?.variations) setVariations(data.variations); })
@@ -760,6 +766,11 @@ export default function Home() {
 
   return (
     <main className="min-h-dvh">
+      {genInfo && (
+        <div className="fixed bottom-3 left-3 z-50 rounded-full bg-black/75 px-3 py-1 text-xs font-medium text-white pointer-events-none">
+          {genInfo.provider === "gemini" ? "Nano Banana 2" : genInfo.provider === "openai" ? "OpenAI" : genInfo.provider} · {(genInfo.ms / 1000).toFixed(1)}s
+        </div>
+      )}
       <div className="mx-auto max-w-md px-4 py-5 safe-top">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">

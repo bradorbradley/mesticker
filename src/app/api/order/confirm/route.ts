@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createPrintfulOrder } from "@/lib/printful";
 import { getDb } from "@/lib/db";
-import { generatePrint } from "@/lib/generation";
+import { generateForApp } from "@/lib/image-providers";
 import { composeSheet } from "@/lib/sheet-composer";
 import { uploadImage } from "@/lib/storage";
 
@@ -60,7 +60,7 @@ async function regenerateHQ(item: CartBlobItem): Promise<string> {
     // SINGLE / VARIATIONS: regenerate each prompt at quality:high, then
     // compose the sheet (single repeats 1 tile × 6, variations uses 6 distinct).
     const tilesHQ = await Promise.all(
-      item.prompts.map((prompt) => generatePrint(cartoonDataUrl, prompt))
+      item.prompts.map(async (prompt) => (await generateForApp(cartoonDataUrl, prompt, "high")).image)
     );
 
     const buffers = await Promise.all(tilesHQ.map(fetchAsBuffer));

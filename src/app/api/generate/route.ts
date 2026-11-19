@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generatePreview } from "@/lib/generation";
+import { canOverrideProvider, generateForApp } from "@/lib/image-providers";
 import { stylePresets, resolvePresetPrompt } from "@/lib/presets";
 import { moderatePrompt } from "@/lib/moderation";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { image, styleId, customPrompt } = await request.json();
+    const { image, styleId, customPrompt, provider } = await request.json();
 
     if (!image || (!styleId && !customPrompt)) {
       return NextResponse.json(
@@ -96,7 +96,9 @@ export async function POST(request: NextRequest) {
     // of letting people experiment freely until they fall in love with one.
 
     // 4. Generate the image (preview tier — fast)
-    const styledImage = await generatePreview(image, prompt);
+    const result = await generateForApp(image, prompt, "medium", provider);
+    const styledImage = result.image;
+    console.log(`[generate] ${result.provider} ${result.model} ${result.ms}ms`);
 
     // 5. Record generation + check spend alerts
     const { alert, stats } = recordGeneration("preview");
@@ -123,6 +125,8 @@ export async function POST(request: NextRequest) {
       generatedImage: styledImage,
       stylePreset: resolvedStyleId,
       sessionId,
+      // Previews show which model made it and how long it took.
+      ...(canOverrideProvider() ? { debug: { provider: result.provider, model: result.model, ms: result.ms } } : {}),
     });
   } catch (error) {
     console.error("Generate error:", error);

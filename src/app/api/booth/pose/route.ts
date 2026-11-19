@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolvePresetPrompt, stylePresets } from "@/lib/presets";
 import { generateVariationDescriptors } from "@/lib/vision";
-import { generateSticker } from "@/lib/image-providers";
+import { canOverrideProvider, generateSticker, parseProvider } from "@/lib/image-providers";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { recordGeneration, isThrottled } from "@/lib/spend-tracker";
 
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   if (isThrottled()) return NextResponse.json({ error: "Busy, try again in a minute" }, { status: 503 });
 
   try {
-    const { photo, styleId, idea } = await request.json();
+    const { photo, styleId, idea, provider } = await request.json();
     if (!photo) return NextResponse.json({ error: "Missing photo" }, { status: 400 });
 
     if (!idea) {
@@ -38,7 +38,8 @@ export async function POST(request: NextRequest) {
     const result = await generateSticker(
       photo,
       `${prompt} Pose and expression for this sticker: ${pose}. Same person, same hairstyle and outfit, fully recognizable. No text, captions or letters anywhere.`,
-      "extra" // small sheet stickers: faster tier (see extrasProvider)
+      "extra", // small sheet stickers: faster tier (see extrasProvider)
+      canOverrideProvider() ? parseProvider(provider) : undefined
     );
     recordGeneration("preview");
     return NextResponse.json({ image: result.image, ms: result.ms });

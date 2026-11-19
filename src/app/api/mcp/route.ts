@@ -3,8 +3,7 @@ import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
 import sharp from "sharp";
 import { stylePresets, resolvePresetPrompt } from "@/lib/presets";
-import { generateAtQuality } from "@/lib/generation";
-import { activeProvider, generateSticker } from "@/lib/image-providers";
+import { generateForApp } from "@/lib/image-providers";
 import { generateVariationDescriptors } from "@/lib/vision";
 import { moderatePrompt } from "@/lib/moderation";
 import { uploadImage } from "@/lib/storage";
@@ -126,7 +125,7 @@ const handler = createMcpHandler(
 
           const photo = toDataUrl(await loadImageBuffer(photo_url), "image/jpeg");
           const t0 = Date.now();
-          const image = activeProvider() === "openai" ? await generateAtQuality(photo, prompt, quality) : (await generateSticker(photo, prompt)).image;
+          const { image } = await generateForApp(photo, prompt, quality);
           recordGeneration(quality === "high" ? "print" : "preview");
           const png = await loadImageBuffer(image);
           const url = await uploadImage(toDataUrl(png));
