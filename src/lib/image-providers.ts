@@ -6,6 +6,13 @@
  *   IMAGE_PROVIDER=gemini  — Google "Nano Banana 2" (Gemini Flash Image), needs GEMINI_API_KEY
  *   IMAGE_PROVIDER=fal     — FLUX Kontext on fal.ai, needs FAL_KEY
  *
+ * IMAGE_PROVIDER covers everything: the web app (/api/generate, variations,
+ * print copies), the booth and the MCP server. BOOTH_IMAGE_PROVIDER is still
+ * read for the booth when IMAGE_PROVIDER is unset.
+ *
+ * Outside production (Vercel previews, local dev) a request can pick the
+ * model with ?model=openai|gemini, so both can be compared on one URL.
+ *
  * Fallback: if the active provider fails (out of credits, rate limited, down,
  * slow), the same request goes to the next provider that has a key, and a
  * failing provider is skipped for a few minutes so guests don't wait on it.
@@ -29,9 +36,23 @@ export interface ProviderResult {
   ms: number;
 }
 
+export function parseProvider(v: unknown): ImageProvider | undefined {
+  const p = typeof v === "string" ? v.toLowerCase() : "";
+  if (p === "gemini" || p === "nanobanana" || p === "nano-banana") return "gemini";
+  return p === "openai" || p === "fal" ? p : undefined;
+}
+
 export function activeProvider(): ImageProvider {
-  const p = (process.env.BOOTH_IMAGE_PROVIDER || process.env.IMAGE_PROVIDER || "openai").toLowerCase();
-  return p === "gemini" || p === "fal" ? p : "openai";
+  return parseProvider(process.env.IMAGE_PROVIDER) ?? parseProvider(process.env.BOOTH_IMAGE_PROVIDER) ?? "openai";
+}
+
+/** Previews and local dev only: lets a request ask for a specific model. */
+export const canOverrideProvider = () => process.env.VERCEL_ENV !== "production";
+
+/** The provider a request asked for, if it's allowed here and has a key; otherwise the configured one. */
+export function requestedProvider(v: unknown): ImageProvider {
+  const p = canOverrideProvider() ? parseProvider(v) : undefined;
+  return p && hasKey(p) ? p : activeProvider();
 }
 
 /**
@@ -112,7 +133,7 @@ const GEMINI_MODELS = Array.from(
 );
 let workingGeminiModel: string | null = null;
 
-async function generateGemini(image: string, prompt: string) {
+async function generateGemini(image: string, prompt: string, tier: Tier = "preview") {
   const key = geminiKey();
   if (!key) throw new Error("GEMINI_API_KEY is not set");
   const { mime, data } = splitDataUrl(image);
@@ -129,7 +150,14 @@ async function generateGemini(image: string, prompt: string) {
         headers: { "Content-Type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify({
           contents: [{ parts: [{ text: whiteBackgroundPrompt(prompt) }, { inline_data: { mime_type: mime, data } }] }],
-          generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "1:1" } },
+          generationConfig: {
+            responseModalities: ["IMAGE"],
+            imageConfig: {
+              aspectRatio: "1:1",
+              // Gemini 3 image models take an output size; print copies get 2K (default 1K).
+              ...(tier === "print" && model.startsWith("gemini-3") ? { imageSize: "2K" } : {}),
+            },
+          },
         }),
       }
     );
@@ -189,7 +217,7 @@ export function hasPrintTier() {
 export type Tier = "preview" | "print" | "extra";
 
 async function runProvider(provider: ImageProvider, image: string, prompt: string, tier: Tier) {
-  if (provider === "gemini") return generateGemini(image, prompt);
+  if (provider === "gemini") return generateGemini(image, prompt, tier);
   if (provider === "fal") return generateFal(image, prompt);
   const q =
     tier === "print"
@@ -203,8 +231,13 @@ async function runProvider(provider: ImageProvider, image: string, prompt: strin
 /** A refusal for this photo would fail everywhere; anything else is worth another provider. */
 const isRefusal = (msg: string) => /safety|moderation|refus|policy/i.test(msg);
 
-export async function generateSticker(image: string, prompt: string, tier: Tier = "preview"): Promise<ProviderResult> {
-  const chain = providerChain(tier === "extra" ? extrasProvider() : activeProvider());
+export async function generateSticker(
+  image: string,
+  prompt: string,
+  tier: Tier = "preview",
+  first?: ImageProvider
+): Promise<ProviderResult> {
+  const chain = providerChain(first ?? (tier === "extra" ? extrasProvider() : activeProvider()));
   if (!chain.length) throw new Error("No image provider is configured");
   // keep the first try short enough that a backup still fits in the request
   const budget = Number(process.env.BOOTH_PROVIDER_TIMEOUT_MS) || 40000;
@@ -224,4 +257,24 @@ export async function generateSticker(image: string, prompt: string, tier: Tier 
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error("Image generation failed");
+}
+
+/**
+ * The web app and MCP server: the same quality knobs as before on OpenAI
+ * ("low" variations, "medium" previews, "high" print copies), or the active
+ * non-OpenAI provider with OpenAI as the backup.
+ */
+export async function generateForApp(
+  image: string,
+  prompt: string,
+  q: Quality,
+  requested?: unknown
+): Promise<ProviderResult> {
+  const provider = requestedProvider(requested);
+  if (provider === "openai") {
+    const t0 = Date.now();
+    const out = await generateAtQuality(image, prompt, q);
+    return { image: out, provider, model: `${process.env.OPENAI_IMAGE_MODEL || "gpt-image"} (${q})`, ms: Date.now() - t0 };
+  }
+  return generateSticker(image, prompt, q === "high" ? "print" : q === "low" ? "extra" : "preview", provider);
 }

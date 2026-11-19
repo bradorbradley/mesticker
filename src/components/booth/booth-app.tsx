@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { modelOverride } from "@/lib/model-override";
 import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "qrcode";
 import { stylePresets } from "@/lib/presets";
@@ -259,7 +260,7 @@ export default function BoothApp() {
     printCopy.current = fetch("/api/booth/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image, styleId: resolvedStyle, tier: "print" }),
+      body: JSON.stringify({ image, styleId: resolvedStyle, tier: "print", provider: modelOverride() }),
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => (d?.generatedImage as string | undefined) ?? null)
@@ -297,7 +298,7 @@ export default function BoothApp() {
     if (!image || variantJobs.current[kind]) return;
     const id = genId.current;
     const post = (body: object) =>
-      fetch("/api/booth/pose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) =>
+      fetch("/api/booth/pose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, provider: modelOverride() }) }).then((r) =>
         r.ok ? r.json() : Promise.reject(new Error(String(r.status)))
       );
     const retry = <T,>(fn: () => Promise<T>) => fn().catch(() => new Promise<T>((ok, no) => setTimeout(() => fn().then(ok, no), 3000)));
@@ -335,7 +336,7 @@ export default function BoothApp() {
     const main = fetch("/api/booth/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image, styleId: BOOTH_STYLE }),
+      body: JSON.stringify({ image, styleId: BOOTH_STYLE, provider: modelOverride() }),
     });
     variantPhoto.current = image;
     startVariantsRef.current("pose");
