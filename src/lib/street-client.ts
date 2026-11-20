@@ -2,7 +2,7 @@
  * Browser helpers for street mode, shared by the guest's phone (/street) and
  * the seller's phone (/street/print).
  */
-import { addStickerBorder, composePrintSheet } from "@/lib/booth-print";
+import { addStickerBorder, composePrintSheet, slotPlacement, trimmedAspect } from "@/lib/booth-print";
 import { BOOTH_STYLE } from "@/lib/booth-config";
 
 export const STREET_POSES = 7;
@@ -87,6 +87,68 @@ export async function buildStreetSheet(main: string, poses: (string | null)[]): 
   const unique = Array.from(new Set(srcs));
   const borderedOf = new Map(await Promise.all(unique.map(async (s) => [s, await addStickerBorder(s)] as const)));
   return composePrintSheet(srcs.map((s) => borderedOf.get(s)!), "pack12");
+}
+
+/**
+ * Make any poses still missing (the guest's tab stops making them when it
+ * leaves for Stripe), saving each one to the order as it lands. Resolves
+ * once every slot has a sticker or has failed.
+ */
+export async function healPoses(
+  order: { photoUrl: string | null; poses: (string | null)[]; ideas: string[] },
+  save: (i: number, url: string) => Promise<unknown>,
+  onPose?: (i: number, url: string | false) => void
+) {
+  const missing = order.poses.map((p, i) => (p ? -1 : i)).filter((i) => i >= 0);
+  if (!missing.length || !order.photoUrl) return;
+  const photo = await toDataUrl(order.photoUrl);
+  const ideas = order.ideas.length ? order.ideas : await makeIdeas(photo);
+  await makePoses(photo, ideas, missing, async (i, img) => {
+    if (!img) return onPose?.(i, false);
+    try {
+      const url = await uploadImage(img);
+      onPose?.(i, url);
+      await save(i, url);
+    } catch {
+      onPose?.(i, false);
+    }
+  });
+}
+
+/**
+ * The print station's kit, same as a booth order: each sticker uploaded once
+ * as its own transparent image with a white die-cut border, its spot on the
+ * 3.9×6.7" sheet in inches, and a numbered guide of the whole sheet.
+ * Missing poses print as the main sticker.
+ */
+export async function buildStreetKit(mainUrl: string, poses: (string | null)[]) {
+  const srcs = RECIPE.map((s) => (s === "main" ? mainUrl : poses[s] || mainUrl)).map(localImage);
+  const unique = Array.from(new Set(srcs));
+  const done = await Promise.all(
+    unique.map(async (s) => {
+      const bordered = await addStickerBorder(s);
+      const [url, aspect] = await Promise.all([uploadImage(bordered), trimmedAspect(bordered)]);
+      return [s, { bordered, url, aspect }] as const;
+    })
+  );
+  const of = new Map(done);
+  const items = srcs.map((s, i) => ({ n: i + 1, url: of.get(s)!.url, ...slotPlacement("pack12", i, of.get(s)!.aspect) }));
+  const guide = await uploadImage(await composePrintSheet(srcs.map((s) => of.get(s)!.bordered), "pack12", { numbers: true }));
+  return { guide, items, files: done.map(([, v]) => v.bordered) };
+}
+
+/** Each sticker once, bordered, as files for the share sheet (the no-laptop fallback). */
+export async function stickerFiles(mainUrl: string, poses: (string | null)[], code: string) {
+  const unique = Array.from(new Set(RECIPE.map((s) => (s === "main" ? mainUrl : poses[s] || mainUrl)).map(localImage)));
+  const bordered = await Promise.all(unique.map((s) => addStickerBorder(s)));
+  return bordered.map((d, i) => dataUrlToFile(d, `mesticker-${code}-${i + 1}.png`));
+}
+
+/** Build the kit and put the order on the print station's queue. */
+export async function sendToStation(id: string, mainUrl: string, poses: (string | null)[]) {
+  const kit = await buildStreetKit(mainUrl, poses);
+  await post("/api/street/kit", { id, guide: kit.guide, items: kit.items });
+  return kit;
 }
 
 export function dataUrlToFile(dataUrl: string, name: string): File {

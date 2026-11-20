@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
-import { getOrder, okImageUrl, publicStatus, refreshPayment, setPayment, upsertOrder, validCode, validId } from "@/lib/street-orders";
+import { getOrder, okImageUrl, publicStatus, refreshPayment, setPayment, upsertOrder, validCode, validId, type StreetOrder } from "@/lib/street-orders";
+import { releaseToStation, streetQueue } from "@/lib/street-print";
 
 /**
  * The guest's phone in street mode.
  *
- *   GET  ?id=<order uuid>  → the order's status (payment, printed) and its stickers
+ *   GET  ?id=<order uuid>  → the order's status (payment, where it is on the print station) and its stickers
  *   POST { id, code?, photoUrl?, mainUrl?, poses?, ideas? } → save stickers as they're made
  *   POST { id, action: "cash" } → the guest will pay the seller in cash
  *
@@ -21,11 +22,21 @@ export async function GET(request: NextRequest) {
   try {
     const order = await getOrder(id);
     if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json(publicStatus(await refreshPayment(order)), { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(await withQueue(await refreshPayment(order)), { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     console.error("[street/order] get failed:", e);
     return NextResponse.json({ error: "Status unavailable" }, { status: 500 });
   }
+}
+
+/** The guest's view, with the print station's progress folded in. */
+async function withQueue(o: StreetOrder) {
+  let queue = await streetQueue(o);
+  if (queue && !queue.verified && (o.payment === "paid" || o.collected)) {
+    await releaseToStation(o);
+    queue = { ...queue, verified: true };
+  }
+  return { ...publicStatus(o), printed: o.printed || queue?.status === "done", queue };
 }
 
 export async function POST(request: NextRequest) {

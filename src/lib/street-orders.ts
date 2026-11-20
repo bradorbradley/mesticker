@@ -4,14 +4,14 @@ import { getStripe } from "@/lib/stripe";
 
 /**
  * Street mode orders: a guest scans the seller's QR, takes a selfie and pays
- * on their own phone; the seller's phone (/street/print) picks the order up,
- * builds the sheet and hands it to the Liene app.
- *
- * Kept apart from booth_queue on purpose, so the booth's print station never
- * claims a street order.
+ * on their own phone. Once paid, a phone (the guest's, or the seller's as a
+ * backup) borders each sticker and sends the order to the same print queue
+ * as the booth (booth_queue, via /api/street/kit), so the print station
+ * laptop prints and cuts it like any booth order.
  *
  *   new → paid (Stripe confirmed) | cash (guest said they'll pay cash) | free (no Stripe set up)
- *       → printed (the seller tapped "Printed")
+ *       → queued (on the print queue; cash prints once the seller taps "Got the cash")
+ *       → printed (the station finished it, or the seller tapped "Printed")
  *
  * Neon in production; without DATABASE_URL (local dev) it lives in memory.
  */
@@ -33,13 +33,17 @@ export interface StreetOrder {
   poses: (string | null)[];
   ideas: string[];
   printed: boolean;
+  /** the seller confirmed the cash (cash orders print only then) */
+  collected: boolean;
+  /** when it went on the print queue (booth_queue, same id) */
+  queuedAt: string | null;
   createdAt: string;
   paidAt: string | null;
   printedAt: string | null;
 }
 
 /** What anyone with the order id may see (the guest's own phone). */
-export type StreetStatus = Pick<StreetOrder, "id" | "code" | "payment" | "printed" | "mainUrl" | "poses" | "ideas" | "photoUrl">;
+export type StreetStatus = Pick<StreetOrder, "id" | "code" | "payment" | "printed" | "collected" | "queuedAt" | "mainUrl" | "poses" | "ideas" | "photoUrl">;
 
 /** Seller auth: STREET_KEY, or the print station's MCP_SECRET. Header `Authorization: Bearer …`. */
 export function sellerAuthorized(req: Request) {
@@ -97,6 +101,8 @@ function ensureTable() {
       )
     `
       .then(() => sql`CREATE INDEX IF NOT EXISTS idx_street_orders_created ON street_orders(created_at)`)
+      .then(() => sql`ALTER TABLE street_orders ADD COLUMN IF NOT EXISTS collected BOOLEAN NOT NULL DEFAULT FALSE`)
+      .then(() => sql`ALTER TABLE street_orders ADD COLUMN IF NOT EXISTS queued_at TIMESTAMPTZ`)
       .catch((e) => {
         tableReady = null;
         throw e;
@@ -122,6 +128,8 @@ function fromRow(r: Row): StreetOrder {
     poses: padPoses(json<(string | null)[]>(r.poses, [])),
     ideas: json<string[]>(r.ideas, []),
     printed: Boolean(r.printed),
+    collected: Boolean(r.collected),
+    queuedAt: iso(r.queued_at),
     createdAt: iso(r.created_at)!,
     paidAt: iso(r.paid_at),
     printedAt: iso(r.printed_at),
@@ -165,7 +173,7 @@ export async function upsertOrder(id: string, patch: OrderPatch, opts: { replace
     const m = memory();
     let o = m.get(id);
     if (!o) {
-      o = { id, code: patch.code ?? "??", checkoutId: null, payment: "none", photoUrl: null, mainUrl: null, poses: padPoses([]), ideas: [], printed: false, createdAt: new Date().toISOString(), paidAt: null, printedAt: null };
+      o = { id, code: patch.code ?? "??", checkoutId: null, payment: "none", photoUrl: null, mainUrl: null, poses: padPoses([]), ideas: [], printed: false, collected: false, queuedAt: null, createdAt: new Date().toISOString(), paidAt: null, printedAt: null };
       m.set(id, o);
     }
     if (!o.printed) {
@@ -242,6 +250,28 @@ export async function setPrinted(id: string, printed: boolean) {
   await getDb()`UPDATE street_orders SET printed = ${printed}, printed_at = CASE WHEN ${printed} THEN NOW() ELSE NULL END WHERE id = ${id}`;
 }
 
+/** The order is on the print queue now. */
+export async function setQueued(id: string) {
+  if (inMemory()) {
+    const o = memory().get(id);
+    if (o && !o.queuedAt) o.queuedAt = new Date().toISOString();
+    return;
+  }
+  await ensureTable();
+  await getDb()`UPDATE street_orders SET queued_at = COALESCE(queued_at, NOW()) WHERE id = ${id}`;
+}
+
+/** The seller has the cash in hand. */
+export async function setCollected(id: string) {
+  if (inMemory()) {
+    const o = memory().get(id);
+    if (o) o.collected = true;
+    return;
+  }
+  await ensureTable();
+  await getDb()`UPDATE street_orders SET collected = TRUE WHERE id = ${id}`;
+}
+
 /** Recent orders that have a sticker (newest first). */
 export async function recentOrders(hours = 12, limit = 60): Promise<StreetOrder[]> {
   if (inMemory()) {
@@ -280,5 +310,5 @@ export async function refreshPayment(o: StreetOrder): Promise<StreetOrder> {
 }
 
 export function publicStatus(o: StreetOrder): StreetStatus {
-  return { id: o.id, code: o.code, payment: o.payment, printed: o.printed, mainUrl: o.mainUrl, poses: o.poses, ideas: o.ideas, photoUrl: o.photoUrl };
+  return { id: o.id, code: o.code, payment: o.payment, printed: o.printed, collected: o.collected, queuedAt: o.queuedAt, mainUrl: o.mainUrl, poses: o.poses, ideas: o.ideas, photoUrl: o.photoUrl };
 }

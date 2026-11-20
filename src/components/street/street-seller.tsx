@@ -4,13 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { bundlePrice, priceLabel } from "@/lib/booth-config";
 import { sounds } from "@/lib/booth-sounds";
-import { STREET_POSES, buildStreetSheet, dataUrlToFile, localImage, makeIdeas, makePoses, toDataUrl, uploadImage } from "@/lib/street-client";
+import { STREET_POSES, dataUrlToFile, healPoses, localImage, sendToStation, stickerFiles } from "@/lib/street-client";
 
 /**
- * The seller's phone in street mode (the one paired with the Liene printer).
- * New paid orders appear here with a chime; each one's sheet is built right
- * on this phone, and Print hands the finished sheet to the share sheet:
- * Save Image, then Liene app → Upload → Print.
+ * The seller's phone in street mode. The print station laptop (in the
+ * backpack, on this phone's hotspot) prints and cuts every order; this page
+ * shows each one with a chime, takes cash ("Got the cash"), sends an order to
+ * the laptop itself if the guest's phone didn't, and can save the stickers to
+ * Photos as a no-laptop fallback.
  */
 
 type Payment = "none" | "paid" | "cash" | "free";
@@ -23,6 +24,9 @@ interface Order {
   poses: (string | null)[];
   ideas: string[];
   printed: boolean;
+  collected: boolean;
+  queuedAt: string | null;
+  queue: { status: "queued" | "printing" | "done" | "failed"; stage: "preparing" | "printing" | null; verified: boolean; ahead: number } | null;
   createdAt: string;
   paidAt: string | null;
 }
@@ -190,7 +194,7 @@ export default function StreetSeller() {
                       {o.mainUrl && <img src={localImage(o.mainUrl)} alt="" className="h-12 w-12 object-contain" />}
                       <span className="font-fun text-xl font-bold">{o.code}</span>
                       <span className="t-body flex-1">{o.payment}</span>
-                      <button className="btn btn-soft !px-3 !py-1" onClick={() => api("POST", { id: o.id, action: "unprinted" })}>
+                      <button className="btn btn-soft !px-3 !py-1" onClick={() => api("POST", { id: o.id, action: o.queuedAt ? "reprint" : "unprinted" })}>
                         Print again
                       </button>
                     </div>
@@ -218,93 +222,93 @@ export default function StreetSeller() {
 
 // ================================================================ one order
 
-/** Only one heal per order per page load, however often the list refreshes. */
-const healing = new Set<string>();
+/** Only one backup send per order per page load, however often the list refreshes. */
+const sending = new Set<string>();
+/** The guest's phone sends the order itself; the seller's steps in after this long. */
+const BACKUP_AFTER_MS = 45_000;
 
 function OrderCard({ order, api }: { order: Order; api: (m: "GET" | "POST", b?: object) => Promise<unknown> }) {
-  const [sheet, setSheet] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [healed, setHealed] = useState<Record<number, string | false>>({});
-  const [healDone, setHealDone] = useState(false);
-  const [shared, setShared] = useState(false);
-  const [nonce, setNonce] = useState(0);
-  const built = useRef<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [, tick] = useState(0);
 
-  const poses = order.poses.map((p, i) => p ?? healed[i] ?? null);
-  const missing = order.poses.map((p, i) => (p ? -1 : i)).filter((i) => i >= 0);
-
-  // Make any poses the guest's phone didn't finish (it stops when they go to pay).
+  // re-check the backup timer every few seconds
   useEffect(() => {
-    if (healing.has(order.id)) return;
-    if (!missing.length) return setHealDone(true);
-    if (!order.photoUrl) return setHealDone(true);
-    healing.add(order.id);
-    (async () => {
-      try {
-        setNote(`Making ${missing.length} more pose${missing.length === 1 ? "" : "s"}…`);
-        const photo = await toDataUrl(order.photoUrl!);
-        const ideas = order.ideas.length ? order.ideas : await makeIdeas(photo);
-        await makePoses(photo, ideas, missing, async (i, img) => {
-          if (!img) return setHealed((h) => ({ ...h, [i]: false }));
-          try {
-            const url = await uploadImage(img);
-            setHealed((h) => ({ ...h, [i]: url }));
-            await api("POST", { id: order.id, action: "stickers", poses: Array.from({ length: STREET_POSES }, (_, k) => (k === i ? url : null)) });
-          } catch {
-            setHealed((h) => ({ ...h, [i]: img }));
-          }
-        });
-      } catch {
-        // print with what we have; missing poses repeat the main sticker
-      } finally {
-        setNote(null);
-        setHealDone(true);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [order.id]);
+    const t = setInterval(() => tick((n) => n + 1), 5000);
+    return () => clearInterval(t);
+  }, []);
 
-  // Build the sheet once every pose is in (or given up on).
-  const sig = `${nonce}|${order.mainUrl}|${poses.map((p) => (p ? p.slice(-24) : "-")).join(",")}`;
-  const allIn = poses.every((p) => p) || healDone;
-  useEffect(() => {
-    if (!order.mainUrl || !allIn || built.current === sig) return;
-    built.current = sig;
-    setNote("Building the sheet…");
-    buildStreetSheet(order.mainUrl, poses.map((p) => (p ? p : null)))
-      .then((png) => {
-        setSheet(png);
-        setFile(dataUrlToFile(png, `mesticker-${order.code}.png`));
-        setNote(null);
-      })
-      .catch(() => {
-        built.current = null;
-        setNote("Couldn't build the sheet. Tap Rebuild.");
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sig, allIn]);
-
-  const print = async () => {
-    if (!file || !sheet) return;
+  const send = useCallback(async () => {
+    if (!order.mainUrl || sending.has(order.id)) return;
+    sending.add(order.id);
+    setBusy(true);
+    const poses = [...order.poses];
     try {
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file] }); // iOS: Save Image · Android: Save / Liene if it's listed
-      } else {
-        const a = document.createElement("a");
-        a.href = sheet;
-        a.download = file.name;
-        a.click();
+      if (poses.some((p) => !p) && order.photoUrl) {
+        setNote("Making the missing poses…");
+        await healPoses(
+          order,
+          (i, url) => api("POST", { id: order.id, action: "stickers", poses: Array.from({ length: STREET_POSES }, (_, k) => (k === i ? url : null)) }),
+          (i, url) => {
+            if (url) poses[i] = url;
+          }
+        ).catch(() => {});
       }
-      setShared(true);
+      setNote("Sending to the printer…");
+      await sendToStation(order.id, order.mainUrl, poses);
+      setNote(null);
     } catch (e) {
-      if ((e as Error)?.name !== "AbortError") setNote("Couldn't open the share sheet. Press and hold the sheet, then Save.");
+      sending.delete(order.id);
+      setNote(`Couldn't send it: ${e instanceof Error ? e.message : "error"}. Tap Send to printer.`);
+    } finally {
+      setBusy(false);
+    }
+  }, [order, api]);
+
+  const paidFor = Date.now() - Date.parse(order.paidAt ?? order.createdAt);
+  useEffect(() => {
+    if (!order.queuedAt && order.mainUrl && paidFor > BACKUP_AFTER_MS) send();
+  }, [order.queuedAt, order.mainUrl, paidFor, send]);
+
+  const saveStickers = async () => {
+    if (!order.mainUrl) return;
+    try {
+      setNote("Getting the stickers ready…");
+      const files = await stickerFiles(order.mainUrl, order.poses, order.code);
+      setNote(null);
+      if (navigator.canShare?.({ files })) await navigator.share({ files });
+      else setNote("This phone can't share files. Use the laptop.");
+    } catch (e) {
+      setNote((e as Error)?.name === "AbortError" ? null : "Couldn't open the share sheet.");
     }
   };
 
-  const ready = poses.filter(Boolean).length;
+  const q = order.queue;
+  const awaitingCash = order.payment === "cash" && !order.collected;
+  const state = !order.queuedAt
+    ? note ?? "Waiting for the guest's phone to send it…"
+    : !q
+      ? "Sent to the printer"
+      : q.status === "failed"
+        ? "The printer reported a problem"
+        : q.status === "printing"
+          ? q.stage === "printing"
+            ? "Printing and cutting"
+            : "Laptop is laying it out"
+          : awaitingCash
+            ? "Waiting for your cash tap"
+            : !q.verified
+              ? "Queued (free test: laptop needs --include-unverified)"
+              : q.ahead > 0
+                ? `In line, ${q.ahead} ahead`
+                : "Up next on the laptop";
+  const ready = order.poses.filter(Boolean).length;
   const pay =
-    order.payment === "paid" ? { t: "Paid", c: "#15803d" } : order.payment === "cash" ? { t: `Cash: collect ${priceLabel(bundlePrice(1))}`, c: "#b45309" } : { t: "Free (test)", c: "#6b7280" };
+    order.payment === "paid"
+      ? { t: "Paid", c: "#15803d" }
+      : order.payment === "cash"
+        ? { t: order.collected ? "Cash collected" : `Cash: collect ${priceLabel(bundlePrice(1))}`, c: order.collected ? "#15803d" : "#b45309" }
+        : { t: "Free (test)", c: "#6b7280" };
 
   return (
     <div className="card flex flex-col p-4" style={{ gap: 12 }}>
@@ -324,44 +328,38 @@ function OrderCard({ order, api }: { order: Order; api: (m: "GET" | "POST", b?: 
         </div>
       </div>
 
-      {sheet ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={sheet} alt={`Sheet ${order.code}`} className="mx-auto w-[62%] rounded-lg border border-[#eee8ff] bg-[repeating-conic-gradient(#f3f0fa_0_25%,#fff_0_50%)] bg-[length:16px_16px]" />
-      ) : (
-        <div className="t-body py-6 text-center">{note ?? "Waiting for the stickers…"}</div>
-      )}
+      <div className="t-lead text-center">{state}</div>
 
-      <button className="btn btn-lg btn-main" disabled={!file} onClick={print}>
-        🖨️ Print
-      </button>
-      {shared && (
-        <ol className="t-body list-decimal pl-5" style={{ lineHeight: 1.5 }}>
-          <li>
-            Tap <b>Save Image</b> (it goes to Photos).
-          </li>
-          <li>
-            Open <b>Liene</b> → <b>Upload</b> → pick the newest photo.
-          </li>
-          <li>Keep the stickers as they are (it&apos;s already cut-ready), check the preview, then <b>Print</b>.</li>
-        </ol>
+      {awaitingCash && (
+        <button className="btn btn-lg btn-main" onClick={() => api("POST", { id: order.id, action: "collected" })}>
+          💵 Got the cash: print it
+        </button>
       )}
+      {!order.queuedAt && (
+        <button className="btn btn-soft" disabled={busy} onClick={send}>
+          {busy ? "Sending…" : "🖨️ Send to printer now"}
+        </button>
+      )}
+      {note && order.queuedAt && <div className="t-body">{note}</div>}
       <div className="flex gap-2">
         <button className="btn btn-soft flex-1" onClick={() => api("POST", { id: order.id, action: "printed" })}>
           ✓ Printed
         </button>
-        <button
-          className="btn btn-soft"
-          onClick={() => {
-            setSheet(null);
-            setFile(null);
-            setHealDone(true);
-            setNonce((n) => n + 1);
-          }}
-        >
-          Rebuild
-        </button>
+        {order.queuedAt && (q?.status === "failed" || q?.status === "done") && (
+          <button className="btn btn-soft flex-1" onClick={() => api("POST", { id: order.id, action: "reprint" })}>
+            Print again
+          </button>
+        )}
       </div>
-      {note && sheet && <div className="t-body">{note}</div>}
+      <details>
+        <summary className="t-body opacity-70">No laptop? Save the stickers</summary>
+        <div className="mt-2 flex flex-col" style={{ gap: 8 }}>
+          <button className="btn btn-soft" onClick={saveStickers}>
+            📲 Save the {Math.min(8, ready + 1)} stickers to Photos
+          </button>
+          <p className="t-body">Then Liene → Upload → pick them all → Print. Each one is its own image, so the printer cuts each.</p>
+        </div>
+      </details>
     </div>
   );
 }
