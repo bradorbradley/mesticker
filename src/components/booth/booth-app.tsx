@@ -679,7 +679,17 @@ const FLOATER_SPOTS: React.CSSProperties[] = [
 ];
 
 function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOfPaper: boolean; freeMode: boolean }) {
-  const examples = BOOTH_STYLES.filter((s) => s.id !== "random").slice(0, 4);
+  // on the booth laptop: a QR so guests can do the whole thing on their own phone (orders still print here)
+  const phone = useIsPhone();
+  const [phoneQr, setPhoneQr] = useState<string | null>(null);
+  useEffect(() => {
+    if (phone) return;
+    QRCode.toDataURL(`${location.origin}/booth`, { width: 360, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } })
+      .then(setPhoneQr)
+      .catch(() => {});
+  }, [phone]);
+  // the bottom-right example makes room for the phone QR
+  const examples = BOOTH_STYLES.filter((s) => s.id !== "random").slice(0, phone ? 4 : 3);
   const spots = [
     { left: "2%", top: "4%", rotate: -12 },
     { right: "2%", top: "0%", rotate: 10 },
@@ -712,7 +722,7 @@ function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOf
           <h1 className="t-hero">
             Turn yourself into a <span className="pop">sticker!</span>
           </h1>
-          <p className="t-lead max-w-[30ch]">Pick a cartoon style, snap a pic, and peel off real stickers printed right here.</p>
+          <p className="t-lead max-w-[30ch]">Snap a pic, pick your sticker sheets, and peel off real stickers printed right here.</p>
 
           {outOfPaper ? (
             <div className="t-h3 card w-fit" style={{ padding: `${u(1.2)} ${u(2.4)}` }}>
@@ -729,7 +739,7 @@ function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOf
           )}
 
           <ol className="flex flex-wrap short:hidden portrait:justify-center" style={{ gap: `${u(0.8)} ${u(1.6)}` }}>
-            {["Pick a style", "Strike a pose", "Pay by phone", "Peel & stick"].map((t, i) => (
+            {["Snap a pic", "Pick your sheets", "Pay by phone", "Peel & stick"].map((t, i) => (
               <li key={t} className="t-body flex items-center" style={{ gap: u(0.6) }}>
                 <span
                   className="font-fun flex items-center justify-center rounded-full bg-white font-bold text-[var(--purple)] shadow"
@@ -757,6 +767,16 @@ function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOf
             </motion.div>
           ))}
           <Mascot className="relative z-10 h-[80%] max-h-full" mood="idle" />
+          {phoneQr && !phone && !outOfPaper && (
+            <div className="card absolute bottom-[4%] right-[2%] z-20 flex items-center short:hidden" style={{ gap: u(1), padding: u(1) }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={phoneQr} alt="Scan to use your phone" className="shrink-0 bg-white" style={{ width: `max(96px, ${u(11)})`, height: `max(96px, ${u(11)})` }} />
+              <div style={{ maxWidth: "11em" }}>
+                <div className="t-h3">📱 Use your phone</div>
+                <div className="t-body">Scan to snap and pick your sheets on your own phone. It prints right here.</div>
+              </div>
+            </div>
+          )}
         </div>
       </Split>
     </button>
