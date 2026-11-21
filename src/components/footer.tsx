@@ -6,6 +6,9 @@ export default function Footer() {
       <div className="mx-auto max-w-md px-6 py-8 flex flex-col gap-4 text-center">
         <p className="font-display font-bold text-sm gradient-text">MeSticker</p>
         <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+          <Link href="/events" className="font-semibold text-primary hover:text-foreground">
+            Book us for events
+          </Link>
           <Link href="/privacy" className="hover:text-foreground">
             Privacy
           </Link>
