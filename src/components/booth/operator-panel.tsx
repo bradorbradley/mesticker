@@ -1,12 +1,33 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { SHEETS_PER_CASSETTE } from "@/lib/booth-config";
+
+/**
+ * Which AI draws the stickers. "default" = whatever Vercel's env vars say.
+ * Nano Banana = Google Gemini Flash Image (needs GEMINI_API_KEY in Vercel).
+ */
+export type ImageModel = "default" | "openai" | "nano" | "mixed";
+export const IMAGE_MODELS: { id: ImageModel; label: string; hint: string }[] = [
+  { id: "default", label: "Default", hint: "whatever Vercel is set to" },
+  { id: "openai", label: "OpenAI", hint: "best match to the web app, ~12–15 s" },
+  { id: "mixed", label: "Mixed", hint: "OpenAI main sticker, Nano Banana sheet stickers" },
+  { id: "nano", label: "Nano Banana", hint: "Google, fastest" },
+];
+/** What the booth sends as `provider` for the main sticker and the sheet stickers. */
+export function providersFor(m: ImageModel | undefined): { hero?: string; extras?: string } {
+  if (m === "openai") return { hero: "openai", extras: "openai" };
+  if (m === "nano") return { hero: "gemini", extras: "gemini" };
+  if (m === "mixed") return { hero: "openai", extras: "gemini" };
+  return {};
+}
 
 export interface BoothSettings {
   sheetsLeft: number;
   freeMode: boolean;
   salesToday: number;
   salesDate: string;
+  imageModel?: ImageModel;
 }
 
 export interface GenStats {
@@ -38,6 +59,15 @@ export default function OperatorPanel({
   onClose: () => void;
 }) {
   const row = "flex items-center justify-between gap-6 border-b border-[#eee8ff] py-4";
+  const [keys, setKeys] = useState<{ openai: boolean; gemini: boolean } | null>(null);
+  useEffect(() => {
+    fetch("/api/booth/providers")
+      .then((r) => r.json())
+      .then((d) => setKeys(d.keys))
+      .catch(() => {});
+  }, []);
+  const model = settings.imageModel ?? "default";
+  const needsGemini = model === "nano" || model === "mixed";
   const small = "btn btn-soft";
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(26,26,46,0.55)]" onClick={onClose}>
@@ -84,6 +114,27 @@ export default function OperatorPanel({
         <div className={row}>
           <div className="text-xl font-semibold">Prints today</div>
           <span className="t-h2">{settings.salesToday}</span>
+        </div>
+
+        <div className={`${row} flex-wrap`}>
+          <div>
+            <div className="text-xl font-semibold">Image model</div>
+            <div className="text-[var(--ink-2)]">{IMAGE_MODELS.find((m) => m.id === model)?.hint}</div>
+            {keys && (
+              <div className={keys.gemini ? "text-[#15803d]" : needsGemini ? "font-semibold text-[var(--pink)]" : "text-[var(--ink-2)]"}>
+                {keys.gemini
+                  ? "✓ Nano Banana key found"
+                  : "Nano Banana needs GEMINI_API_KEY in Vercel (then redeploy). Until then it uses OpenAI."}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {IMAGE_MODELS.map((m) => (
+              <button key={m.id} className={model === m.id ? "btn btn-main" : small} onClick={() => update({ imageModel: m.id })}>
+                {m.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className={row}>

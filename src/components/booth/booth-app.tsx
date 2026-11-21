@@ -23,7 +23,7 @@ import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import Mascot from "./mascot";
 import BoothCamera from "./booth-camera";
-import OperatorPanel, { type BoothSettings, type GenStats } from "./operator-panel";
+import OperatorPanel, { providersFor, type BoothSettings, type GenStats } from "./operator-panel";
 import { u } from "./units";
 import LoadingState from "@/components/loading-state";
 import { WAIT_GAMES, type WaitGameId } from "./games/wait-games";
@@ -205,6 +205,9 @@ export default function BoothApp() {
   };
 
   useEffect(() => setSettings(loadSettings()), []);
+  // the staff panel's image model, read when a request goes out (generate() is a stable callback)
+  const modelRef = useRef(providersFor(undefined));
+  modelRef.current = providersFor(settings?.imageModel);
   const updateSettings = useCallback((patch: Partial<BoothSettings>) => {
     setSettings((s) => {
       const next = { ...(s ?? loadSettings()), ...patch };
@@ -259,7 +262,7 @@ export default function BoothApp() {
     printCopy.current = fetch("/api/booth/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image, styleId: resolvedStyle, tier: "print" }),
+      body: JSON.stringify({ image, styleId: resolvedStyle, tier: "print", provider: modelRef.current.hero }),
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => (d?.generatedImage as string | undefined) ?? null)
@@ -297,7 +300,7 @@ export default function BoothApp() {
     if (!image || variantJobs.current[kind]) return;
     const id = genId.current;
     const post = (body: object) =>
-      fetch("/api/booth/pose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) =>
+      fetch("/api/booth/pose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, provider: modelRef.current.extras }) }).then((r) =>
         r.ok ? r.json() : Promise.reject(new Error(String(r.status)))
       );
     const retry = <T,>(fn: () => Promise<T>) => fn().catch(() => new Promise<T>((ok, no) => setTimeout(() => fn().then(ok, no), 3000)));
@@ -335,7 +338,7 @@ export default function BoothApp() {
     const main = fetch("/api/booth/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image, styleId: BOOTH_STYLE }),
+      body: JSON.stringify({ image, styleId: BOOTH_STYLE, provider: modelRef.current.hero }),
     });
     variantPhoto.current = image;
     startVariantsRef.current("pose");
