@@ -13,9 +13,12 @@ import { u } from "./units";
 export default function BoothCamera({
   onCapture,
   onBack,
+  onMobile,
 }: {
   onCapture: (photo: string) => void;
   onBack: () => void;
+  /** booth laptop: show "Take from mobile" (QR → the guest's phone takes the photo) */
+  onMobile?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -187,6 +190,11 @@ export default function BoothCamera({
                 <button className="btn btn-soft" onClick={() => fileRef.current?.click()}>
                   Use a photo instead
                 </button>
+                {onMobile && (
+                  <button className="btn btn-soft" onClick={onMobile}>
+                    📱 Take from mobile
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -237,6 +245,11 @@ export default function BoothCamera({
               <button className="btn btn-soft" disabled={count !== null} onClick={() => fileRef.current?.click()}>
                 🖼️ Upload a photo
               </button>
+              {onMobile && (
+                <button className="btn btn-soft" disabled={count !== null} onClick={onMobile}>
+                  📱 Take from mobile
+                </button>
+              )}
               <button className="btn btn-lg btn-main" disabled={!ready || count !== null} onClick={startCountdown}>
                 {count !== null ? "Smile! 😁" : "📸 I'm ready"}
               </button>

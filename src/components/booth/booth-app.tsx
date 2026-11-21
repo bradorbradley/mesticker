@@ -483,6 +483,115 @@ export default function BoothApp() {
   const outOfPaper = settings !== null && settings.sheetsLeft <= 0;
   const freeMode = settings?.freeMode ?? BOOTH_FREE_MODE;
 
+  // ---- "Take from mobile": the guest's phone takes the photo, then either device picks sheets / pays.
+  // This laptop stays the brain (it makes the stickers and sends the print order); the phone
+  // follows through /api/booth/pair. Both poll every 1.5 s.
+  const isPhone = useIsPhone();
+  const [pairCode, setPairCode] = useState<string | null>(null);
+  const [pairQr, setPairQr] = useState<string | null>(null);
+  const [pairOpen, setPairOpen] = useState(false);
+  const [phoneConnected, setPhoneConnected] = useState(false);
+  const [payShare, setPayShare] = useState<{ url: string; payFor: string } | null>(null);
+  const pairSeen = useRef({ photoAt: "", seq: 0, print: 0, startedAt: 0 });
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  const phonePrintRef = useRef<() => void>(() => {});
+  phonePrintRef.current = () => {
+    if (freeMode && stepRef.current === "sheets" && !paid && picked.length) startPrint();
+  };
+
+  const startPairing = useCallback(() => {
+    sounds.tap();
+    const rand = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => (b % 36).toString(36)).join("");
+    const code = rand + Date.now().toString(36).slice(-4);
+    pairSeen.current = { photoAt: "", seq: 0, print: 0, startedAt: Date.now() };
+    setPairCode(code);
+    setPhoneConnected(false);
+    setPayShare(null);
+    setPairQr(null);
+    setPairOpen(true);
+    QRCode.toDataURL(`${location.origin}/booth/snap?p=${code}`, { width: 520, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } })
+      .then(setPairQr)
+      .catch(() => {});
+  }, []);
+
+  const onPayUrl = useCallback((url: string | null, sheets: SheetKind[]) => {
+    const key = sheets.join("+");
+    setPayShare((cur) => (url ? { url, payFor: key } : cur?.payFor === key ? null : cur));
+  }, []);
+
+  // follow the phone: its photo, sheet changes, free-mode print
+  useEffect(() => {
+    if (!pairCode) return;
+    let alive = true;
+    const tick = async () => {
+      try {
+        const d = await (await fetch(`/api/booth/pair?p=${pairCode}`, { cache: "no-store" })).json();
+        if (!alive) return;
+        if (d.connectedAt) {
+          setPhoneConnected(true);
+          // the guest is busy on their phone: don't idle-reset the booth under them (for up to 10 min)
+          if (Date.now() - pairSeen.current.startedAt < 10 * 60_000) lastTouch.current = Date.now();
+        }
+        if (d.photoAt && d.photoAt !== pairSeen.current.photoAt) {
+          pairSeen.current.photoAt = d.photoAt;
+          if (stepRef.current === "camera" || stepRef.current === "attract") {
+            const { photo } = await (await fetch(`/api/booth/pair?p=${pairCode}&photo=1`, { cache: "no-store" })).json();
+            if (alive && photo) {
+              setPairOpen(false);
+              sounds.success();
+              setPhoto(photo);
+              generate(photo);
+            }
+          }
+        }
+        const ph = d.phone ?? {};
+        if (ph.seq && ph.seq > pairSeen.current.seq) {
+          pairSeen.current.seq = ph.seq;
+          if (Array.isArray(ph.picked) && ph.picked.length) setPicked(ph.picked as SheetKind[]);
+        }
+        if (ph.print && ph.print > pairSeen.current.print) {
+          pairSeen.current.print = ph.print;
+          phonePrintRef.current();
+        }
+      } catch {}
+    };
+    tick();
+    const id = setInterval(tick, 1500);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [pairCode, generate]);
+
+  // tell the phone what this screen shows
+  const pairPayUrl = payShare && payShare.payFor === picked.join("+") ? payShare.url : null;
+  useEffect(() => {
+    if (!pairCode) return;
+    const state = { step, picked, sticker: digitalUrl, payUrl: pairPayUrl, payFor: pairPayUrl ? picked.join("+") : null, freeMode, paid };
+    const t = setTimeout(() => {
+      fetch("/api/booth/pair", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ p: pairCode, role: "laptop", state }) }).catch(() => {});
+    }, 150);
+    return () => clearTimeout(t);
+  }, [pairCode, step, picked, digitalUrl, pairPayUrl, freeMode, paid]);
+
+  // a new guest (reset / idle): end the pairing and tell the old phone
+  const pairCodeRef = useRef(pairCode);
+  pairCodeRef.current = pairCode;
+  useEffect(() => {
+    if (step !== "attract" || !pairCodeRef.current) return;
+    const code = pairCodeRef.current;
+    fetch("/api/booth/pair", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ p: code, role: "laptop", state: { step: "attract", picked: [], sticker: null, payUrl: null, payFor: null, freeMode, paid: false } }),
+    }).catch(() => {});
+    setPairCode(null);
+    setPairOpen(false);
+    setPayShare(null);
+    setPhoneConnected(false);
+  }, [step, freeMode]);
+
   return (
     <div className="booth fixed inset-0 z-40 flex flex-col overflow-hidden">
       <TopBar
@@ -526,9 +635,11 @@ export default function BoothApp() {
               <BoothCamera
                 onBack={() => setStep("attract")}
                 onCapture={(p) => {
+                  setPairOpen(false);
                   setPhoto(p);
                   generate(p);
                 }}
+                onMobile={isPhone ? undefined : startPairing}
               />
             )}
             {step === "generating" && <Generating photo={photo} ready={stickerReady} />}
@@ -562,6 +673,7 @@ export default function BoothApp() {
                 }}
                 onPaid={startPrint}
                 onCheckout={prepareOrder}
+                onPayUrl={pairCode ? onPayUrl : undefined}
               />
             )}
             {step === "printing" && <PrintKit guides={guides} kit={kit} order={printOrder} onDone={() => setStep("done")} />}
@@ -569,6 +681,15 @@ export default function BoothApp() {
           </motion.div>
         </AnimatePresence>
       </main>
+
+      {pairOpen && step === "camera" && (
+        <PhonePairOverlay qr={pairQr} connected={phoneConnected} onClose={() => setPairOpen(false)} />
+      )}
+      {pairCode && phoneConnected && !pairOpen && (step === "generating" || step === "sheets" || step === "reveal") && (
+        <div className="t-body pointer-events-none fixed bottom-3 left-1/2 z-40 -translate-x-1/2 rounded-full bg-white/90 px-4 py-1 shadow">
+          📱 Phone connected: pick sheets or pay on either screen
+        </div>
+      )}
 
       {operatorOpen && settings && (
         <OperatorPanel
@@ -587,6 +708,59 @@ export default function BoothApp() {
         />
       )}
     </div>
+  );
+}
+
+// ================================================================ take from mobile
+
+/** QR for the guest's phone: snap a selfie or pick a photo there, the stickers appear here. */
+function PhonePairOverlay({ qr, connected, onClose }: { qr: string | null; connected: boolean; onClose: () => void }) {
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(26,26,46,0.55)]"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      onClick={onClose}
+    >
+      <motion.div
+        className="card flex items-center bg-white landscape:flex-row portrait:flex-col"
+        style={{ gap: u(3), padding: u(3), maxWidth: "92vw" }}
+        initial={{ scale: 0.9 }}
+        animate={{ scale: 1 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex aspect-square shrink-0 items-center justify-center bg-white" style={{ width: `clamp(200px, ${u(30)}, 70vw)` }}>
+          {qr ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={qr} alt="Scan with your phone" className="h-full w-full" />
+          ) : (
+            <motion.span style={{ fontSize: u(5) }} animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
+              ✨
+            </motion.span>
+          )}
+        </div>
+        <div className="flex max-w-md flex-col" style={{ gap: u(1.2) }}>
+          <h2 className="t-h2">
+            Use your <span className="pop">phone</span>
+          </h2>
+          <ol className="t-lead" style={{ display: "grid", gap: u(0.6) }}>
+            <li>1. Scan with your phone camera</li>
+            <li>2. Snap a selfie or pick a photo</li>
+            <li>3. Your stickers appear right here. Pick sheets and pay on your phone or this screen</li>
+          </ol>
+          {connected ? (
+            <motion.div className="t-lead font-bold text-[#15803d]" animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.6, repeat: Infinity }}>
+              📱 Phone connected: waiting for your photo…
+            </motion.div>
+          ) : (
+            <div className="t-body opacity-70">Waiting for your phone…</div>
+          )}
+          <button className="btn btn-soft w-fit" onClick={onClose}>
+            ← Use this camera instead
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -911,6 +1085,7 @@ function SheetShop({
   onRetake,
   onPaid,
   onCheckout,
+  onPayUrl,
 }: {
   photo: string | null;
   sticker: string;
@@ -924,6 +1099,8 @@ function SheetShop({
   onRetake: () => void;
   onPaid: (checkoutId?: string) => void;
   onCheckout: (checkoutId: string) => Promise<void>;
+  /** the live Stripe checkout for these sheets (shared with a paired phone) */
+  onPayUrl?: (url: string | null, sheets: SheetKind[]) => void;
 }) {
   const [previews, setPreviews] = useState<Partial<Record<SheetKind, string>>>({});
   const scroller = useRef<HTMLDivElement>(null);
@@ -1120,7 +1297,7 @@ function SheetShop({
                 🖨️ Print {count === 1 ? "my sheet" : `my ${count} sheets`} · {count * STICKERS_PER_SHEET} stickers
               </button>
             ) : (
-              <PayWithQr key={picked.join("+")} sheets={picked} onPaid={onPaid} onCheckout={onCheckout} compact={phone} />
+              <PayWithQr key={picked.join("+")} sheets={picked} onPaid={onPaid} onCheckout={onCheckout} onPayUrl={onPayUrl} compact={phone} />
             ))}
         </div>
       </section>
@@ -1132,11 +1309,13 @@ function PayWithQr({
   sheets,
   onPaid,
   onCheckout,
+  onPayUrl,
   compact = false,
 }: {
   sheets: SheetKind[];
   onPaid: (checkoutId?: string) => void;
   onCheckout: (checkoutId: string) => Promise<void>;
+  onPayUrl?: (url: string | null, sheets: SheetKind[]) => void;
   /** phone: price + a big Pay button, QR on request */
   compact?: boolean;
 }) {
@@ -1148,6 +1327,8 @@ function PayWithQr({
   const [state, setState] = useState<"loading" | "waiting" | "free" | "error">("loading");
   const paidRef = useRef(false);
   const price = bundlePrice(sheets.length);
+  const onPayUrlRef = useRef(onPayUrl);
+  onPayUrlRef.current = onPayUrl;
 
   useEffect(() => {
     let alive = true;
@@ -1169,7 +1350,12 @@ function PayWithQr({
         setState("waiting");
         onCheckout(data.id)
           .catch((e) => console.error("order pre-send failed", e))
-          .finally(() => alive && setSentAhead(true));
+          .finally(() => {
+            if (!alive) return;
+            setSentAhead(true);
+            // a paired phone can pay this checkout too (the order is already at the print station)
+            onPayUrlRef.current?.(data.url, sheets);
+          });
         poll = setInterval(async () => {
           try {
             const r = await fetch(`/api/booth/checkout?id=${data.id}`);
@@ -1190,6 +1376,7 @@ function PayWithQr({
       alive = false;
       clearTimeout(start);
       if (poll) clearInterval(poll);
+      onPayUrlRef.current?.(null, sheets);
     };
   }, [sheets, onPaid, onCheckout]);
 
