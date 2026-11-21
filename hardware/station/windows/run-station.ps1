@@ -34,5 +34,8 @@ while ($true) {
   Add-Content $log "$(Get-Date -Format o) RUNNER autopilot exited with code $code, restarting"
   # back off if it keeps dying straight away
   if (((Get-Date) - $t0).TotalSeconds -lt 30) { $fast++ } else { $fast = 0 }
+  # node keeps dying on launch (e.g. 0xC0000142 when this long-running session goes bad):
+  # quit, and Task Scheduler's 1-minute watchdog starts a fresh runner in a clean session
+  if ($fast -ge 5 -or $code -eq 3) { Add-Content $log "$(Get-Date -Format o) RUNNER handing over to a fresh runner"; exit 1 }
   Start-Sleep -Seconds ([Math]::Min(60, 3 * [Math]::Max(1, $fast)))
 }

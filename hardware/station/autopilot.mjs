@@ -53,7 +53,17 @@ const run = (script, ...args) => execFileSync(process.execPath, [join(HERE, scri
 const runAsync = (script, ...args) => new Promise((res) => execFile(process.execPath, [join(HERE, script), ...args], { env: process.env, windowsHide: true }, (e, out) => res(e ? null : out)));
 const handled = () => new Set(existsSync(HANDLED) ? readFileSync(HANDLED, "utf8").split(/\r?\n/).filter(Boolean) : []);
 const remember = (...ids) => appendFileSync(HANDLED, ids.filter(Boolean).map((i) => i + "\n").join(""));
-const errText = (e) => String(e?.stderr || e?.message || e).trim().split("\n").filter(Boolean).pop() ?? "unknown error";
+const errText = (e) => {
+  // child processes that can't even start (0xC0000142): this process tree has gone bad.
+  // Exit 3 so the runner hands over to a fresh one instead of failing every check.
+  if (e?.status === 3221225794 || e?.status === -1073741502 || e?.code === 3221225794) {
+    if ((errText.dead = (errText.dead ?? 0) + 1) >= 3) {
+      console.error("child processes fail to start (0xC0000142): restarting the station");
+      process.exit(3);
+    }
+  }
+  return String(e?.stderr || e?.message || e).trim().split("\n").filter(Boolean).pop() ?? "unknown error";
+};
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => {
   const line = `${new Date().toISOString()} ${a.join(" ")}`;
