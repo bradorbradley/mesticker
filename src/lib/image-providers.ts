@@ -37,12 +37,15 @@ export function activeProvider(): ImageProvider {
 /**
  * The 14 small sheet stickers (poses / expressions, ~1.1" printed) can use a
  * faster provider than the hero: BOOTH_EXTRAS_PROVIDER=gemini|fal|openai
- * (default: same as the hero). On OpenAI they use BOOTH_EXTRA_QUALITY
+ * (default: Nano Banana if a Gemini key is set, else the same as the hero). On OpenAI they use BOOTH_EXTRA_QUALITY
  * (default "low": roughly twice as fast, plenty for a 1" sticker).
  */
 export function extrasProvider(): ImageProvider {
   const p = (process.env.BOOTH_EXTRAS_PROVIDER || "").toLowerCase();
-  return p === "gemini" || p === "fal" || p === "openai" ? p : activeProvider();
+  if (p === "gemini" || p === "fal" || p === "openai") return p;
+  // unset: Nano Banana when there's a Gemini key (faster, and spreads the 14
+  // stickers off OpenAI's rate limit); the hero stays on activeProvider()
+  return hasKey("gemini") ? "gemini" : activeProvider();
 }
 
 const geminiKey = () =>

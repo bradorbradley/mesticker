@@ -9,7 +9,7 @@ import { SHEETS_PER_CASSETTE } from "@/lib/booth-config";
  */
 export type ImageModel = "default" | "openai" | "nano" | "mixed";
 export const IMAGE_MODELS: { id: ImageModel; label: string; hint: string }[] = [
-  { id: "default", label: "Default", hint: "whatever Vercel is set to" },
+  { id: "default", label: "Default", hint: "OpenAI main sticker; Nano Banana sheet stickers when the Google key is set" },
   { id: "openai", label: "OpenAI", hint: "best match to the web app, ~12–15 s" },
   { id: "mixed", label: "Mixed", hint: "OpenAI main sticker, Nano Banana sheet stickers" },
   { id: "nano", label: "Nano Banana", hint: "Google, fastest" },
