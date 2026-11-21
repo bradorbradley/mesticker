@@ -828,6 +828,19 @@ function bundleHint(count: number) {
   return `Add ${count === 1 ? "another" : "the last one"} for just ${priceLabel(bundlePrice(count + 1) - bundlePrice(count))}`;
 }
 
+/** A phone held upright: the guest is on their own device, so "Pay" beats a QR. */
+function useIsPhone() {
+  const [phone, setPhone] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(orientation: portrait) and (max-width: 820px)");
+    const on = () => setPhone(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return phone;
+}
+
 /** Where each sticker sits on a pack12 sheet, as % of the sheet (for the loading spinners). */
 const SLOT_CENTERS = LAYOUTS[SHEET_LAYOUT].map(([x, y, w, h]) => ({ left: ((x + w / 2) / SHEET_W) * 100, top: ((y + h / 2) / SHEET_H) * 100, size: (Math.min(w, h) / SHEET_W) * 100 }));
 
@@ -897,6 +910,17 @@ function SheetShop({
 
   const count = picked.length;
   const tooMany = count > sheetsLeft;
+  const phone = useIsPhone();
+  // carousel (phone): which sheet is centred, and jumping to one
+  const carousel = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(0);
+  const onCarouselScroll = () => {
+    const el = carousel.current;
+    if (!el || !el.children.length) return;
+    const w = (el.children[0] as HTMLElement).offsetWidth;
+    setShown(Math.max(0, Math.min(SHEET_DESIGNS.length - 1, Math.round(el.scrollLeft / (w || 1)))));
+  };
+  const scrollToSheet = (i: number) => (carousel.current?.children[i] as HTMLElement | undefined)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
 
   return (
     <div ref={scroller} className="h-full w-full overflow-y-auto overflow-x-hidden scroll-smooth">
@@ -924,48 +948,59 @@ function SheetShop({
         </div>
       </section>
 
-      {/* 2 — the sheets + the order */}
+      {/* 2 — the sheets + the order.
+          Phone (portrait): one big sheet at a time in a swipe carousel, a big Add button under
+          each, and a compact pay bar pinned to the bottom.
+          Laptop (landscape): the three sheets side by side, the order + QR beside them. */}
       <section
         ref={sheetsRef}
-        className="flex min-h-full flex-col landscape:flex-row short:!flex-col"
-        style={{ gap: u(1.4), padding: `${u(1.2)} ${u(2)} ${u(1.6)}` }}
+        className="relative flex min-h-full flex-col landscape:flex-row short:!flex-col"
+        style={{ gap: u(1.2), paddingTop: u(1) }}
       >
-        <div className="flex min-w-0 flex-1 flex-col" style={{ gap: u(0.8) }}>
-          <h2 className="t-h2">
-            Pick your <span className="pop">sheets</span>
-          </h2>
-          <div className="t-body">12 stickers on every sheet. Tap to add or remove.</div>
-          <div className="grid grid-cols-3" style={{ gap: u(1.2) }}>
+        <div className="flex min-w-0 flex-1 flex-col" style={{ gap: u(0.6) }}>
+          <div style={{ padding: `0 ${u(2)}` }}>
+            <h2 className="t-h2">
+              Pick your <span className="pop">sheets</span>
+            </h2>
+            <div className="t-body">
+              12 stickers each · <span className="landscape:hidden">swipe to see all 3 · </span>
+              <span className="text-[#15803d]">{bundleHint(count)}</span>
+            </div>
+          </div>
+          <div
+            ref={carousel}
+            onScroll={onCarouselScroll}
+            className="flex snap-x snap-mandatory overflow-x-auto overflow-y-hidden landscape:grid landscape:grid-cols-3 landscape:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            style={{ gap: u(1.2), padding: `${u(0.6)} ${u(2)} ${u(0.8)}`, scrollPaddingInline: u(2) }}
+          >
             {SHEET_DESIGNS.map((d) => {
               const on = picked.includes(d.id);
               const srcs = sheetSources(d.id, sticker, variants, true);
               const loading = srcs.flatMap((src, i) => (src ? [] : [i]));
               return (
-                <motion.button
+                <div
                   key={d.id}
-                  onClick={() => onToggle(d.id)}
-                  className={cn(
-                    "relative flex flex-col items-center rounded-3xl border-[5px] bg-white/80 text-center transition-colors",
-                    on ? "border-[var(--purple)] bg-white shadow-[0_12px_32px_rgba(91,63,214,0.25)]" : "border-transparent opacity-80"
-                  )}
-                  style={{ padding: u(0.8), gap: u(0.5) }}
-                  whileTap={{ scale: 0.97 }}
-                  aria-pressed={on}
+                  className="flex shrink-0 snap-center flex-col items-center portrait:w-[min(70vw,calc((100dvh-420px)*0.582),420px)] landscape:w-auto"
+                  style={{ gap: u(0.7) }}
                 >
-                  <span
-                    className={cn("absolute right-2 top-2 z-10 rounded-full font-bold shadow", on ? "bg-[var(--purple)] text-white" : "bg-white text-[var(--ink)]")}
-                    style={{ padding: `${u(0.2)} ${u(0.8)}`, fontSize: `max(12px, ${u(1.2)})` }}
+                  {/* the sheet itself, big, like the real thing on the table */}
+                  <motion.button
+                    onClick={() => onToggle(d.id)}
+                    className={cn(
+                      "relative w-full bg-white transition-shadow landscape:w-[min(100%,calc((100dvh-370px)*0.582))]",
+                      on ? "shadow-[0_0_0_5px_var(--purple),0_18px_40px_rgba(91,63,214,0.30)]" : "shadow-[0_12px_30px_rgba(26,26,46,0.16)]"
+                    )}
+                    style={{ aspectRatio: "3.9 / 6.7", borderRadius: 14 }}
+                    whileTap={{ scale: 0.98 }}
+                    aria-pressed={on}
+                    aria-label={`${d.name} sheet`}
                   >
-                    {on ? "✓ Added" : "+ Add"}
-                  </span>
-                  <div className="relative w-full bg-white shadow-sm" style={{ aspectRatio: "3.9 / 6.7", borderRadius: 10 }}>
                     {previews[d.id] ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={previews[d.id]} alt={`${d.name} sheet`} className="h-full w-full rounded-[10px]" />
+                      <img src={previews[d.id]} alt={`${d.name} sheet`} className="h-full w-full rounded-[14px]" />
                     ) : (
-                      <div className="h-full w-full rounded-[10px] bg-[var(--lav)]" />
+                      <div className="h-full w-full rounded-[14px] bg-[var(--lav)]" />
                     )}
-                    {/* a spinner on every sticker still being drawn */}
                     {loading.map((i) => (
                       <span
                         key={i}
@@ -979,48 +1014,67 @@ function SheetShop({
                         />
                       </span>
                     ))}
+                    {on && (
+                      <span className="absolute -right-2 -top-2 flex items-center justify-center rounded-full bg-[var(--purple)] font-bold text-white shadow-lg" style={{ width: u(3.2), height: u(3.2), minWidth: 30, minHeight: 30, fontSize: `max(15px, ${u(1.6)})` }}>
+                        ✓
+                      </span>
+                    )}
+                  </motion.button>
+                  <div className="text-center">
+                    <div className="t-h3" style={{ fontSize: `max(17px, ${u(1.8)})` }}>
+                      {d.emoji} {d.name}
+                    </div>
+                    <div className="t-body" style={{ fontSize: `max(13px, ${u(1.1)})` }}>
+                      {loading.length ? `✨ drawing ${loading.length} more…` : d.blurb}
+                    </div>
                   </div>
-                  <div className="t-h3" style={{ fontSize: `max(13px, ${u(1.6)})` }}>
-                    {d.emoji} {d.name}
-                  </div>
-                  <div className="t-body short:hidden" style={{ fontSize: `max(11px, ${u(1.05)})` }}>
-                    {loading.length ? `✨ drawing ${loading.length} more…` : d.blurb}
-                  </div>
-                </motion.button>
+                  <button
+                    className={cn("btn w-full", on ? "btn-main" : "btn-soft")}
+                    onClick={() => onToggle(d.id)}
+                    style={{ maxWidth: 320 }}
+                  >
+                    {on ? "✓ In your order" : `+ Add · ${priceLabel(bundlePrice(count + 1) - bundlePrice(count))}`}
+                  </button>
+                </div>
               );
             })}
           </div>
+          {/* which sheet you're looking at (phone) */}
+          <div className="flex justify-center landscape:hidden" style={{ gap: 8 }}>
+            {SHEET_DESIGNS.map((d, i) => (
+              <button
+                key={d.id}
+                aria-label={`Show ${d.name}`}
+                onClick={() => scrollToSheet(i)}
+                className={cn("h-2.5 rounded-full transition-all", i === shown ? "w-6 bg-[var(--purple)]" : "w-2.5 bg-[var(--lav)]", picked.includes(d.id) && i !== shown && "bg-[#b8a9f5]")}
+              />
+            ))}
+          </div>
         </div>
 
-        {/* the order: what's in it, the price, the QR */}
-        <div className="card flex shrink-0 flex-col landscape:w-[34%] landscape:self-center short:!w-full" style={{ gap: u(0.9), padding: u(1.4) }}>
-          <div className="t-h3">Your order</div>
-          {count ? (
-            <div className="flex flex-wrap" style={{ gap: u(0.5) }}>
-              {picked.map((id) => (
-                <span key={id} className="chip bg-[var(--lav)] text-[var(--ink)]">
-                  {getSheet(id).emoji} {getSheet(id).name}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <div className="t-body">Tap a sheet to add it</div>
-          )}
-          <div className="t-body">
-            <b>
-              {count} sheet{count === 1 ? "" : "s"} · {count * STICKERS_PER_SHEET} stickers
-            </b>{" "}
-            · <span className="text-[#15803d]">{bundleHint(count)}</span>
+        {/* the order: what's in it, the price, the QR (laptop) / a pay button (phone) */}
+        <div
+          className="card z-10 flex shrink-0 flex-col landscape:mr-[var(--gut)] landscape:mb-[var(--gut)] landscape:w-[32%] landscape:self-center portrait:sticky portrait:bottom-0 portrait:rounded-b-none short:!w-full"
+          style={{ gap: u(0.7), padding: u(1.3), ["--gut" as string]: u(2) } as React.CSSProperties}
+        >
+          <div className="flex flex-wrap items-center" style={{ gap: u(0.5) }}>
+            <span className="t-h3">Your order</span>
+            {picked.map((id) => (
+              <span key={id} className="chip bg-[var(--lav)] text-[var(--ink)]">
+                {getSheet(id).emoji} {getSheet(id).name}
+              </span>
+            ))}
+            {!count && <span className="t-body">Add a sheet above</span>}
           </div>
           {tooMany && <div className="t-body text-[var(--pink)]">Only {sheetsLeft} sheet{sheetsLeft === 1 ? "" : "s"} of paper left — pick fewer</div>}
           {count > 0 &&
             !tooMany &&
             (freeMode ? (
               <button className="btn btn-lg btn-main" onClick={() => onPaid()}>
-                🖨️ Print {count === 1 ? "my sheet" : `my ${count} sheets`}
+                🖨️ Print {count === 1 ? "my sheet" : `my ${count} sheets`} · {count * STICKERS_PER_SHEET} stickers
               </button>
             ) : (
-              <PayWithQr key={picked.join("+")} sheets={picked} onPaid={onPaid} onCheckout={onCheckout} />
+              <PayWithQr key={picked.join("+")} sheets={picked} onPaid={onPaid} onCheckout={onCheckout} compact={phone} />
             ))}
         </div>
       </section>
@@ -1032,11 +1086,15 @@ function PayWithQr({
   sheets,
   onPaid,
   onCheckout,
+  compact = false,
 }: {
   sheets: SheetKind[];
   onPaid: (checkoutId?: string) => void;
   onCheckout: (checkoutId: string) => Promise<void>;
+  /** phone: price + a big Pay button, QR on request */
+  compact?: boolean;
 }) {
+  const [showQr, setShowQr] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
   // paying on this same phone pauses this tab: only offer it once the order is safely sent
   const [sentAhead, setSentAhead] = useState(false);
@@ -1094,6 +1152,41 @@ function PayWithQr({
       <button className="btn btn-lg btn-main w-fit" onClick={() => onPaid()}>
         🖨️ Print my sheets
       </button>
+    );
+  }
+
+  if (compact && !showQr) {
+    const ready = !!payUrl && sentAhead;
+    return (
+      <div className="flex flex-col" style={{ gap: u(0.5) }}>
+        <div className="flex items-center" style={{ gap: u(1) }}>
+          <div className="shrink-0">
+            <div className="font-fun font-bold" style={{ fontSize: `max(30px, ${u(3.4)})`, lineHeight: 1 }}>
+              {priceLabel(price)}
+            </div>
+            <div className="t-body" style={{ fontSize: 12 }}>
+              {sheets.length * STICKERS_PER_SHEET} stickers
+            </div>
+          </div>
+          {ready ? (
+            <a className="btn btn-lg btn-main flex-1 justify-center text-center" href={payUrl!} target="_blank" rel="noopener noreferrer">
+              Pay {priceLabel(price)} →
+            </a>
+          ) : (
+            <button className="btn btn-lg btn-main flex-1 opacity-70" disabled>
+              {state === "error" ? "Payment is down, ask staff" : "Getting ready…"}
+            </button>
+          )}
+        </div>
+        <div className="t-body flex items-center justify-between" style={{ fontSize: 12 }}>
+          <span>Apple Pay · Google Pay · card · prints right after</span>
+          {qr && (
+            <button className="font-semibold text-[var(--purple)] underline" onClick={() => setShowQr(true)}>
+              Show QR
+            </button>
+          )}
+        </div>
+      </div>
     );
   }
 
