@@ -136,14 +136,19 @@ function fromRow(r: Row): QueueOrder {
 // ---------------------------------------------------------------- operations
 
 /**
- * Add an order. Same id again (the booth re-sends it once paid, or staff
- * reopens the kit) only upgrades it to verified, never back.
+ * Add an order. Same id again (the booth re-sends it with every sticker
+ * drawn, or once paid) upgrades it to verified (never back) and, while it's
+ * still queued, replaces its kit with the newer one.
  */
 export async function enqueue(o: Pick<QueueOrder, "id" | "boothId" | "productId" | "checkoutId" | "verified" | "kitUrl" | "guideUrl" | "guides" | "items">) {
   if (inMemory()) {
     const m = memory();
     const had = m.get(o.id);
-    if (had) had.verified ||= o.verified;
+    if (had) {
+      had.verified ||= o.verified;
+      // a fuller kit (all sheet stickers drawn) replaces the quick one while it's still waiting
+      if (had.status === "queued") Object.assign(had, { kitUrl: o.kitUrl, guideUrl: o.guideUrl, guides: o.guides, items: o.items });
+    }
     else m.set(o.id, { ...o, status: "queued", attempts: 0, error: null, createdAt: new Date().toISOString(), claimedAt: null, doneAt: null, stage: null, stageAt: null });
     return;
   }
@@ -151,7 +156,14 @@ export async function enqueue(o: Pick<QueueOrder, "id" | "boothId" | "productId"
   await getDb()`
     INSERT INTO booth_queue (id, booth_id, product_id, checkout_id, verified, kit_url, guide_url, guides, items)
     VALUES (${o.id}, ${o.boothId}, ${o.productId}, ${o.checkoutId}, ${o.verified}, ${o.kitUrl}, ${o.guideUrl}, ${JSON.stringify(o.guides)}::jsonb, ${JSON.stringify(o.items)}::jsonb)
-    ON CONFLICT (id) DO UPDATE SET verified = booth_queue.verified OR EXCLUDED.verified
+    ON CONFLICT (id) DO UPDATE SET
+      verified = booth_queue.verified OR EXCLUDED.verified,
+      -- the booth sends a quick kit as soon as there's a checkout, then the full one once
+      -- every sheet sticker is drawn; take the newer one until the station claims it
+      kit_url = CASE WHEN booth_queue.status = 'queued' THEN EXCLUDED.kit_url ELSE booth_queue.kit_url END,
+      guide_url = CASE WHEN booth_queue.status = 'queued' THEN EXCLUDED.guide_url ELSE booth_queue.guide_url END,
+      guides = CASE WHEN booth_queue.status = 'queued' THEN EXCLUDED.guides ELSE booth_queue.guides END,
+      items = CASE WHEN booth_queue.status = 'queued' THEN EXCLUDED.items ELSE booth_queue.items END
   `;
 }
 
