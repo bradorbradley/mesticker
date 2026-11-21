@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
 
-/** Auto-slide hint: starts at 0% (sticker fully visible), then nudges to show comparison */
+/** Auto-slide hint: nudges the divider to show the comparison (the after image fills the left part, up to position %) */
 function useSliderHint(
   allImagesLoaded: boolean,
   isDragging: boolean,
@@ -82,10 +82,10 @@ export default function ImageRevealSlider({
 
   const allImagesLoaded = imagesLoaded.before && imagesLoaded.after;
 
-  // position 0 = all sticker; fire once when a drag gets there
+  // position = how much of the after image (left side) shows; 100 = all sticker
   const revealedRef = useRef(false);
   useEffect(() => {
-    if (isDragging && position <= 8 && !revealedRef.current && onRevealed) {
+    if (isDragging && position >= 92 && !revealedRef.current && onRevealed) {
       revealedRef.current = true;
       onRevealed();
     }
@@ -289,15 +289,16 @@ export default function ImageRevealSlider({
         <>
           <div
             className="absolute top-4 left-4 bg-black/50 text-white px-3 py-1 rounded-lg text-sm font-semibold transition-opacity duration-200"
-            style={{ opacity: position < 80 ? 1 : 0 }}
+            style={{ opacity: position > 20 ? 1 : 0 }}
           >
-            {altBefore}
+            {/* the after image is clipped to the left part (0 → position%) */}
+            {altAfter}
           </div>
           <div
             className="absolute top-4 right-4 bg-black/50 text-white px-3 py-1 rounded-lg text-sm font-semibold transition-opacity duration-200"
-            style={{ opacity: position > 20 ? 1 : 0 }}
+            style={{ opacity: position < 80 ? 1 : 0 }}
           >
-            {altAfter}
+            {altBefore}
           </div>
 
           <div

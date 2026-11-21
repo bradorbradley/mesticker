@@ -978,7 +978,7 @@ function SheetShop({
         <div className="relative min-h-0 w-full flex-1">
           <BoothReveal photo={photo} sticker={sticker} onRevealed={() => setTimeout(showSheets, 700)} />
         </div>
-        <div className="t-body text-center">👈 Drag the slider to see the whole sticker</div>
+        <div className="t-body text-center">Drag the slider all the way 👉 to see your whole sticker</div>
         <div className="flex flex-wrap justify-center" style={{ gap: u(0.8) }}>
           <button className="btn btn-lg btn-main" onClick={showSheets}>
             See my sticker sheets ↓
