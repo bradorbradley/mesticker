@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolvePresetPrompt, stylePresets } from "@/lib/presets";
-import { generateSticker, hasPrintTier, requestedProvider } from "@/lib/image-providers";
+import { generateSticker, hasPrintTier, requestedGeminiModel, requestedProvider } from "@/lib/image-providers";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { recordGeneration, recordError, isThrottled } from "@/lib/spend-tracker";
 
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     const { prompt, resolvedId } = resolvePresetPrompt(styleId);
     // Same prompt as the web app's /api/generate, so the look is identical.
     // the staff panel can pick the model (e.g. Nano Banana); ignored if that key isn't set
-    const result = await generateSticker(image, prompt, tier, requestedProvider(wanted));
+    const result = await generateSticker(image, prompt, tier, requestedProvider(wanted), requestedGeminiModel(wanted));
     recordGeneration(tier);
 
     return NextResponse.json({
