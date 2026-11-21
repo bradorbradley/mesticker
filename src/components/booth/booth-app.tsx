@@ -23,7 +23,7 @@ import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import Mascot from "./mascot";
 import BoothCamera from "./booth-camera";
-import OperatorPanel, { providersFor, type BoothSettings, type GenStats } from "./operator-panel";
+import OperatorPanel, { IMAGE_MODELS, providersFor, type BoothSettings, type GenStats } from "./operator-panel";
 import { u } from "./units";
 import LoadingState from "@/components/loading-state";
 import { WAIT_GAMES, type WaitGameId } from "./games/wait-games";
@@ -204,7 +204,18 @@ export default function BoothApp() {
     setVariantsState(EMPTY_VARIANTS);
   };
 
-  useEffect(() => setSettings(loadSettings()), []);
+  useEffect(() => {
+    const s = loadSettings();
+    // /booth?model=nano|mixed|openai|default picks the image model for this laptop (remembered)
+    const m = new URLSearchParams(location.search).get("model");
+    if (m && IMAGE_MODELS.some((x) => x.id === m)) {
+      s.imageModel = m as BoothSettings["imageModel"];
+      try {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+      } catch {}
+    }
+    setSettings(s);
+  }, []);
   // the staff panel's image model, read when a request goes out (generate() is a stable callback)
   const modelRef = useRef(providersFor(undefined));
   modelRef.current = providersFor(settings?.imageModel);
