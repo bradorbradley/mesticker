@@ -12,7 +12,7 @@ $log = Join-Path $orders 'station.log'
 
 # keep the system (not just the screen) awake while this runs
 Add-Type -Namespace Win32 -Name Power -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint esFlags);'
-[void][Win32.Power]::SetThreadExecutionState(0x80000001) # ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+[void][Win32.Power]::SetThreadExecutionState([uint32]2147483649) # ES_CONTINUOUS | ES_SYSTEM_REQUIRED (0x80000001; a hex literal is negative in PowerShell 5)
 
 # find node: PATH first, then the portable install
 $node = (Get-Command node -ErrorAction SilentlyContinue).Source

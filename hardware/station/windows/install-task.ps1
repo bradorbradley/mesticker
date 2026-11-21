@@ -6,9 +6,11 @@
 param([switch]$IncludeUnverified)
 
 $runner = Join-Path $PSScriptRoot 'run-station.ps1'
-$arg = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runner`""
+# conhost --headless runs the console with no window at all (-WindowStyle Hidden still flashes one
+# and leaves it up when anything is printed)
+$arg = "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$runner`""
 if ($IncludeUnverified) { $arg += ' -IncludeUnverified' }
-$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg
+$action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument $arg
 # at log-on, plus every minute as a watchdog: if the station is ever gone it's back within a minute
 # (MultipleInstances IgnoreNew means a running station is never doubled)
 $logon = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
