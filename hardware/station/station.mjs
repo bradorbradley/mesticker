@@ -18,7 +18,7 @@
  * order.json with every placement in inches). Prints the JSON summary on
  * stdout so an agent (Claude) can read it and drive StixCut.
  */
-import { readFileSync, mkdirSync, writeFileSync, renameSync } from "node:fs";
+import { readFileSync, mkdirSync, writeFileSync, renameSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
@@ -141,15 +141,42 @@ async function fetchOrder(order) {
   const dir = join(ORDERS, order.id);
   const stickerDir = join(dir, "stickers");
   mkdirSync(stickerDir, { recursive: true });
+  // url → cleaned file, kept across calls: the station prepares an order while the guest is
+  // still paying (prefetch), and the claim after payment then downloads nothing again
+  const cachePath = join(dir, ".stickers.json");
+  let cache = {};
+  try {
+    cache = JSON.parse(readFileSync(cachePath, "utf8"));
+  } catch {}
   const fileOf = new Map();
-  let specks = 0;
+  const used = new Set(Object.values(cache));
+  let next = 1;
+  const freshName = () => {
+    let p;
+    do p = join(stickerDir, `s${String(next++).padStart(2, "0")}.png`);
+    while (used.has(p));
+    used.add(p);
+    return p;
+  };
+  const jobs = [];
   for (const it of order.items) {
     if (fileOf.has(it.url)) continue;
-    const path = join(stickerDir, `s${String(fileOf.size + 1).padStart(2, "0")}.png`);
-    await download(it.url, path);
+    if (cache[it.url] && existsSync(cache[it.url])) {
+      fileOf.set(it.url, cache[it.url]);
+      continue;
+    }
+    const path = freshName();
     fileOf.set(it.url, path);
-    specks += await cleanSticker(path);
+    jobs.push((async () => {
+      await download(it.url, path);
+      const n = await cleanSticker(path);
+      cache[it.url] = path;
+      return n;
+    })());
   }
+  // all stickers at once (was one after another)
+  const specks = (await Promise.all(jobs)).reduce((a, b) => a + b, 0);
+  writeFileSync(cachePath, JSON.stringify(cache));
   const guideUrls = order.guides?.length ? order.guides : order.guideUrl ? [order.guideUrl] : [];
   const sheetNames = String(order.productId || "").split("+");
   const count = Math.max(guideUrls.length, ...order.items.map((it) => (it.sheet ?? 0) + 1));
@@ -158,7 +185,10 @@ async function fetchOrder(order) {
     let guide = null;
     if (guideUrls[s]) {
       guide = join(dir, `sheet-${s + 1}-guide.png`);
-      await download(guideUrls[s], guide).catch(() => (guide = null));
+      if (cache[`guide:${guideUrls[s]}`] !== guide || !existsSync(guide)) {
+        await download(guideUrls[s], guide).then(() => (cache[`guide:${guideUrls[s]}`] = guide)).catch(() => (guide = null));
+        writeFileSync(cachePath, JSON.stringify(cache));
+      }
     }
     const placements = order.items
       .filter((it) => (it.sheet ?? 0) === s)
@@ -193,6 +223,22 @@ switch (cmd) {
     const out = {};
     for (const f of readdirSync(dir).filter((x) => x.endsWith(".png")).sort()) out[f] = await cleanSticker(join(dir, f));
     console.log(JSON.stringify({ specksRemoved: out }));
+    break;
+  }
+  case "prefetch": {
+    // Orders the booth sent before payment (unverified, with a Stripe checkout, recent):
+    // download and clean their stickers now, so printing starts sooner once they're paid.
+    // Doesn't claim anything. Prints the ids it prepared.
+    const { orders } = await api(cfg, "GET", null, "?status=queued");
+    const fresh = orders.filter((o) => !o.verified && o.checkoutId && Date.now() - Date.parse(o.createdAt) < 30 * 60_000 && o.items?.length);
+    const done = [];
+    for (const o of fresh) {
+      try {
+        await fetchOrder(o);
+        done.push(o.id);
+      } catch {}
+    }
+    console.log(JSON.stringify(done));
     break;
   }
   case "list": {

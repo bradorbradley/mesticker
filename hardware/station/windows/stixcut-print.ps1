@@ -16,13 +16,43 @@ Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 Add-Type -Namespace W -Name U -MemberDefinition @'
 [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, string l);
 [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+[DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+[DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr pid);
+[DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);
+[DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
 '@
+
+# Keep StixCut out of the guest's way: it works minimized, its Open dialog is moved off-screen,
+# and focus goes back to whatever was in front (the booth's Chrome window).
+function Hide-StixCut {
+  $p = Get-Process StixCut -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($p -and $p.MainWindowHandle -ne [IntPtr]::Zero -and -not [W.U]::IsIconic($p.MainWindowHandle)) { [void][W.U]::ShowWindow($p.MainWindowHandle, 6) } # SW_MINIMIZE
+}
+function Restore-Focus([IntPtr]$h) {
+  if ($h -eq [IntPtr]::Zero) { return }
+  $p = Get-Process StixCut -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($p -and $h -eq $p.MainWindowHandle) { return }
+  $fg = [W.U]::GetForegroundWindow()
+  if ($fg -eq $h) { return }
+  # borrow the current foreground thread's input state so Windows lets us hand focus back
+  $me = [W.U]::GetCurrentThreadId(); $them = [W.U]::GetWindowThreadProcessId($fg, [IntPtr]::Zero)
+  [void][W.U]::AttachThreadInput($me, $them, $true)
+  [void][W.U]::SetForegroundWindow($h)
+  [void][W.U]::AttachThreadInput($me, $them, $false)
+}
+$script:prevFg = [W.U]::GetForegroundWindow()
 $A = [Windows.Automation.AutomationElement]
 $Scope = [Windows.Automation.TreeScope]
 $Walker = [Windows.Automation.TreeWalker]::ControlViewWalker
 $sw = [Diagnostics.Stopwatch]::StartNew()
 
-function Out-Result($h) { $h.ms = $sw.ElapsedMilliseconds; ($h | ConvertTo-Json -Compress); exit ($(if ($h.ok) { 0 } else { 1 })) }
+function Out-Result($h) {
+  if (-not $Status) { Hide-StixCut; Restore-Focus $script:prevFg }
+  $h.ms = $sw.ElapsedMilliseconds; ($h | ConvertTo-Json -Compress); exit ($(if ($h.ok) { 0 } else { 1 })) }
 function Cond($prop, $val) { New-Object Windows.Automation.PropertyCondition($prop, $val) }
 
 function Get-Win {
@@ -52,7 +82,7 @@ function Get-State($w, [string]$doc) {
   $short = $t | Where-Object { $_ -and $_.Length -le 60 }
   $printer = ($short | Where-Object { $_ -match '^\d+ (READY|BUSY|PRINTING)|NOT CONNECTED|DISCONNECTED|OFFLINE|^PRINTING|ERROR' } | Select-Object -Unique) -join ', '
   $msg = ($short | Where-Object { $_ -match 'error|failed|out of paper|no paper|ribbon|jammed|paper jam|cover open|disconnect' } | Select-Object -First 1)
-  $busy = [bool]($jobs | Where-Object { $_.state -match '^(upload|print|cut|queued|pending|sending)' })
+  $busy = [bool]($jobs | Where-Object { $_.state -match '^(upload|print|cut|queued|pending|sending)' }) -or [bool]($short | Where-Object { $_ -match '^\d+ (BUSY|PRINTING)|^PRINTING' })
   $mine = if ($doc) { $jobs | Where-Object { $_.doc -eq $doc } | Select-Object -First 1 } else { $null }
   [pscustomobject]@{ job = ($jobs | Select-Object -First 1).text; busy = $busy; ready = [bool]($t -match '^\d+ READY$'); printer = $printer; message = $msg; mine = $mine; docName = (($w.FindFirst($Scope::Descendants, (Cond $A::AutomationIdProperty 'DocNameText'))).Current.Name) }
 }
@@ -92,9 +122,12 @@ function Open-InStixCut($w, [string]$path) {
   $dlg = $null
   for ($i = 0; $i -lt 60 -and -not $dlg; $i++) { Start-Sleep -Milliseconds 100; $dlg = $A::RootElement.FindFirst($Scope::Descendants, (Cond $A::ClassNameProperty '#32770')) }
   if (-not $dlg) { throw 'Open dialog did not appear' }
+  [void][W.U]::SetWindowPos([IntPtr]$dlg.Current.NativeWindowHandle, [IntPtr]::Zero, -32000, -32000, 0, 0, 0x15)
   $edit = $dlg.FindAll($Scope::Descendants, (Cond $A::ClassNameProperty 'Edit')) | Where-Object { $_.Current.AutomationId -eq '1148' } | Select-Object -First 1
   $ok = $dlg.FindAll($Scope::Descendants, (Cond $A::ClassNameProperty 'Button')) | Where-Object { $_.Current.AutomationId -eq '1' } | Select-Object -First 1
   if (-not $edit -or -not $ok) { throw 'Open dialog controls not found' }
+  # off-screen at once, so the guest doesn't see it (0x15 = NOSIZE|NOZORDER|NOACTIVATE)
+  [void][W.U]::SetWindowPos([IntPtr]$dlg.Current.NativeWindowHandle, [IntPtr]::Zero, -32000, -32000, 0, 0, 0x15)
   [void][W.U]::SendMessage([IntPtr]$edit.Current.NativeWindowHandle, 0x000C, [IntPtr]::Zero, $path)   # WM_SETTEXT
   [void][W.U]::PostMessage([IntPtr]$ok.Current.NativeWindowHandle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero) # BM_CLICK
   for ($i = 0; $i -lt 50; $i++) {
@@ -185,6 +218,9 @@ while ($true) {
   $w = Get-Win
   $s = Get-State $w $doc
   if ($s.mine -and $s.mine.state -match '^(upload|print|cut|done)') { Out-Result @{ ok = $true; stage = 'started'; job = $s.mine.text; openMs = $openMs; startedMs = $sw.ElapsedMilliseconds } }
+  # StixCut's queue list only exposes its visible rows, so a new job can be out of sight. We only
+  # press when nothing is running, so any job now running, or the printer printing, is ours.
+  if ($s.busy -or $s.printer -match 'PRINTING|BUSY') { Out-Result @{ ok = $true; stage = 'started'; job = $(if ($s.job) { $s.job } else { $s.printer }); openMs = $openMs; startedMs = $sw.ElapsedMilliseconds } }
   if ($s.mine -and $s.mine.state -match '^(cancel|fail|error)') { Out-Result @{ ok = $false; stage = 'press'; error = "job $($s.mine.text)" } }
   if ((Get-Date) -gt $deadline) { Out-Result @{ ok = $false; stage = 'press'; error = "pressed Print & Cut but no job started in $StartTimeout s ($($s.printer) $($s.message))" } }
 }

@@ -137,7 +137,8 @@ function fromStripe() {
 
 /** Clean + heal. Heal failure (e.g. image API out of credits) prints with the stickers we have. */
 function prepare(got) {
-  run("station.mjs", "clean", got.id);
+  // queue orders were cleaned as they downloaded; only a recovered order needs it here
+  if (got.recovered) run("station.mjs", "clean", got.id);
   try {
     return JSON.parse(run("heal.mjs", got.id));
   } catch (e) {
@@ -299,6 +300,7 @@ async function stixcutLoop() {
   }
   let queueFails = 0;
   let checkedAt = 0, printerOk = false;
+  let prefetching = null, prefetchAt = 0, stripeAt = 0;
   for (;;) {
     if (WIN && Date.now() - checkedAt > (printerOk ? 10_000 : 5_000)) {
       // What a person would do between orders: StixCut open, done panel closed, printer
@@ -324,9 +326,21 @@ async function stixcutLoop() {
       await sleep(2500);
       continue;
     }
+    // while waiting: prepare orders that are still being paid for (download, clean, lay out),
+    // so after payment only "load in StixCut + press" is left
+    if (WIN && !prefetching && Date.now() - prefetchAt > 3000) {
+      prefetchAt = Date.now();
+      prefetching = runAsync("station.mjs", "prefetch")
+        .then(async (out) => {
+          for (const id of JSON.parse(out || "[]")) if (!handled().has(id)) await runAsync("stixcut-layout.mjs", id);
+        })
+        .catch(() => {})
+        .finally(() => (prefetching = null));
+    }
     let got = null;
     try {
-      got = fromQueue() || fromStripe();
+      // Stripe recovery is a slower check: every 10 s, the queue every second
+      got = fromQueue() || (Date.now() - stripeAt > 10_000 ? ((stripeAt = Date.now()), fromStripe()) : null);
       queueFails = 0;
       clearAlert("queue", "queue reachable again");
     } catch (e) {
@@ -335,6 +349,7 @@ async function stixcutLoop() {
     }
     if (got) {
       got.claimedAt = Date.now();
+      if (prefetching) await prefetching; // don't write the same files twice at once
       remember(got.id, got.checkoutId);
       const dir = join(ORDERS, got.id);
       log(`order ${got.id}${got.recovered ? " (recovered from Stripe)" : ""} claimed${WIN && dryRun() ? " (DRY RUN: won't print)" : ""}`);
@@ -357,7 +372,7 @@ async function stixcutLoop() {
       console.log("READY " + JSON.stringify({ id: got.id, recovered: got.recovered, dir, healed, sheets: sheets.map((s) => s.path) }));
       process.exit(0);
     }
-    await sleep(2500); // a paid order is picked up within ~2.5 s
+    await sleep(WIN ? 1000 : 2500); // a paid order is picked up within ~1 s
   }
 }
 

@@ -12,7 +12,7 @@
  * positions are the sticker's centre. Cut paths are normalized 0–1 over the
  * sticker image ({ p, i, o } = point and its two bezier handles).
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { join, basename } from "node:path";
@@ -149,6 +149,13 @@ async function stickerEntry(file, maxInches = 2.5) {
 
 export async function buildLayouts(orderDir) {
   const order = JSON.parse(readFileSync(join(orderDir, "order.json"), "utf8"));
+  // same sheets as last time (prepared while the guest paid)? reuse the files
+  const key = createHash("sha256").update(JSON.stringify(order.sheets)).digest("hex");
+  const cacheFile = join(orderDir, ".layout.json");
+  try {
+    const c = JSON.parse(readFileSync(cacheFile, "utf8"));
+    if (c.key === key && c.out.every((s) => existsSync(s.path))) return c.out;
+  } catch {}
   const out = [];
   for (const sheet of order.sheets) {
     const byFile = new Map();
@@ -189,6 +196,7 @@ export async function buildLayouts(orderDir) {
     writeFileSync(path, JSON.stringify(doc));
     out.push({ sheet: sheet.sheet, path, stickers: placements.length, cutPoints: [...byFile.values()].map((s) => s.cutLayers[0].path.subpaths[0].n.length) });
   }
+  writeFileSync(cacheFile, JSON.stringify({ key, out }));
   return out;
 }
 
