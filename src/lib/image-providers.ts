@@ -9,7 +9,7 @@
  * Fallback: if the active provider fails (out of credits, rate limited, down,
  * slow), the same request goes to the next provider that has a key, and a
  * failing provider is skipped for a few minutes so guests don't wait on it.
- * Gemini uses GEMINI_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY.
+ * Gemini uses GEMINI_API_KEY (or GOOGLE_GENERATIVE_AI_API_KEY, GOOGLE_API_KEY, GOOGLE_AI_API_KEY, GOOGLE_GEMINI_API_KEY).
  *
  * Gemini and FLUX can't output transparent PNGs, so they're prompted for a
  * pure white background which is then removed (remove.bg if configured,
@@ -37,17 +37,21 @@ export function activeProvider(): ImageProvider {
 /**
  * The 14 small sheet stickers (poses / expressions, ~1.1" printed) can use a
  * faster provider than the hero: BOOTH_EXTRAS_PROVIDER=gemini|fal|openai
- * (default: same as the hero). On OpenAI they use BOOTH_EXTRA_QUALITY
+ * (default: Nano Banana if a Gemini key is set, else the same as the hero). On OpenAI they use BOOTH_EXTRA_QUALITY
  * (default "low": roughly twice as fast, plenty for a 1" sticker).
  */
 export function extrasProvider(): ImageProvider {
   const p = (process.env.BOOTH_EXTRAS_PROVIDER || "").toLowerCase();
-  return p === "gemini" || p === "fal" || p === "openai" ? p : activeProvider();
+  if (p === "gemini" || p === "fal" || p === "openai") return p;
+  // unset: Nano Banana when there's a Gemini key (faster, and spreads the 14
+  // stickers off OpenAI's rate limit); the hero stays on activeProvider()
+  return hasKey("gemini") ? "gemini" : activeProvider();
 }
 
-const geminiKey = () => process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+const geminiKey = () =>
+  process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
 
-function hasKey(p: ImageProvider) {
+export function hasKey(p: ImageProvider) {
   if (p === "openai") return !!process.env.OPENAI_API_KEY;
   if (p === "gemini") return !!geminiKey();
   return !!process.env.FAL_KEY;
@@ -112,13 +116,18 @@ const GEMINI_MODELS = Array.from(
 );
 let workingGeminiModel: string | null = null;
 
-async function generateGemini(image: string, prompt: string) {
+/** Google image models the booth may ask for by name (e.g. to compare speed). */
+export const GEMINI_CHOICES = ["gemini-3.1-flash-image", "gemini-nano-banana-2.1", "gemini-3.1-flash-lite-image", "gemini-3-pro-image"] as const;
+
+async function generateGemini(image: string, prompt: string, only?: string) {
   const key = geminiKey();
   if (!key) throw new Error("GEMINI_API_KEY is not set");
   const { mime, data } = splitDataUrl(image);
-  const models = workingGeminiModel
-    ? [workingGeminiModel, ...GEMINI_MODELS.filter((m) => m !== workingGeminiModel)]
-    : GEMINI_MODELS;
+  const models = only
+    ? [only]
+    : workingGeminiModel
+      ? [workingGeminiModel, ...GEMINI_MODELS.filter((m) => m !== workingGeminiModel)]
+      : GEMINI_MODELS;
 
   let lastErr = "No Gemini image model available";
   for (const model of models) {
@@ -145,7 +154,7 @@ async function generateGemini(image: string, prompt: string) {
     const b64 = part?.inlineData?.data ?? part?.inline_data?.data;
     if (!b64) throw new Error("Gemini returned no image (it may have refused this photo)");
     const outMime = part?.inlineData?.mimeType ?? part?.inline_data?.mime_type ?? "image/png";
-    workingGeminiModel = model;
+    if (!only) workingGeminiModel = model;
     return { image: await cleanBackground(`data:${outMime};base64,${b64}`), model };
   }
   throw new Error(lastErr);
@@ -188,8 +197,8 @@ export function hasPrintTier() {
 
 export type Tier = "preview" | "print" | "extra";
 
-async function runProvider(provider: ImageProvider, image: string, prompt: string, tier: Tier) {
-  if (provider === "gemini") return generateGemini(image, prompt);
+async function runProvider(provider: ImageProvider, image: string, prompt: string, tier: Tier, geminiModel?: string) {
+  if (provider === "gemini") return generateGemini(image, prompt, geminiModel);
   if (provider === "fal") return generateFal(image, prompt);
   const q =
     tier === "print"
@@ -203,8 +212,20 @@ async function runProvider(provider: ImageProvider, image: string, prompt: strin
 /** A refusal for this photo would fail everywhere; anything else is worth another provider. */
 const isRefusal = (msg: string) => /safety|moderation|refus|policy/i.test(msg);
 
-export async function generateSticker(image: string, prompt: string, tier: Tier = "preview"): Promise<ProviderResult> {
-  const chain = providerChain(tier === "extra" ? extrasProvider() : activeProvider());
+/** A provider the booth asked for (staff panel), if it's real and has a key; otherwise undefined. */
+export function requestedProvider(v: unknown): ImageProvider | undefined {
+  const p = String(v ?? "").toLowerCase().split(":")[0];
+  return (p === "openai" || p === "gemini" || p === "fal") && hasKey(p) ? p : undefined;
+}
+
+/** "gemini:<model>" → that Google model, if it's one of GEMINI_CHOICES. */
+export function requestedGeminiModel(v: unknown): string | undefined {
+  const [p, m] = String(v ?? "").split(":");
+  return p === "gemini" && (GEMINI_CHOICES as readonly string[]).includes(m) ? m : undefined;
+}
+
+export async function generateSticker(image: string, prompt: string, tier: Tier = "preview", prefer?: ImageProvider, geminiModel?: string): Promise<ProviderResult> {
+  const chain = providerChain(prefer ?? (tier === "extra" ? extrasProvider() : activeProvider()));
   if (!chain.length) throw new Error("No image provider is configured");
   // keep the first try short enough that a backup still fits in the request
   const budget = Number(process.env.BOOTH_PROVIDER_TIMEOUT_MS) || 40000;
@@ -212,7 +233,7 @@ export async function generateSticker(image: string, prompt: string, tier: Tier 
   for (const [i, provider] of chain.entries()) {
     const t0 = Date.now();
     try {
-      const out = await withTimeout(runProvider(provider, image, prompt, tier), i < chain.length - 1 ? budget : 85000, provider);
+      const out = await withTimeout(runProvider(provider, image, prompt, tier, provider === prefer ? geminiModel : undefined), i < chain.length - 1 ? budget : 85000, provider);
       downUntil.delete(provider);
       return { ...out, provider, ms: Date.now() - t0 };
     } catch (e) {
