@@ -50,6 +50,18 @@ const EXPRESSIONS = [
   "pouty grumpy face, arms crossed, cheeks puffed (cute, not mean)",
 ];
 
+/** Fallback poses for Pose Party when the per-person ideas take too long. */
+const POSES = [
+  "big thumbs up with a huge grin",
+  "jumping for joy, arms up in the air",
+  "peace sign next to the face with a wink",
+  "flexing a bicep, proud and confident",
+  "waving hello with a big friendly smile",
+  "dancing, mid-groove, one arm up",
+  "pointing at the viewer, 'you got this' face",
+];
+const IDEAS_TIMEOUT_MS = 3500;
+
 /**
  * What goes in each of a sheet's 12 slots (pack12 order: hero, 2 beside it,
  * then 3 rows of 3). "main" = their sticker; [kind, i] = extra i of that set.
@@ -317,7 +329,13 @@ export default function BoothApp() {
     const retry = <T,>(fn: () => Promise<T>) => fn().catch(() => new Promise<T>((ok, no) => setTimeout(() => fn().then(ok, no), 3000)));
     const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
     const ideas: Promise<string[]> =
-      kind === "face" ? Promise.resolve(EXPRESSIONS) : (ideasJob.current ??= retry(() => post({ photo: image })).then((d: { ideas: string[] }) => d.ideas));
+      kind === "face"
+        ? Promise.resolve(EXPRESSIONS)
+        : (ideasJob.current ??= Promise.race([
+            // poses designed for this person, if the vision engine answers quickly; otherwise the stock poses, so Pose Party doesn't lag
+            post({ photo: image }).then((d: { ideas: string[] }) => (d.ideas?.length ? d.ideas : POSES)),
+            new Promise<string[]>((r) => setTimeout(() => r(POSES), IDEAS_TIMEOUT_MS)),
+          ]).catch(() => POSES));
     variantJobs.current[kind] = ideas
       .then((list) =>
         // stagger so 14 image requests don't all land in the same instant
@@ -381,13 +399,14 @@ export default function BoothApp() {
    * a numbered guide per sheet and every sticker's placement.
    */
   const buildPrintFiles = useCallback(
-    async (sheets: SheetKind[]) => {
+    async (sheets: SheetKind[], quick = false) => {
       if (!sticker) throw new Error("no sticker");
       const pending = printCopy.current;
-      const hq = pending ? await Promise.race([pending, new Promise<null>((r) => setTimeout(() => r(null), 30000))]) : null;
+      const hq = pending && !quick ? await Promise.race([pending, new Promise<null>((r) => setTimeout(() => r(null), 30000))]) : null;
       const main = hq || sticker;
       const needs = new Set<VariantKind>(sheets.flatMap((k) => (k === "best" ? ["pose", "face"] : [k])) as VariantKind[]);
-      await Promise.race([Promise.all([...needs].map((k) => variantJobs.current[k])), new Promise((r) => setTimeout(r, 60000))]);
+      // quick: whatever's drawn right now (the full kit follows); otherwise wait up to 60 s for stragglers
+      if (!quick) await Promise.race([Promise.all([...needs].map((k) => variantJobs.current[k])), new Promise((r) => setTimeout(r, 60000))]);
       const v = variantsRef.current;
       const sheetGuides = await Promise.all(sheets.map((k) => buildSheet(k, main, v, false, true)));
       return { main, guides: sheetGuides, kit: await buildKit(sheets, main, v) };
@@ -408,8 +427,15 @@ export default function BoothApp() {
       const sheets = picked;
       const orderId = newOrderId();
       prepared.current = { checkoutId, orderId };
-      const files = await buildPrintFiles(sheets);
-      await sendKit(files.guides, files.kit, { id: orderId, sheets, checkoutId });
+      const order = { id: orderId, sheets, checkoutId };
+      // 1) right away, with what's drawn so far, so Pay is ready in a few seconds (the station
+      //    fills any gaps if this tab gets paused while paying on the same phone) ...
+      const quick = await buildPrintFiles(sheets, true);
+      await sendKit(quick.guides, quick.kit, order);
+      // 2) ... then the full kit, same order, once every sheet sticker is drawn
+      buildPrintFiles(sheets)
+        .then((full) => prepared.current?.orderId === orderId && sendKit(full.guides, full.kit, order))
+        .catch((e) => console.error("full kit resend failed", e));
     },
     [sticker, picked, buildPrintFiles]
   );
