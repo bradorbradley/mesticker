@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolvePresetPrompt, stylePresets } from "@/lib/presets";
-import { generateSticker, hasPrintTier } from "@/lib/image-providers";
+import { generateSticker, hasPrintTier, requestedProvider } from "@/lib/image-providers";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { recordGeneration, recordError, isThrottled } from "@/lib/spend-tracker";
 
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { image, styleId, tier: rawTier } = await request.json();
+    const { image, styleId, tier: rawTier, provider: wanted } = await request.json();
     const tier = rawTier === "print" ? "print" : "preview";
     // The print copy only differs from the preview where the model has a quality setting.
     if (tier === "print" && !hasPrintTier()) {
@@ -36,7 +36,8 @@ export async function POST(request: NextRequest) {
 
     const { prompt, resolvedId } = resolvePresetPrompt(styleId);
     // Same prompt as the web app's /api/generate, so the look is identical.
-    const result = await generateSticker(image, prompt, tier);
+    // the staff panel can pick the model (e.g. Nano Banana); ignored if that key isn't set
+    const result = await generateSticker(image, prompt, tier, requestedProvider(wanted));
     recordGeneration(tier);
 
     return NextResponse.json({

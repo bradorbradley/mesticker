@@ -9,7 +9,7 @@
  * Fallback: if the active provider fails (out of credits, rate limited, down,
  * slow), the same request goes to the next provider that has a key, and a
  * failing provider is skipped for a few minutes so guests don't wait on it.
- * Gemini uses GEMINI_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY.
+ * Gemini uses GEMINI_API_KEY (or GOOGLE_GENERATIVE_AI_API_KEY, GOOGLE_API_KEY, GOOGLE_AI_API_KEY, GOOGLE_GEMINI_API_KEY).
  *
  * Gemini and FLUX can't output transparent PNGs, so they're prompted for a
  * pure white background which is then removed (remove.bg if configured,
@@ -45,9 +45,10 @@ export function extrasProvider(): ImageProvider {
   return p === "gemini" || p === "fal" || p === "openai" ? p : activeProvider();
 }
 
-const geminiKey = () => process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+const geminiKey = () =>
+  process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
 
-function hasKey(p: ImageProvider) {
+export function hasKey(p: ImageProvider) {
   if (p === "openai") return !!process.env.OPENAI_API_KEY;
   if (p === "gemini") return !!geminiKey();
   return !!process.env.FAL_KEY;
@@ -203,8 +204,14 @@ async function runProvider(provider: ImageProvider, image: string, prompt: strin
 /** A refusal for this photo would fail everywhere; anything else is worth another provider. */
 const isRefusal = (msg: string) => /safety|moderation|refus|policy/i.test(msg);
 
-export async function generateSticker(image: string, prompt: string, tier: Tier = "preview"): Promise<ProviderResult> {
-  const chain = providerChain(tier === "extra" ? extrasProvider() : activeProvider());
+/** A provider the booth asked for (staff panel), if it's real and has a key; otherwise undefined. */
+export function requestedProvider(v: unknown): ImageProvider | undefined {
+  const p = String(v ?? "").toLowerCase();
+  return (p === "openai" || p === "gemini" || p === "fal") && hasKey(p) ? p : undefined;
+}
+
+export async function generateSticker(image: string, prompt: string, tier: Tier = "preview", prefer?: ImageProvider): Promise<ProviderResult> {
+  const chain = providerChain(prefer ?? (tier === "extra" ? extrasProvider() : activeProvider()));
   if (!chain.length) throw new Error("No image provider is configured");
   // keep the first try short enough that a backup still fits in the request
   const budget = Number(process.env.BOOTH_PROVIDER_TIMEOUT_MS) || 40000;
