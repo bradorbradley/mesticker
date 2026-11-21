@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolvePresetPrompt, stylePresets } from "@/lib/presets";
 import { generateVariationDescriptors } from "@/lib/vision";
-import { generateSticker, requestedProvider } from "@/lib/image-providers";
+import { generateSticker, requestedGeminiModel, requestedProvider } from "@/lib/image-providers";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { recordGeneration, isThrottled } from "@/lib/spend-tracker";
 
@@ -39,7 +39,8 @@ export async function POST(request: NextRequest) {
       photo,
       `${prompt} Pose and expression for this sticker: ${pose}. Same person, same hairstyle and outfit, fully recognizable. No text, captions or letters anywhere.`,
       "extra", // small sheet stickers: faster tier (see extrasProvider)
-      requestedProvider(wanted)
+      requestedProvider(wanted),
+      requestedGeminiModel(wanted)
     );
     recordGeneration("preview");
     return NextResponse.json({ image: result.image, ms: result.ms, provider: result.provider, model: result.model });
