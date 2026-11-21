@@ -7,7 +7,9 @@
 # Open button (the file dialog is filled with WM_SETTEXT / BM_CLICK, so nothing needs focus and
 # no keystrokes are sent anywhere). StixCut 1.0.23 crashes when a file is handed to a running
 # instance from outside, so it is only launched with a file when it isn't running at all.
-param([string]$Sheet, [switch]$Status, [switch]$NoPress, [int]$IdleTimeout = 360, [int]$OpenTimeout = 45, [int]$StartTimeout = 90)
+param([string]$Sheet, [switch]$Status, [switch]$EnsureReady, [switch]$NoPress, [int]$IdleTimeout = 360, [int]$OpenTimeout = 45, [int]$StartTimeout = 90)
+# -EnsureReady: what a person would do between orders. Opens StixCut if it isn't running, closes
+# the "sheet is ready" panel, and presses Connect Printer if StixCut has lost the printer.
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
@@ -110,6 +112,24 @@ if ($Status) {
   if (-not $w) { Out-Result @{ ok = $false; stage = 'status'; error = 'StixCut is not running' } }
   $s = Get-State $w
   Out-Result @{ ok = $true; stage = 'status'; job = $s.job; busy = $s.busy; ready = $s.ready; printer = $s.printer; message = $s.message }
+}
+
+if ($EnsureReady) {
+  $w = Get-Win
+  $launched = $false
+  if (-not $w) {
+    Start-Process 'shell:AppsFolder\arthax.StixCut_hh3pb79gwwyrg!StixCut'
+    $launched = $true
+    for ($i = 0; $i -lt 60 -and -not $w; $i++) { Start-Sleep -Milliseconds 500; $w = Get-Win }
+    if (-not $w) { Out-Result @{ ok = $false; stage = 'ensure'; error = 'StixCut did not start' } }
+    # give it a moment to find the printer by itself
+    for ($i = 0; $i -lt 20 -and -not (Get-State $w).ready; $i++) { Start-Sleep -Milliseconds 500; $w = Get-Win }
+  }
+  $s = Get-State $w
+  if (-not $s.busy) { Close-DonePanel $w }
+  $connected = $false
+  if (-not $s.ready -and -not $s.busy) { $connected = Connect-Printer $w; $s = Get-State (Get-Win) }
+  Out-Result @{ ok = $true; stage = 'ensure'; launched = $launched; pressedConnect = $connected; ready = $s.ready; busy = $s.busy; printer = $s.printer; message = $s.message; job = $s.job }
 }
 
 if (-not $Sheet -or -not (Test-Path $Sheet)) { Out-Result @{ ok = $false; stage = 'args'; error = "sheet file not found: $Sheet" } }

@@ -31,6 +31,8 @@ export function stixcut(args, timeoutMs = 600_000) {
 /** Load the sheet in StixCut and press Print & Cut. { noPress: true } stops just before pressing (dry run). */
 export const pressPrint = (sheetPath, { noPress = false } = {}) => stixcut(["-Sheet", sheetPath, ...(noPress ? ["-NoPress"] : [])]);
 export const stixcutStatus = () => stixcut(["-Status"], 30_000);
+/** Open StixCut if needed, close the done panel, press Connect if it lost the printer. */
+export const stixcutEnsureReady = () => stixcut(["-EnsureReady"], 90_000);
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const arg = process.argv[2];
@@ -38,7 +40,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     console.error('usage: print-win.mjs "<sheet.stixcut>" | --status');
     process.exit(2);
   }
-  const r = arg === "--status" ? await stixcutStatus() : await pressPrint(arg, { noPress: process.argv.includes("--no-press") });
+  const r = arg === "--status" ? await stixcutStatus() : arg === "--ensure" ? await stixcutEnsureReady() : await pressPrint(arg, { noPress: process.argv.includes("--no-press") });
   console.log(JSON.stringify(r));
   process.exit(r.ok ? 0 : 1);
 }

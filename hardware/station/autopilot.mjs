@@ -291,38 +291,38 @@ async function keepPrinterOn() {
 }
 
 async function stixcutLoop() {
-  const stixcutStatus = WIN ? (await import("./print-win.mjs")).stixcutStatus : null;
-  const usb = WIN ? await import("./pixcut/print.mjs").catch(() => null) : null;
+  const pw = WIN ? await import("./print-win.mjs") : null;
   if (WIN) {
     log(`station up (StixCut auto-print${unverified ? ", including unverified/free orders" : ", paid orders only"})`);
-    if (usb && !(await stixcutStatus()).ok) await keepPrinterOn(usb);
+    // before StixCut takes the printer: make sure it never powers itself off
+    if (!(await pw.stixcutStatus()).ok && (await usbPresent())) await keepPrinterOn();
   }
   let queueFails = 0;
-  let wasPresent = true;
+  let checkedAt = 0, printerOk = false;
   for (;;) {
-    if (WIN) {
-      // don't claim while the printer is missing or in error (a running job is fine: we wait for it)
-      const s = await stixcutStatus();
+    if (WIN && Date.now() - checkedAt > (printerOk ? 10_000 : 5_000)) {
+      // What a person would do between orders: StixCut open, done panel closed, printer
+      // connected (pressing Connect if it dropped). Never claim while the printer can't print.
+      checkedAt = Date.now();
+      const usbOn = await usbPresent();
+      const s = await pw.stixcutEnsureReady();
       let problem = null;
-      if (s.ok) {
-        if (!s.ready && !s.busy) problem = `${s.printer || "not connected"}${s.message && typeof s.message === "string" ? ` (${s.message})` : ""}`;
+      if (!s.ok) problem = s.error;
+      else if (!s.ready && !s.busy) problem = !usbOn ? "printer off or unplugged (not on USB, StixCut has no printer)" : `StixCut can't connect to the printer (${s.printer || "no printer"})`;
+      if (s.ok && s.launched) log("opened StixCut");
+      if (s.ok && s.pressedConnect) log("pressed Connect Printer in StixCut");
+      if (s.ok && (s.ready || s.busy)) {
         // StixCut can reach the printer over Bluetooth too, but sending a sheet that way takes minutes
-        else if (!(await usbPresent())) alert("bluetooth", "PRINTER IS ON BLUETOOTH, NOT USB: sheets will take minutes to send. Plug the USB-C cable into the laptop and the printer.");
+        if (!usbOn) alert("bluetooth", "PRINTER IS ON BLUETOOTH, NOT USB: sheets will take minutes to send. Plug the USB-C cable into the laptop and the printer.");
         else clearAlert("bluetooth", "printer on USB again");
-      } else {
-        // StixCut closed: only ask Windows whether the printer is plugged in. Never open the
-        // device here: that would block StixCut from connecting when it next starts.
-        const present = await usbPresent();
-        if (!present) problem = "PixCut S1 not found on USB (switched off or unplugged?)";
-        else if (!wasPresent) await keepPrinterOn(); // it just came back (power cycle): re-apply auto-off = Never
-        wasPresent = present;
       }
-      if (problem) {
-        alert("printer", `PRINTER NOT READY: ${problem}. Turn it on / check paper and USB. Orders wait in the queue.`);
-        await sleep(2500);
-        continue;
-      }
-      clearAlert("printer", "printer ready again");
+      printerOk = !problem;
+      if (problem) alert("printer", `PRINTER NOT READY: ${problem}. Turn it on / check paper and the USB-C cable. Orders wait in the queue.`);
+      else clearAlert("printer", "printer ready again");
+    }
+    if (WIN && !printerOk) {
+      await sleep(2500);
+      continue;
     }
     let got = null;
     try {
