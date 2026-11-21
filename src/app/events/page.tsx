@@ -20,6 +20,12 @@ const STEPS = [
   { icon: Printer, title: "Peel & stick", body: "Each 12-sticker sheet prints and cuts right there in about 2 minutes. They play a game while it prints." },
 ];
 
+const SHEETS = [
+  { file: "/events/sheet-pose-party.webp", name: "Pose Party", emoji: "🤸", blurb: "You + 7 poses" },
+  { file: "/events/sheet-big-feelings.webp", name: "Big Feelings", emoji: "😆", blurb: "You + 7 expressions" },
+  { file: "/events/sheet-best-of.webp", name: "Best Of", emoji: "⭐", blurb: "A big you + the best of both" },
+];
+
 const OCCASIONS = ["Weddings", "Birthday parties", "Bar & Bat Mitzvahs", "Corporate parties & offsites", "Brand activations & pop-ups", "School & community events", "Holiday parties", "Conferences"];
 
 const INCLUDED = [
@@ -74,8 +80,47 @@ export default function EventsPage() {
         </div>
       </section>
 
-      {/* how it works */}
+      {/* real people, real stickers */}
+      <section className="mx-auto max-w-6xl px-6 pb-14">
+        <h2 className="font-display text-3xl font-bold md:text-4xl">Real people, real stickers</h2>
+        <p className="mt-2 text-muted-foreground">Printed and cut on the spot, ready to peel. Works on pets too.</p>
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/events/guests-sheets.jpg" alt="Two guests holding their MeSticker sheets" loading="lazy" className="aspect-[3/4] w-full rounded-3xl object-cover shadow-md" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/events/dog-sheet.jpg" alt="A dachshund in a sweater with its owner holding a sticker sheet" loading="lazy" className="aspect-[3/4] w-full rounded-3xl object-cover shadow-md" />
+          <div className="flex aspect-[3/4] flex-col items-center justify-center rounded-3xl bg-[#1a1a2e] p-6 text-center shadow-md">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/events/dog-sticker.webp" alt="The dachshund as a chibi sticker" loading="lazy" className="w-full max-w-[320px]" />
+            <p className="mt-3 font-display text-lg font-bold text-white">…and the pup&apos;s sticker 🐶</p>
+          </div>
+        </div>
+      </section>
+
+      {/* the three sheets */}
       <section className="bg-primary/5 py-14">
+        <div className="mx-auto max-w-6xl px-6">
+          <h2 className="font-display text-3xl font-bold md:text-4xl">Three sheets to choose from</h2>
+          <p className="mt-2 text-muted-foreground">Every sheet has 12 stickers on 4×7&quot; kiss-cut paper. Guests can take one, two or all three.</p>
+          <div className="mt-8 grid gap-6 sm:grid-cols-3">
+            {SHEETS.map((sh) => (
+              <figure key={sh.file} className="flex flex-col items-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={sh.file} alt={`${sh.name} sticker sheet`} loading="lazy" className="w-full max-w-[300px] rounded-xl bg-white shadow-[0_14px_36px_rgba(91,63,214,0.22)]" style={{ aspectRatio: "3.9 / 6.7" }} />
+                <figcaption className="mt-4 text-center">
+                  <div className="font-display text-xl font-bold">
+                    {sh.emoji} {sh.name}
+                  </div>
+                  <div className="text-muted-foreground">{sh.blurb}</div>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* how it works */}
+      <section className="py-14">
         <div className="mx-auto max-w-6xl px-6">
           <h2 className="font-display text-3xl font-bold md:text-4xl">How it works at your event</h2>
           <div className="mt-8 grid gap-5 md:grid-cols-3">
