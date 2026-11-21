@@ -194,6 +194,27 @@ async function printAllWindows(got, sheets) {
     alert(`qc-${got.id}`, `ORDER ${got.id} NOT PRINTED, QC failed: ${problems.join("; ")}`);
     return;
   }
+  // DRY RUN: the file ~/.mesticker-station/DRY_RUN exists. Everything happens (claim, stickers,
+  // QC, StixCut opens the sheet, printer connected, Print & Cut ready, guest screen -> printing)
+  // except pressing Print & Cut. No paper used. Delete the file to go live.
+  if (dryRun()) {
+    for (let i = 0; i < sheets.length; i++) {
+      const r = await pressPrint(sheets[i].path, { noPress: true });
+      if (!r.ok) {
+        log(`DRY RUN order ${got.id} sheet ${i + 1}: StixCut NOT ready (${r.stage}: ${r.error})`);
+        alert(`dry-${got.id}`, `DRY RUN: sheet ${i + 1} of ${got.id} would NOT have printed (${r.error})`);
+        break;
+      }
+      if (i === 0) {
+        t.started = Date.now();
+        if (!got.recovered) runAsync("station.mjs", "progress", got.id, "printing");
+      }
+      log(`DRY RUN order ${got.id} sheet ${i + 1}/${sheets.length}: loaded in StixCut, printer connected, Print & Cut ready (not pressed). ${Date.now() - t.claimed} ms after claim (StixCut ${r.openMs} ms)`);
+      if (i < sheets.length - 1) await sleep(4000); // time to look at it
+    }
+    if (!got.recovered) try { run("station.mjs", "failed", got.id, "dry run: not printed (test)"); } catch {}
+    return;
+  }
   for (let i = 0; i < sheets.length; i++) {
     const r = await pressPrint(sheets[i].path);
     if (!r.ok && r.stage === "press") {
@@ -228,6 +249,10 @@ async function printAllWindows(got, sheets) {
   log(`order ${got.id} DONE ${JSON.stringify(timing)}`);
   appendFileSync(join(ORDERS, "timings.jsonl"), JSON.stringify({ at: new Date().toISOString(), ...timing }) + "\n");
 }
+
+const DRY_RUN_FILE = join(homedir(), ".mesticker-station", "DRY_RUN");
+/** Checked per order, so it can be switched on/off while the station runs. */
+const dryRun = () => existsSync(DRY_RUN_FILE);
 
 /** Is the PixCut plugged in and on? Enumerates USB only; never opens the device. */
 async function usbPresent() {
@@ -271,6 +296,9 @@ async function stixcutLoop() {
       let problem = null;
       if (s.ok) {
         if (!s.ready && !s.busy) problem = `${s.printer || "not connected"}${s.message && typeof s.message === "string" ? ` (${s.message})` : ""}`;
+        // StixCut can reach the printer over Bluetooth too, but sending a sheet that way takes minutes
+        else if (!(await usbPresent())) alert("bluetooth", "PRINTER IS ON BLUETOOTH, NOT USB: sheets will take minutes to send. Plug the USB-C cable into the laptop and the printer.");
+        else clearAlert("bluetooth", "printer on USB again");
       } else {
         // StixCut closed: only ask Windows whether the printer is plugged in. Never open the
         // device here: that would block StixCut from connecting when it next starts.
@@ -299,7 +327,7 @@ async function stixcutLoop() {
       got.claimedAt = Date.now();
       remember(got.id, got.checkoutId);
       const dir = join(ORDERS, got.id);
-      log(`order ${got.id}${got.recovered ? " (recovered from Stripe)" : ""} claimed`);
+      log(`order ${got.id}${got.recovered ? " (recovered from Stripe)" : ""} claimed${WIN && dryRun() ? " (DRY RUN: won't print)" : ""}`);
       if (WIN && !got.recovered) runAsync("station.mjs", "progress", got.id, "preparing");
       let healed, sheets;
       try {

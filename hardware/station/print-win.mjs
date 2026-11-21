@@ -4,6 +4,7 @@
  *
  *   node print-win.mjs "<path>\sheet-1.stixcut"   open the sheet in a fresh StixCut, press Print & Cut
  *   node print-win.mjs --status                    what StixCut's print queue shows now
+ *   node print-win.mjs "<sheet>" --no-press        load it and get Print & Cut ready, but don't press (dry run)
  *
  * Exits 0 once the printer has taken the job; prints the JSON result from
  * windows/stixcut-print.ps1 ({ ok, stage, openMs, startedMs } or { ok:false, error }).
@@ -27,7 +28,8 @@ export function stixcut(args, timeoutMs = 600_000) {
   });
 }
 
-export const pressPrint = (sheetPath) => stixcut(["-Sheet", sheetPath]);
+/** Load the sheet in StixCut and press Print & Cut. { noPress: true } stops just before pressing (dry run). */
+export const pressPrint = (sheetPath, { noPress = false } = {}) => stixcut(["-Sheet", sheetPath, ...(noPress ? ["-NoPress"] : [])]);
 export const stixcutStatus = () => stixcut(["-Status"], 30_000);
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -36,7 +38,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     console.error('usage: print-win.mjs "<sheet.stixcut>" | --status');
     process.exit(2);
   }
-  const r = arg === "--status" ? await stixcutStatus() : await pressPrint(arg);
+  const r = arg === "--status" ? await stixcutStatus() : await pressPrint(arg, { noPress: process.argv.includes("--no-press") });
   console.log(JSON.stringify(r));
   process.exit(r.ok ? 0 : 1);
 }
