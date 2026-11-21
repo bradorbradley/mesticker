@@ -86,7 +86,7 @@ staff panel reopens the last kit.
 | `NEXT_PUBLIC_BOOTH_FREE_MODE` | `1` = no payment (demos) |
 | `BOOTH_IMAGE_PROVIDER` | `openai` (default), `gemini` (Nano Banana 2) or `fal` (FLUX Kontext) |
 | `GEMINI_API_KEY` / `FAL_KEY` | Keys for the alternative models |
-| `BOOTH_EXTRAS_PROVIDER` | Model for the 14 small sheet stickers only (`gemini`, `fal`, `openai`); default = same as the main sticker |
+| `BOOTH_EXTRAS_PROVIDER` | Model for the 14 small sheet stickers only (`gemini`, `fal`, `openai`); default = `gemini` (Nano Banana) when a Gemini key is set, else same as the main sticker |
 | `BOOTH_EXTRA_QUALITY` | OpenAI quality for the sheet stickers, default `low` |
 | `BOOTH_PREVIEW_QUALITY` | OpenAI quality, default `medium` (same as the web app); `low` is faster but rougher |
 | `BOOTH_PRINT_QUALITY` | Unset by default; set `high` to also make a sharper print copy in the background |
