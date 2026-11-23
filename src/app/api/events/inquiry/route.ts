@@ -26,7 +26,7 @@ function staff(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const rate = checkRateLimit(`event-inquiry:${getClientIP(request)}`, 8, 60 * 60 * 1000);
-  if (!rate.allowed) return NextResponse.json({ error: "Too many requests. Try again in a bit, or email hello@mesticker.fun." }, { status: 429 });
+  if (!rate.allowed) return NextResponse.json({ error: "Too many requests. Try again in a bit, or email mestickerfun@gmail.com." }, { status: 429 });
   try {
     const body = await request.json();
     if (body.website) return NextResponse.json({ ok: true }); // honeypot: bots fill every field
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[events/inquiry]", e);
-    return NextResponse.json({ error: "Couldn't send that. Please email hello@mesticker.fun." }, { status: 500 });
+    return NextResponse.json({ error: "Couldn't send that. Please email mestickerfun@gmail.com." }, { status: 500 });
   }
 }
 

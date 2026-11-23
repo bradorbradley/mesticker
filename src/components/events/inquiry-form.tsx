@@ -93,7 +93,10 @@ export default function InquiryForm() {
         {state === "sending" ? <Loader2 className="animate-spin" size={20} /> : null}
         {state === "sending" ? "Sending…" : "Check availability"}
       </button>
-      <p className="text-center text-xs text-muted-foreground sm:col-span-2">No commitment. We reply within 1–2 business days.</p>
+      <p className="text-center text-xs text-muted-foreground sm:col-span-2">
+        No commitment. We reply within 1–2 business days. By sending this you agree to our{" "}
+        <a href="/privacy" className="underline">Privacy Policy</a> and <a href="/events/terms" className="underline">Event Booking Terms</a>.
+      </p>
     </form>
   );
 }

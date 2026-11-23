@@ -1,51 +1,73 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import LegalPage from "@/components/legal/legal-page";
+import { LEGAL } from "@/lib/legal";
 
 export const metadata = {
   title: "Refund Policy · MeSticker",
-  description: "MeSticker refund and replacement policy.",
+  description: "Refunds and reprints for MeSticker online orders, booth prints and events.",
 };
+
+const mail = <a href={`mailto:${LEGAL.email}`} className="font-semibold text-primary">{LEGAL.email}</a>;
 
 export default function RefundsPage() {
   return (
-    <main className="min-h-dvh max-w-2xl mx-auto px-6 py-8">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-2 text-sm text-primary font-semibold mb-6"
-      >
-        <ArrowLeft size={14} /> Back to MeSticker
-      </Link>
-
-      <h1 className="font-display text-3xl font-bold mb-2">Refund Policy</h1>
-      <p className="text-sm text-muted-foreground mb-8">Last updated May 2026</p>
-
-      <div className="space-y-4 text-sm">
-        <h2 className="font-bold text-base">Replacements for defects</h2>
-        <p>
-          If your stickers arrive damaged, mis-printed, or with a manufacturing defect, we&apos;ll
-          replace them free of charge. Email us within 30 days of delivery with a photo of the
-          issue and we&apos;ll ship a replacement.
-        </p>
-
-        <h2 className="font-bold text-base">Lost or undelivered orders</h2>
-        <p>
-          If your order doesn&apos;t arrive within 14 business days of shipping, contact us and
-          we&apos;ll either re-ship or refund.
-        </p>
-
-        <h2 className="font-bold text-base">Custom-made products</h2>
-        <p>
-          Because every sticker is custom-printed for you, we don&apos;t offer refunds for buyer&apos;s
-          remorse or for the cartoon not matching your expectations. Please review your sticker
-          sheet preview before completing checkout.
-        </p>
-
-        <h2 className="font-bold text-base">How to request</h2>
-        <p>
-          <Link href="/contact" className="text-primary font-semibold">Contact us</Link> with your
-          order number and photos. We&apos;ll respond within 2 business days.
-        </p>
-      </div>
-    </main>
+    <LegalPage
+      title="Refund Policy"
+      intro={<p>Every sheet is made just for you, so we can&apos;t take returns, but if something is wrong on our side we&apos;ll make it right.</p>}
+      sections={[
+        {
+          id: "booth",
+          title: "At the photo booth",
+          body: (
+            <ul>
+              <li><b>Misprint, bad cut or jammed sheet:</b> tell the attendant and we&apos;ll reprint it on the spot for free.</li>
+              <li><b>Paid but nothing printed</b> (for example the printer went down): we&apos;ll print it as soon as we can, or refund you in full if we can&apos;t.</li>
+              <li><b>Charged twice:</b> email {mail} with the time and the last 4 digits of your card and we&apos;ll refund the duplicate.</li>
+            </ul>
+          ),
+        },
+        {
+          id: "online",
+          title: "Online orders",
+          body: (
+            <ul>
+              <li><b>Damaged, misprinted or defective:</b> email {mail} within 30 days of delivery with your order number and a photo, and we&apos;ll send a free replacement or refund you.</li>
+              <li><b>Lost or never arrived:</b> if it hasn&apos;t arrived 14 business days after shipping, we&apos;ll reship it or refund you.</li>
+              <li><b>Wrong address:</b> we can&apos;t cover orders shipped to an address entered incorrectly, but we&apos;ll help however we can.</li>
+            </ul>
+          ),
+        },
+        {
+          id: "custom",
+          title: "Things we can't refund",
+          body: (
+            <p>
+              Because stickers are custom-made from your photo, we don&apos;t offer refunds for changing your mind or because the cartoon isn&apos;t
+              exactly what you imagined. You see the full sheet before you pay, so please check it first. Generating previews is free.
+            </p>
+          ),
+        },
+        {
+          id: "events",
+          title: "Event bookings",
+          body: (
+            <p>
+              Deposits, cancellations and rescheduling for events are covered by our{" "}
+              <Link href="/events/terms" className="font-semibold text-primary">Event Booking Terms</Link>.
+            </p>
+          ),
+        },
+        {
+          id: "how",
+          title: "How refunds work",
+          body: (
+            <p>
+              Email {mail}. We reply within 2 business days. Approved refunds go back to your original payment method through Stripe and usually show
+              up within 5–10 business days. Nothing here limits any rights you have under consumer protection law.
+            </p>
+          ),
+        },
+      ]}
+    />
   );
 }

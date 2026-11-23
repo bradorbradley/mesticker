@@ -18,6 +18,9 @@ export default function Footer() {
           <Link href="/refunds" className="hover:text-foreground">
             Refunds
           </Link>
+          <Link href="/events/terms" className="hover:text-foreground">
+            Event terms
+          </Link>
           <Link href="/contact" className="hover:text-foreground">
             Contact
           </Link>
