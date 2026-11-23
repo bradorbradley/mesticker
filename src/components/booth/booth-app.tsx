@@ -925,6 +925,10 @@ function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOf
               </li>
             ))}
           </ol>
+          <p className="t-body max-w-[46ch] opacity-70 short:hidden" style={{ fontSize: `max(11px, ${u(0.95)})` }}>
+            By taking a photo you agree to our Terms and Privacy Policy at mesticker.fun. Photos are turned into cartoons by AI services, never used
+            for facial recognition, and deleted within 14 days.
+          </p>
         </div>
 
         <div className="relative flex items-center justify-center landscape:h-full landscape:flex-1 portrait:w-full portrait:min-h-0 portrait:flex-1">

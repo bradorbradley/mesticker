@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, Mail } from "lucide-react";
+import { LEGAL } from "@/lib/legal";
 
 export const metadata = {
   title: "Contact · MeSticker",
@@ -28,13 +29,13 @@ export default function ContactPage() {
         <div>
           <p className="font-bold">Email us</p>
           <a
-            href="mailto:hello@mesticker.fun"
+            href={`mailto:${LEGAL.email}`}
             className="text-primary font-semibold text-lg hover:underline"
           >
-            hello@mesticker.fun
+            {LEGAL.email}
           </a>
           <p className="text-xs text-muted-foreground mt-2">
-            Order issues, replacements, partnerships, press, or feedback. We respond within
+            Event bookings, order issues, replacements, partnerships, press, or feedback. We respond within
             2 business days.
           </p>
         </div>
