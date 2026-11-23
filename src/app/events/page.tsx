@@ -4,11 +4,11 @@ import ImageRevealSlider from "@/components/image-reveal";
 import InquiryForm from "@/components/events/inquiry-form";
 
 export const metadata = {
-  title: "MeSticker for Events · Live AI Sticker Booth",
+  title: "MeSticker for Events · Cartoon Sticker Photo Booth",
   description:
-    "Book MeSticker for your wedding, party or brand event. Guests snap a photo, become a cartoon, and walk away with a sheet of real stickers printed and cut on the spot.",
+    "Book the MeSticker cartoon sticker photo booth for your wedding, party or company event. Guests snap a photo, become a cartoon, and walk away with a sheet of real stickers printed and cut on the spot. Custom styles and themes for every event.",
   openGraph: {
-    title: "MeSticker for Events · Live AI Sticker Booth",
+    title: "MeSticker for Events · Cartoon Sticker Photo Booth",
     description: "Guests snap a photo and walk away with 12 cartoon stickers of themselves, printed on the spot.",
     images: ["/og-image.png"],
   },
@@ -26,6 +26,21 @@ const SHEETS = [
   { file: "/events/sheet-best-of.webp", name: "Best Of", emoji: "⭐", blurb: "A big you + the best of both" },
 ];
 
+const STYLES = [
+  { file: "/events/styles/chibi.webp", name: "Chibi" },
+  { file: "/events/styles/pixar.webp", name: "3D animated" },
+  { file: "/events/styles/simpsons.webp", name: "Yellow sitcom" },
+  { file: "/events/styles/spongebob.webp", name: "Undersea cartoon" },
+  { file: "/events/styles/rick-and-morty.webp", name: "Sci-fi cartoon" },
+];
+
+const THEMES = [
+  { file: "/events/styles/holiday.webp", name: "Holiday party", blurb: "Santa hats, ugly sweaters, snowflakes" },
+  { file: "/events/styles/corporate.webp", name: "Company event", blurb: "Blazers, lanyards, your logo on every sheet" },
+  { file: "/events/styles/wedding.webp", name: "Wedding", blurb: "Black tie, champagne, your names and date" },
+  { file: "/events/styles/birthday.webp", name: "Birthday", blurb: "Party hats, cake and confetti" },
+];
+
 const OCCASIONS = ["Weddings", "Birthday parties", "Bar & Bat Mitzvahs", "Corporate parties & offsites", "Brand activations & pop-ups", "School & community events", "Holiday parties", "Conferences"];
 
 const INCLUDED = [
@@ -34,7 +49,7 @@ const INCLUDED = [
   { icon: Sparkles, text: "All the sticker paper and ink" },
   { icon: Smartphone, text: "Digital copies guests can save to their phone" },
   { icon: QrCode, text: "Guests can also join from their own phone with a QR code" },
-  { icon: Heart, text: "Ask about custom branding: your logo, names or date on every sheet" },
+  { icon: Heart, text: "Custom styles and themes: your logo, names or date on every sheet" },
 ];
 
 const FAQS = [
@@ -57,7 +72,7 @@ export default function EventsPage() {
           </Link>
           <p className="mt-8 inline-block rounded-full bg-primary/10 px-4 py-1 text-sm font-semibold text-primary">Now booking events</p>
           <h1 className="mt-4 font-display text-4xl font-bold leading-tight md:text-6xl" style={{ textWrap: "balance" }}>
-            A live AI sticker booth for <span className="gradient-text">your event</span>
+            A cartoon sticker photo booth for <span className="gradient-text">your event</span>
           </h1>
           <p className="mt-5 max-w-[46ch] text-lg text-muted-foreground">
             Guests snap a photo, turn into a cartoon, and walk away with a sheet of real stickers of themselves, printed and cut on the spot.
@@ -117,6 +132,45 @@ export default function EventsPage() {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* custom styles + themes */}
+      <section className="mx-auto max-w-6xl px-6 py-14">
+        <h2 className="font-display text-3xl font-bold md:text-4xl">
+          Styled for <span className="gradient-text">your event</span>
+        </h2>
+        <p className="mt-2 max-w-[62ch] text-muted-foreground">
+          Pick the cartoon style, and we&apos;ll theme every sticker to match the occasion: outfits, props, colors, plus your logo, names or date on
+          every sheet. Want something one-of-a-kind? We can design a custom style just for your event.
+        </p>
+
+        <h3 className="mt-10 font-display text-xl font-bold">Cartoon styles</h3>
+        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          {STYLES.map((st) => (
+            <figure key={st.file} className="rounded-3xl bg-white p-4 text-center shadow-sm">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={st.file} alt={`${st.name} style sticker`} loading="lazy" className="mx-auto aspect-square w-full object-contain" />
+              <figcaption className="mt-2 font-display font-bold">{st.name}</figcaption>
+            </figure>
+          ))}
+        </div>
+
+        <h3 className="mt-10 font-display text-xl font-bold">Event themes</h3>
+        <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {THEMES.map((t) => (
+            <figure key={t.file} className="rounded-3xl bg-primary/5 p-4 text-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={t.file} alt={`${t.name} themed sticker`} loading="lazy" className="mx-auto aspect-square w-full max-w-[240px] object-contain" />
+              <figcaption className="mt-2">
+                <div className="font-display text-lg font-bold">{t.name}</div>
+                <div className="text-sm text-muted-foreground">{t.blurb}</div>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+        <a href="#book" className="mt-8 inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3 font-bold text-white">
+          Tell us your theme <ArrowRight size={18} />
+        </a>
       </section>
 
       {/* how it works */}
