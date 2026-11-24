@@ -9,7 +9,7 @@ import { generateVariationDescriptors } from "@/lib/vision";
 import { moderatePrompt } from "@/lib/moderation";
 import { uploadImage } from "@/lib/storage";
 import { saveImage } from "@/lib/image-store";
-import { listMediaModels, pollVideo, speak, startVideo } from "@/lib/video-providers";
+import { listMediaModels, makeMusic, pollVideo, speak, startVideo } from "@/lib/video-providers";
 import { recordGeneration } from "@/lib/spend-tracker";
 import { DPI, LAYOUT_INFO, LAYOUTS, MIN_GAP_PX, SHEET_H, SHEET_W, type LayoutId, type Slot } from "@/lib/sheet-layouts";
 import { borderSticker, loadImageBuffer, renderSheet, toDataUrl } from "@/lib/sheet-render";
@@ -261,6 +261,24 @@ const handler = createMcpHandler(
           return { content: [text({ audio_url: url })] };
         } catch (e) {
           return fail(`Speech failed: ${e instanceof Error ? e.message : e}`);
+        }
+      }
+    );
+
+    server.registerTool(
+      "make_music",
+      {
+        title: "Music (Lyria)",
+        description: "Make a short instrumental track from a brief (mood, tempo, instruments, structure). Returns an audio URL.",
+        inputSchema: z.object({ prompt: z.string().min(10).max(2000), model: z.string().default("lyria-3-clip-preview") }),
+      },
+      async ({ prompt, model }) => {
+        try {
+          const { audio, mimeType } = await makeMusic(prompt, model);
+          const url = await saveImage(audio, mimeType, "audio");
+          return { content: [text({ audio_url: url, mime_type: mimeType })] };
+        } catch (e) {
+          return fail(`Music failed: ${e instanceof Error ? e.message : e}`);
         }
       }
     );
