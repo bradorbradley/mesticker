@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolvePresetPrompt, stylePresets } from "@/lib/presets";
+import { boothPresets, resolvePresetPrompt, withEventTheme } from "@/lib/presets";
 import { generateSticker, hasPrintTier, requestedGeminiModel, requestedProvider } from "@/lib/image-providers";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { recordGeneration, recordError, isThrottled } from "@/lib/spend-tracker";
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { image, styleId, tier: rawTier, provider: wanted } = await request.json();
+    const { image, styleId, tier: rawTier, provider: wanted, theme } = await request.json();
     const tier = rawTier === "print" ? "print" : "preview";
     // The print copy only differs from the preview where the model has a quality setting.
     if (tier === "print" && !hasPrintTier()) {
@@ -30,11 +30,12 @@ export async function POST(request: NextRequest) {
     if (!image || !styleId) {
       return NextResponse.json({ error: "Missing image or style" }, { status: 400 });
     }
-    if (styleId !== "random" && !stylePresets.some((p) => p.id === styleId && p.id !== "custom")) {
+    if (styleId !== "random" && !boothPresets.some((p) => p.id === styleId && p.id !== "custom")) {
       return NextResponse.json({ error: "Invalid style" }, { status: 400 });
     }
 
-    const { prompt, resolvedId } = resolvePresetPrompt(styleId);
+    const { prompt: base, resolvedId } = resolvePresetPrompt(styleId);
+    const prompt = withEventTheme(base, theme);
     // Same prompt as the web app's /api/generate, so the look is identical.
     // the staff panel can pick the model (e.g. Nano Banana); ignored if that key isn't set
     const result = await generateSticker(image, prompt, tier, requestedProvider(wanted), requestedGeminiModel(wanted));

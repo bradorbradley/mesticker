@@ -77,7 +77,13 @@ export async function POST(request: NextRequest) {
           subject: `🎉 Event inquiry: ${inquiry.name}${inquiry.eventDate ? ` · ${inquiry.eventDate}` : ""}`,
           html: `<div style="font-family:Helvetica,Arial,sans-serif;color:#1a1a2e"><h2>New MeSticker event inquiry</h2><table>${rows}</table></div>`,
         }),
-      }).catch((e) => console.error("[events/inquiry] email failed", e));
+      })
+        .then(async (r) => {
+          if (!r.ok) console.error("[events/inquiry] email failed", r.status, await r.text().catch(() => ""));
+        })
+        .catch((e) => console.error("[events/inquiry] email failed", e));
+    } else {
+      console.warn("[events/inquiry] saved, but no email sent: set RESEND_API_KEY and EVENTS_NOTIFY_EMAIL");
     }
     return NextResponse.json({ ok: true });
   } catch (e) {

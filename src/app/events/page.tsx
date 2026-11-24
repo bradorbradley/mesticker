@@ -35,8 +35,8 @@ const STYLES = [
 
 const THEMES = [
   { file: "/events/styles/holiday.webp", name: "Holiday party", blurb: "Santa hats, ugly sweaters, snowflakes" },
-  { file: "/events/styles/corporate.webp", name: "Company event", blurb: "Blazers, lanyards, your logo on every sheet" },
-  { file: "/events/styles/wedding.webp", name: "Wedding", blurb: "Black tie, champagne, your names and date" },
+  { file: "/events/styles/corporate.webp", name: "Company event", blurb: "Blazers, lanyards and your colors. Ask us about adding your logo." },
+  { file: "/events/styles/wedding.webp", name: "Wedding", blurb: "Black tie, champagne and flowers. Ask us about your names and date." },
   { file: "/events/styles/birthday.webp", name: "Birthday", blurb: "Party hats, cake and confetti" },
 ];
 
@@ -48,7 +48,7 @@ const INCLUDED = [
   { icon: Sparkles, text: "All the sticker paper and ink" },
   { icon: Smartphone, text: "Digital copies guests can save to their phone" },
   { icon: QrCode, text: "Guests can also join from their own phone with a QR code" },
-  { icon: Heart, text: "Custom styles and themes: your logo, names or date on every sheet" },
+  { icon: Heart, text: "Your pick of cartoon style, themed to the occasion" },
 ];
 
 const FAQS = [
@@ -139,8 +139,8 @@ export default function EventsPage() {
           Styled for <span className="gradient-text">your event</span>
         </h2>
         <p className="mt-2 max-w-[62ch] text-muted-foreground">
-          Pick the cartoon style, and we&apos;ll theme every sticker to match the occasion: outfits, props, colors, plus your logo, names or date on
-          every sheet. Want something one-of-a-kind? We can design a custom style just for your event.
+          Pick the cartoon style, and we&apos;ll theme every sticker to match the occasion: outfits, props and colors. Want your logo, names or date on
+          the sheets, or something one-of-a-kind? Tell us when you book and we&apos;ll design it with you.
         </p>
 
         <h3 className="mt-10 font-display text-xl font-bold">Pick a style, or invent your own</h3>
