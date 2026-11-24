@@ -6,11 +6,14 @@ import { listInquiries, saveInquiry } from "@/lib/event-inquiries";
 /**
  * Event booking requests from /events.
  *   POST { name, email, phone?, eventDate?, location?, guests?, hours?, eventType?, message?, website? }
- *        → saved, and emailed to EVENTS_NOTIFY_EMAIL when Resend is set up
+ *        → saved, and emailed to EVENTS_NOTIFY_EMAIL when RESEND_API_KEY is set
  *   GET  ?key=<MCP_SECRET> → { inquiries } (newest first), for /events/inquiries
  */
 
-const FROM = process.env.BOOTH_EMAIL_FROM || "MeSticker <stickers@mesticker.fun>";
+// Resend's shared test sender works with no DNS setup, but only delivers to the
+// Resend account's own email, so EVENTS_NOTIFY_EMAIL must be that address.
+// Once mesticker.fun is verified in Resend, set EVENTS_EMAIL_FROM="MeSticker <stickers@mesticker.fun>".
+const FROM = process.env.EVENTS_EMAIL_FROM || "MeSticker <onboarding@resend.dev>";
 const clip = (v: unknown, n: number) => {
   const s = String(v ?? "").trim().slice(0, n);
   return s || null;
@@ -77,7 +80,13 @@ export async function POST(request: NextRequest) {
           subject: `🎉 Event inquiry: ${inquiry.name}${inquiry.eventDate ? ` · ${inquiry.eventDate}` : ""}`,
           html: `<div style="font-family:Helvetica,Arial,sans-serif;color:#1a1a2e"><h2>New MeSticker event inquiry</h2><table>${rows}</table></div>`,
         }),
-      }).catch((e) => console.error("[events/inquiry] email failed", e));
+      })
+        .then(async (r) => {
+          if (!r.ok) console.error("[events/inquiry] email failed", r.status, await r.text().catch(() => ""));
+        })
+        .catch((e) => console.error("[events/inquiry] email failed", e));
+    } else {
+      console.warn("[events/inquiry] saved, but no email sent: set RESEND_API_KEY and EVENTS_NOTIFY_EMAIL");
     }
     return NextResponse.json({ ok: true });
   } catch (e) {

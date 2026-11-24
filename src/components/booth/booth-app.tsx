@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "qrcode";
-import { stylePresets } from "@/lib/presets";
+import { eventStyleOptions, stylePresets } from "@/lib/presets";
 import {
   BOOTH_FREE_MODE,
   BOOTH_FROM_LABEL,
@@ -231,6 +231,11 @@ export default function BoothApp() {
   // the staff panel's image model, read when a request goes out (generate() is a stable callback)
   const modelRef = useRef(providersFor(undefined));
   modelRef.current = providersFor(settings?.imageModel);
+  // the event's cartoon style, from the staff panel (default chibi)
+  const styleRef = useRef(BOOTH_STYLE);
+  const themeRef = useRef<string | undefined>(undefined);
+  themeRef.current = settings?.eventTheme || undefined;
+  styleRef.current = settings?.eventStyle && eventStyleOptions.some((p) => p.id === settings.eventStyle) ? settings.eventStyle : BOOTH_STYLE;
   const updateSettings = useCallback((patch: Partial<BoothSettings>) => {
     setSettings((s) => {
       const next = { ...(s ?? loadSettings()), ...patch };
@@ -285,7 +290,7 @@ export default function BoothApp() {
     printCopy.current = fetch("/api/booth/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image, styleId: resolvedStyle, tier: "print", provider: modelRef.current.hero }),
+      body: JSON.stringify({ image, styleId: resolvedStyle, tier: "print", provider: modelRef.current.hero, theme: themeRef.current }),
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => (d?.generatedImage as string | undefined) ?? null)
@@ -342,7 +347,7 @@ export default function BoothApp() {
         Promise.allSettled(
           SLOTS.map((i) =>
             wait(i * 350 + (kind === "face" ? 175 : 0))
-              .then(() => retry(() => post({ photo: image, styleId: BOOTH_STYLE, idea: list[i % list.length] })))
+              .then(() => retry(() => post({ photo: image, styleId: styleRef.current, idea: list[i % list.length], theme: themeRef.current })))
               .then((d) => setVariant(kind, i, d.image, id))
               .catch(() => setVariant(kind, i, false, id))
           )
@@ -367,7 +372,7 @@ export default function BoothApp() {
     const main = fetch("/api/booth/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image, styleId: BOOTH_STYLE, provider: modelRef.current.hero }),
+      body: JSON.stringify({ image, styleId: styleRef.current, provider: modelRef.current.hero, theme: themeRef.current }),
     });
     variantPhoto.current = image;
     startVariantsRef.current("pose");

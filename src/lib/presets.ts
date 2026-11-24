@@ -70,6 +70,38 @@ export const stylePresets: StylePreset[] = [
   },
 ];
 
+/**
+ * Styles offered for booked events only (picked in the booth's staff panel).
+ * Kept out of stylePresets so the web app's style picker doesn't change.
+ */
+export const eventOnlyPresets: StylePreset[] = [
+  {
+    id: "vangogh",
+    name: "Van Gogh",
+    description: "Post-impressionist oil painting",
+    previewImage: "/events/styles/vangogh.webp",
+    prompt:
+      "Transform this photo into a character painted in the style of a Vincent van Gogh oil painting. Thick swirling impasto brushstrokes, bold visible texture, rich cobalt blues and sunflower yellows, expressive post-impressionist color. The brushwork stays on the character only. Keep the person fully recognizable: their face, hairstyle, hair color and clothing." +
+      STICKER_SUFFIX,
+  },
+];
+
+/** Every style the booth can draw: the web app's presets plus event-only ones. */
+export const boothPresets: StylePreset[] = [...stylePresets, ...eventOnlyPresets];
+
+/** Styles the staff panel offers for an event (no random or custom). */
+export const eventStyleOptions = boothPresets.filter((p) => p.id !== "random" && p.id !== "custom");
+
+/**
+ * A booked event's theme from the staff panel ("holiday party: Santa hat,
+ * ugly sweater"), worked into the character's outfit and props. No text.
+ */
+export function withEventTheme(prompt: string, theme: unknown): string {
+  const t = String(theme ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+  if (!t) return prompt;
+  return `${prompt} Event theme: ${t}. Work the theme into the character's outfit, accessories and props, keeping the person fully recognizable. No text, letters or logos.`;
+}
+
 export function getDisplayPresets(): StylePreset[] {
   return stylePresets;
 }
@@ -80,7 +112,7 @@ export function resolvePresetPrompt(presetId: string): { prompt: string; resolve
     const pick = realPresets[Math.floor(Math.random() * realPresets.length)];
     return { prompt: pick.prompt, resolvedId: pick.id };
   }
-  const preset = stylePresets.find((p) => p.id === presetId);
+  const preset = boothPresets.find((p) => p.id === presetId);
   if (!preset) throw new Error(`Unknown preset: ${presetId}`);
   return { prompt: preset.prompt, resolvedId: preset.id };
 }

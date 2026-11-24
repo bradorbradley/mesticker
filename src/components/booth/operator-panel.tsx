@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SHEETS_PER_CASSETTE } from "@/lib/booth-config";
+import { BOOTH_STYLE, SHEETS_PER_CASSETTE } from "@/lib/booth-config";
+import { eventStyleOptions } from "@/lib/presets";
 
 /**
  * Which AI draws the stickers. "default" = whatever Vercel's env vars say.
@@ -28,6 +29,10 @@ export interface BoothSettings {
   salesToday: number;
   salesDate: string;
   imageModel?: ImageModel;
+  /** Cartoon style for this event (a preset id). Unset = BOOTH_STYLE (chibi). */
+  eventStyle?: string;
+  /** Optional theme for this event, worked into outfits and props. */
+  eventTheme?: string;
 }
 
 export interface GenStats {
@@ -135,6 +140,38 @@ export default function OperatorPanel({
               </button>
             ))}
           </div>
+        </div>
+
+        <div className={`${row} flex-wrap`}>
+          <div>
+            <div className="text-xl font-semibold">Event style</div>
+            <div className="text-[var(--ink-2)]">Every sticker at this booth uses it, until you change it</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {eventStyleOptions.map((p) => (
+              <button
+                key={p.id}
+                className={(settings.eventStyle ?? BOOTH_STYLE) === p.id ? "btn btn-main" : small}
+                onClick={() => update({ eventStyle: p.id })}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={`${row} flex-wrap`}>
+          <div>
+            <div className="text-xl font-semibold">Event theme</div>
+            <div className="text-[var(--ink-2)]">Optional, e.g. &ldquo;holiday party: Santa hats, ugly sweaters&rdquo;. Leave empty for none.</div>
+          </div>
+          <input
+            className="w-full rounded-xl border-2 border-[#eee8ff] px-4 py-3 text-lg"
+            maxLength={200}
+            defaultValue={settings.eventTheme ?? ""}
+            onBlur={(e) => update({ eventTheme: e.target.value.trim() || undefined })}
+            placeholder="No theme"
+          />
         </div>
 
         <div className={row}>

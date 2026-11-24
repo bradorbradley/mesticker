@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolvePresetPrompt, stylePresets } from "@/lib/presets";
+import { boothPresets, resolvePresetPrompt, withEventTheme } from "@/lib/presets";
 import { generateVariationDescriptors } from "@/lib/vision";
 import { generateSticker, requestedGeminiModel, requestedProvider } from "@/lib/image-providers";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
@@ -23,17 +23,17 @@ export async function POST(request: NextRequest) {
   if (isThrottled()) return NextResponse.json({ error: "Busy, try again in a minute" }, { status: 503 });
 
   try {
-    const { photo, styleId, idea, provider: wanted } = await request.json();
+    const { photo, styleId, idea, provider: wanted, theme } = await request.json();
     if (!photo) return NextResponse.json({ error: "Missing photo" }, { status: 400 });
 
     if (!idea) {
       const { descriptors } = await generateVariationDescriptors(photo);
       return NextResponse.json({ ideas: descriptors.slice(0, 9) });
     }
-    if (!stylePresets.some((p) => p.id === styleId && p.id !== "custom" && p.id !== "random")) {
+    if (!boothPresets.some((p) => p.id === styleId && p.id !== "custom" && p.id !== "random")) {
       return NextResponse.json({ error: "Invalid style" }, { status: 400 });
     }
-    const { prompt } = resolvePresetPrompt(styleId);
+    const prompt = withEventTheme(resolvePresetPrompt(styleId).prompt, theme);
     const pose = String(idea).slice(0, 300);
     const result = await generateSticker(
       photo,
