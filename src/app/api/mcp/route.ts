@@ -9,7 +9,7 @@ import { generateVariationDescriptors } from "@/lib/vision";
 import { moderatePrompt } from "@/lib/moderation";
 import { uploadImage } from "@/lib/storage";
 import { saveImage } from "@/lib/image-store";
-import { pollVideo, speak, startVideo } from "@/lib/video-providers";
+import { listMediaModels, pollVideo, speak, startVideo } from "@/lib/video-providers";
 import { recordGeneration } from "@/lib/spend-tracker";
 import { DPI, LAYOUT_INFO, LAYOUTS, MIN_GAP_PX, SHEET_H, SHEET_W, type LayoutId, type Slot } from "@/lib/sheet-layouts";
 import { borderSticker, loadImageBuffer, renderSheet, toDataUrl } from "@/lib/sheet-render";
@@ -212,6 +212,18 @@ const handler = createMcpHandler(
           return { content: [text({ operation })] };
         } catch (e) {
           return fail(`Video start failed: ${e instanceof Error ? e.message : e}`);
+        }
+      }
+    );
+
+    server.registerTool(
+      "list_video_models",
+      { title: "List video/voice models", description: "Free. The Veo, TTS and Lyria models the Gemini key can use (for start_video's model and speak).", inputSchema: z.object({}) },
+      async () => {
+        try {
+          return { content: [text(await listMediaModels())] };
+        } catch (e) {
+          return fail(`List failed: ${e instanceof Error ? e.message : e}`);
         }
       }
     );
