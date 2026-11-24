@@ -69,6 +69,18 @@ export async function speak(text: string, voice = "Puck", model = "gemini-2.5-fl
   return pcmToWav(Buffer.from(b64, "base64"), 24000);
 }
 
+/** Lyria: a short instrumental from a text brief. Returns the audio bytes and type. */
+export async function makeMusic(prompt: string, model = "lyria-3-clip-preview") {
+  if (!/^lyria-[\w.-]{1,40}$/.test(model)) throw new Error("Unknown Lyria model");
+  const data = await call(`models/${model}:generateContent`, {
+    method: "POST",
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ["AUDIO"] } }),
+  });
+  const part = data.candidates?.[0]?.content?.parts?.find((p: { inlineData?: { data: string } }) => p.inlineData)?.inlineData as { data: string; mimeType?: string } | undefined;
+  if (!part) throw new Error(`Lyria returned no audio: ${JSON.stringify(data).slice(0, 300)}`);
+  return { audio: Buffer.from(part.data, "base64"), mimeType: (part.mimeType || "audio/mpeg").split(";")[0] };
+}
+
 function pcmToWav(pcm: Buffer, rate: number) {
   const h = Buffer.alloc(44);
   h.write("RIFF", 0); h.writeUInt32LE(36 + pcm.length, 4); h.write("WAVE", 8); h.write("fmt ", 12);
