@@ -52,7 +52,7 @@ const INCLUDED = [
 ];
 
 const FAQS = [
-  { q: "How much does it cost?", a: "Packages start at $650. The exact price depends on your guest count, how many hours you'd like the booth and where the event is. Tell us about it with the form below and we'll send a quote within 1–2 business days." },
+  { q: "How much does it cost?", a: "Kids' birthday parties start at $450 for 2 hours with up to 30 kids, and every kid takes home a sheet. Other events start at $650. The exact price depends on your guest count, how many hours you'd like the booth and where the event is. Tell us about it with the form below and we'll send a quote within 1–2 business days." },
   { q: "Who pays for the stickers?", a: "Your choice. You can cover it so every guest gets stickers free, or guests can buy their own sheets on their phones (Apple Pay, Google Pay, card) while you pay a smaller booking fee." },
   { q: "How many guests can it handle?", a: "Each sheet takes about 2 minutes to print and cut, so roughly 25 sheets an hour. Guests get their cartoon in seconds and play a game while their sheet prints, so the line keeps moving." },
   { q: "What do you need from the venue?", a: "A table about 6 ft wide, a power outlet and Wi-Fi (we can bring a hotspot). Setup takes about 30 minutes." },
@@ -233,7 +233,7 @@ export default function EventsPage() {
       {/* pricing */}
       <section className="mx-auto max-w-6xl px-6">
         <div className="rounded-3xl bg-gradient-to-br from-primary to-pink-500 p-8 text-white md:p-10">
-          <h2 className="font-display text-3xl font-bold">Packages from $650</h2>
+          <h2 className="font-display text-3xl font-bold">Kids' parties from $450 · Events from $650</h2>
           <p className="mt-3 max-w-[60ch] text-lg text-white/90">
             Your exact price depends on your guest count, how many hours you&apos;d like and where you are. Tell us about your event and we&apos;ll send a
             quote within 1–2 business days.
