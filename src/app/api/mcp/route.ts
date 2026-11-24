@@ -8,6 +8,8 @@ import { activeProvider, generateScene, generateSticker } from "@/lib/image-prov
 import { generateVariationDescriptors } from "@/lib/vision";
 import { moderatePrompt } from "@/lib/moderation";
 import { uploadImage } from "@/lib/storage";
+import { saveImage } from "@/lib/image-store";
+import { pollVideo, speak, startVideo } from "@/lib/video-providers";
 import { recordGeneration } from "@/lib/spend-tracker";
 import { DPI, LAYOUT_INFO, LAYOUTS, MIN_GAP_PX, SHEET_H, SHEET_W, type LayoutId, type Slot } from "@/lib/sheet-layouts";
 import { borderSticker, loadImageBuffer, renderSheet, toDataUrl } from "@/lib/sheet-render";
@@ -184,6 +186,69 @@ const handler = createMcpHandler(
           return { content: [text({ image_url: url }), await imagePreview(png, 512)] };
         } catch (e) {
           return fail(`Scene failed: ${e instanceof Error ? e.message : e}`);
+        }
+      }
+    );
+
+    server.registerTool(
+      "start_video",
+      {
+        title: "Start a video clip (Veo)",
+        description:
+          "Animate a still (e.g. a generate_scene frame) into a short clip with Google Veo. Costs real money (about $0.15/s on Veo 3.1 Fast). Returns an operation name: call get_video with it every ~20 s until the clip is ready.",
+        inputSchema: z.object({
+          prompt: z.string().min(10).max(4000),
+          image_url: z.string().optional(),
+          model: z.string().default("veo-3.1-fast-generate-preview"),
+          aspect_ratio: z.enum(["9:16", "16:9"]).default("9:16"),
+          seconds: z.union([z.literal(4), z.literal(6), z.literal(8)]).default(4),
+          resolution: z.enum(["720p", "1080p"]).optional(),
+        }),
+      },
+      async ({ prompt, image_url, model, aspect_ratio, seconds, resolution }) => {
+        try {
+          const image = image_url ? { base64: (await sharp(await loadImageBuffer(image_url)).png().toBuffer()).toString("base64"), mimeType: "image/png" } : undefined;
+          const operation = await startVideo({ prompt, image, model, aspectRatio: aspect_ratio, seconds, resolution });
+          return { content: [text({ operation })] };
+        } catch (e) {
+          return fail(`Video start failed: ${e instanceof Error ? e.message : e}`);
+        }
+      }
+    );
+
+    server.registerTool(
+      "get_video",
+      {
+        title: "Check a video clip",
+        description: "Poll a start_video operation. Returns {status:'running'} or {status:'done', video_url}.",
+        inputSchema: z.object({ operation: z.string() }),
+      },
+      async ({ operation }) => {
+        try {
+          const r = await pollVideo(operation);
+          if (!r.done) return { content: [text({ status: "running" })] };
+          const url = await saveImage(r.mp4, "video/mp4", "video");
+          return { content: [text({ status: "done", video_url: url, bytes: r.mp4.length })] };
+        } catch (e) {
+          return fail(`Video failed: ${e instanceof Error ? e.message : e}`);
+        }
+      }
+    );
+
+    server.registerTool(
+      "speak",
+      {
+        title: "Voiceover (Gemini TTS)",
+        description: "Turn a line into speech. Put delivery cues in the text (e.g. 'Say warmly, with a smile: ...'). Voices: Puck, Kore, Charon, Fenrir, Aoede, Leda, Orus, Zephyr. Returns a WAV URL.",
+        inputSchema: z.object({ text: z.string().min(1).max(2000), voice: z.string().regex(/^[A-Z][a-z]+$/).default("Puck") }),
+      },
+      async ({ text: line, voice }) => {
+        try {
+          const wav = await speak(line, voice);
+          const url = await saveImage(wav, "audio/wav", "audio");
+          return { content: [text({ audio_url: url })] };
+        } catch (e) {
+          return fail(`Speech failed: ${e instanceof Error ? e.message : e}`);
         }
       }
     );

@@ -38,7 +38,7 @@ export function publicBase() {
   return (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
 }
 
-const EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "application/json": "json" };
+const EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "application/json": "json", "video/mp4": "mp4", "audio/wav": "wav" };
 
 /** Store bytes; returns the public URL. `kind` groups them ("sticker", "cart", "photo"). */
 export async function saveImage(buf: Buffer, contentType: string, kind: string): Promise<string> {
