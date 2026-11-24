@@ -160,6 +160,34 @@ async function generateGemini(image: string, prompt: string, only?: string) {
   throw new Error(lastErr);
 }
 
+/**
+ * A full illustrated scene (not a sticker): reference images (e.g. the mascot)
+ * plus a prompt, at any aspect ratio, background kept. Used by the MCP
+ * `generate_scene` tool for storyboards and marketing art.
+ */
+export async function generateScene(prompt: string, references: string[], aspectRatio = "9:16", model = "gemini-3.1-flash-image") {
+  const key = geminiKey();
+  if (!key) throw new Error("GEMINI_API_KEY is not set");
+  const parts: Record<string, unknown>[] = [{ text: prompt }];
+  for (const ref of references) {
+    const { mime, data } = splitDataUrl(ref);
+    parts.push({ inline_data: { mime_type: mime, data } });
+  }
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+    body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio } } }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.error?.message || `Gemini error ${res.status}`);
+  type Part = { inlineData?: { data: string; mimeType?: string }; inline_data?: { data: string; mime_type?: string } };
+  const out: Part[] = json?.candidates?.[0]?.content?.parts ?? [];
+  const part = out.find((p) => p.inlineData || p.inline_data);
+  const b64 = part?.inlineData?.data ?? part?.inline_data?.data;
+  if (!b64) throw new Error("Gemini returned no image");
+  return `data:${part?.inlineData?.mimeType ?? part?.inline_data?.mime_type ?? "image/png"};base64,${b64}`;
+}
+
 // ---------------------------------------------------------------- fal.ai FLUX Kontext
 async function generateFal(image: string, prompt: string) {
   const key = process.env.FAL_KEY;
