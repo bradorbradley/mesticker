@@ -28,10 +28,9 @@ const SHEETS = [
 
 const STYLES = [
   { file: "/events/styles/chibi.webp", name: "Chibi" },
-  { file: "/events/styles/pixar.webp", name: "3D animated" },
-  { file: "/events/styles/simpsons.webp", name: "Yellow sitcom" },
-  { file: "/events/styles/spongebob.webp", name: "Undersea cartoon" },
-  { file: "/events/styles/rick-and-morty.webp", name: "Sci-fi cartoon" },
+  { file: "/events/styles/pixar.webp", name: "Pixar-style 3D" },
+  { file: "/events/styles/simpsons.webp", name: "Simpsons-style" },
+  { file: "/events/styles/vangogh.webp", name: "Van Gogh painting" },
 ];
 
 const THEMES = [
@@ -144,16 +143,27 @@ export default function EventsPage() {
           every sheet. Want something one-of-a-kind? We can design a custom style just for your event.
         </p>
 
-        <h3 className="mt-10 font-display text-xl font-bold">Cartoon styles</h3>
+        <h3 className="mt-10 font-display text-xl font-bold">Pick a style, or invent your own</h3>
         <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {STYLES.map((st) => (
             <figure key={st.file} className="rounded-3xl bg-white p-4 text-center shadow-sm">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={st.file} alt={`${st.name} style sticker`} loading="lazy" className="mx-auto aspect-square w-full object-contain" />
+              <img src={st.file} alt={`${st.name} sticker`} loading="lazy" className="mx-auto aspect-square w-full object-contain" />
               <figcaption className="mt-2 font-display font-bold">{st.name}</figcaption>
             </figure>
           ))}
+          {/* custom */}
+          <a
+            href="#book"
+            className="col-span-2 flex flex-col items-center justify-center rounded-3xl border-[3px] border-dashed border-primary/40 bg-primary/5 p-5 text-center transition-colors hover:bg-primary/10 sm:col-span-1"
+          >
+            <span className="text-5xl">✨</span>
+            <span className="mt-3 font-display text-lg font-bold">Your custom style</span>
+            <span className="mt-1 text-sm text-muted-foreground">Anime, comic book, claymation, your team&apos;s mascot, your brand&apos;s look. If you can describe it, we can make it.</span>
+            <span className="mt-3 text-sm font-bold text-primary">Ask us →</span>
+          </a>
         </div>
+        <p className="mt-3 text-xs text-muted-foreground">Styles are original artistic interpretations. MeSticker isn&apos;t affiliated with or endorsed by any studio or show.</p>
 
         <h3 className="mt-10 font-display text-xl font-bold">Event themes</h3>
         <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
