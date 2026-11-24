@@ -4,7 +4,7 @@ import { z } from "zod";
 import sharp from "sharp";
 import { stylePresets, resolvePresetPrompt } from "@/lib/presets";
 import { generateAtQuality } from "@/lib/generation";
-import { activeProvider, generateSticker } from "@/lib/image-providers";
+import { activeProvider, generateScene, generateSticker } from "@/lib/image-providers";
 import { generateVariationDescriptors } from "@/lib/vision";
 import { moderatePrompt } from "@/lib/moderation";
 import { uploadImage } from "@/lib/storage";
@@ -153,6 +153,37 @@ const handler = createMcpHandler(
           return { content: [text({ poses: descriptors, source })] };
         } catch (e) {
           return fail(`Couldn't suggest poses: ${e instanceof Error ? e.message : e}`);
+        }
+      }
+    );
+
+    server.registerTool(
+      "generate_scene",
+      {
+        title: "Generate an illustrated scene",
+        description:
+          "Make a full illustrated scene (storyboard frame, marketing art) with Google Nano Banana, keeping the background. Pass reference image URLs (e.g. the mascot at https://mesticker.fun/booth/mascot.webp) so characters stay consistent. Returns the image URL.",
+        inputSchema: z.object({
+          prompt: z.string().min(10).max(4000),
+          reference_urls: z.array(z.string()).max(4).default([]),
+          aspect_ratio: z.enum(["9:16", "16:9", "1:1", "4:5", "3:4"]).default("9:16"),
+        }),
+      },
+      async ({ prompt, reference_urls, aspect_ratio }) => {
+        try {
+          const refs = await Promise.all(
+            reference_urls.map(async (u) => {
+              const buf = await sharp(await loadImageBuffer(u)).png().toBuffer();
+              return toDataUrl(buf);
+            })
+          );
+          const img = await generateScene(prompt, refs, aspect_ratio);
+          const png = await loadImageBuffer(img);
+          const url = await uploadImage(toDataUrl(png));
+          recordGeneration("preview");
+          return { content: [text({ image_url: url }), await imagePreview(png, 512)] };
+        } catch (e) {
+          return fail(`Scene failed: ${e instanceof Error ? e.message : e}`);
         }
       }
     );
