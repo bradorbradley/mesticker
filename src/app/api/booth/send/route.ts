@@ -10,11 +10,13 @@ import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
  *        the address they paid with (looked up from Stripe, never sent to the
  *        kiosk).
  *
- * Needs RESEND_API_KEY and a verified sending domain (BOOTH_EMAIL_FROM,
- * default "MeSticker <stickers@mesticker.fun>").
+ * Needs RESEND_API_KEY and BOOTH_EMAIL_FROM on a domain verified in Resend,
+ * e.g. "MeSticker <stickers@mesticker.fun>". Resend's shared test sender can't
+ * reach guests, so the option stays hidden until BOOTH_EMAIL_FROM is set.
  */
 
-const FROM = process.env.BOOTH_EMAIL_FROM || "MeSticker <stickers@mesticker.fun>";
+const FROM = process.env.BOOTH_EMAIL_FROM;
+const emailReady = () => !!process.env.RESEND_API_KEY && !!FROM;
 
 function allowedImage(url: string) {
   try {
@@ -31,12 +33,12 @@ function origin(request: NextRequest) {
 }
 
 export async function GET() {
-  return NextResponse.json({ email: !!process.env.RESEND_API_KEY });
+  return NextResponse.json({ email: emailReady() });
 }
 
 export async function POST(request: NextRequest) {
   const key = process.env.RESEND_API_KEY;
-  if (!key) return NextResponse.json({ error: "Email is not set up" }, { status: 501 });
+  if (!key || !emailReady()) return NextResponse.json({ error: "Email is not set up" }, { status: 501 });
 
   const rate = checkRateLimit(`booth-send:${getClientIP(request)}`, 60, 60 * 60 * 1000);
   if (!rate.allowed) return NextResponse.json({ error: "Too many emails, try again later" }, { status: 429 });
