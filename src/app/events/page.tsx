@@ -233,7 +233,7 @@ export default function EventsPage() {
       {/* pricing */}
       <section className="mx-auto max-w-6xl px-6">
         <div className="rounded-3xl bg-gradient-to-br from-primary to-pink-500 p-8 text-white md:p-10">
-          <h2 className="font-display text-3xl font-bold">Kids' parties from $450 · Events from $650</h2>
+          <h2 className="font-display text-3xl font-bold">Kids&apos; parties from $450 · Events from $650</h2>
           <p className="mt-3 max-w-[60ch] text-lg text-white/90">
             Your exact price depends on your guest count, how many hours you&apos;d like and where you are. Tell us about your event and we&apos;ll send a
             quote within 1–2 business days.
