@@ -6,11 +6,14 @@ import { listInquiries, saveInquiry } from "@/lib/event-inquiries";
 /**
  * Event booking requests from /events.
  *   POST { name, email, phone?, eventDate?, location?, guests?, hours?, eventType?, message?, website? }
- *        → saved, and emailed to EVENTS_NOTIFY_EMAIL when Resend is set up
+ *        → saved, and emailed to EVENTS_NOTIFY_EMAIL when RESEND_API_KEY is set
  *   GET  ?key=<MCP_SECRET> → { inquiries } (newest first), for /events/inquiries
  */
 
-const FROM = process.env.BOOTH_EMAIL_FROM || "MeSticker <stickers@mesticker.fun>";
+// Resend's shared test sender works with no DNS setup, but only delivers to the
+// Resend account's own email, so EVENTS_NOTIFY_EMAIL must be that address.
+// Once mesticker.fun is verified in Resend, set EVENTS_EMAIL_FROM="MeSticker <stickers@mesticker.fun>".
+const FROM = process.env.EVENTS_EMAIL_FROM || "MeSticker <onboarding@resend.dev>";
 const clip = (v: unknown, n: number) => {
   const s = String(v ?? "").trim().slice(0, n);
   return s || null;
