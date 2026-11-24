@@ -15,6 +15,19 @@ async function call(path: string, init?: RequestInit) {
   return data;
 }
 
+/** Free: the Veo/TTS models this key can use. */
+export async function listMediaModels() {
+  const out: { name: string; methods: string[] }[] = [];
+  let page = "";
+  for (let i = 0; i < 5; i++) {
+    const data = await call(`models?pageSize=1000${page ? `&pageToken=${page}` : ""}`);
+    for (const m of data.models || []) if (/veo|tts|lyria/i.test(m.name)) out.push({ name: m.name, methods: m.supportedGenerationMethods || [] });
+    if (!data.nextPageToken) break;
+    page = data.nextPageToken;
+  }
+  return out;
+}
+
 export const VEO_MODEL = /^veo-[\w.-]{3,60}$/;
 
 /** Start a Veo clip from a first-frame image. Returns the operation name to poll. */
