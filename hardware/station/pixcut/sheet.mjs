@@ -23,6 +23,7 @@ export const CUT = {
   edgeMm: 1.5, // keep cuts this far from the paper edge
 };
 export const STICKERS_PER_SHEET = 12;
+export const LIGHT_JPEG_BYTES = 360 * 1024;
 // distinct stickers each design needs (heal.mjs recipes): main + extras
 const DISTINCT = { pose: 8, face: 8, best: 11 };
 
@@ -78,7 +79,7 @@ const bbox = (poly) => {
  * Build one sheet. `sheet` is an entry of order.json's `sheets`.
  * Returns { jpeg, plt, preview, qc: { ok, issues, warnings, stats } }.
  */
-export async function buildSheet(sheet) {
+export async function buildSheet(sheet, { light = false, needGuide = true } = {}) {
   const issues = [], warnings = [];
   const pls = [...sheet.placements].sort((a, b) => a.n - b.n);
 
@@ -87,7 +88,7 @@ export async function buildSheet(sheet) {
   for (const pl of pls) {
     if (pl.x == null || pl.y == null || !(pl.w > 0) || !(pl.h > 0)) issues.push(`sticker ${pl.n} has no position/size`);
     else if (pl.x < -eps || pl.y < -eps || pl.x + pl.w > PRINTABLE.w + eps || pl.y + pl.h > PRINTABLE.h + eps) issues.push(`sticker ${pl.n} runs off the printable area`);
-    if (!pl.file || !existsSync(pl.file)) issues.push(`sticker ${pl.n} image is missing`);
+    if (!pl.file || (!Buffer.isBuffer(pl.file) && !existsSync(pl.file))) issues.push(`sticker ${pl.n} image is missing`);
   }
   const hero = pls.find((p) => p.n === 1);
   if (!hero) issues.push("no hero sticker (spot 1)");
@@ -166,9 +167,11 @@ export async function buildSheet(sheet) {
     .extend({ left: SHEET.padX, right: SHEET.padX, top: SHEET.padY, bottom: SHEET.padY, background: "#ffffff" });
   const flatBuf = await flat.png().toBuffer();
   let jpeg;
-  for (const q of [95, 92, 88, 84, 80]) {
-    jpeg = await sharp(flatBuf).jpeg({ quality: q, chromaSubsampling: "4:4:4" }).toBuffer();
-    if (jpeg.length <= MAX_JPEG_BYTES) break;
+  // `light` is for Bluetooth, where every kilobyte costs time: smaller file, still print quality
+  const limit = light ? LIGHT_JPEG_BYTES : MAX_JPEG_BYTES;
+  for (const q of light ? [84, 78, 72, 66] : [95, 92, 88, 84, 80]) {
+    jpeg = await sharp(flatBuf).jpeg({ quality: q, chromaSubsampling: light ? "4:2:0" : "4:4:4", mozjpeg: light }).toBuffer();
+    if (jpeg.length <= limit) break;
   }
   if (jpeg.length > MAX_JPEG_BYTES) issues.push(`print image is ${jpeg.length} bytes, over the printer's 1 MiB`);
 
@@ -181,7 +184,7 @@ export async function buildSheet(sheet) {
     .toBuffer();
 
   // the guest's guide should show the same layout (rough check: aspect and existence)
-  if (!sheet.guide || !existsSync(sheet.guide)) warnings.push(`sheet ${sheet.sheet} has no guide image to compare against`);
+  if (needGuide && (!sheet.guide || !existsSync(sheet.guide))) warnings.push(`sheet ${sheet.sheet} has no guide image to compare against`);
 
   return {
     jpeg,

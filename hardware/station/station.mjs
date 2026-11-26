@@ -21,7 +21,7 @@
 import { readFileSync, mkdirSync, writeFileSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import sharp from "sharp";
+import { cleanStickerBuffer } from "./pixcut/clean.mjs";
 
 const HOME = homedir();
 const CONFIG = process.env.STATION_CONFIG || join(HOME, ".mesticker-station", "env");
@@ -101,38 +101,8 @@ async function download(url, path) {
  * (music notes, hearts) are far bigger and stay. Returns specks removed.
  */
 async function cleanSticker(path) {
-  const img = sharp(path).ensureAlpha();
-  const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
-  const W = info.width, H = info.height, C = info.channels;
-  const solid = (i) => data[i * C + 3] > 48;
-  const label = new Int32Array(W * H).fill(-1);
-  const sizes = [];
-  for (let i = 0; i < W * H; i++) {
-    if (label[i] !== -1 || !solid(i)) continue;
-    const id = sizes.length, stack = [i];
-    let n = 0;
-    label[i] = id;
-    while (stack.length) {
-      const p = stack.pop();
-      n++;
-      const x = p % W, y = (p / W) | 0;
-      for (const q of [x > 0 ? p - 1 : -1, x < W - 1 ? p + 1 : -1, y > 0 ? p - W : -1, y < H - 1 ? p + W : -1]) {
-        if (q >= 0 && label[q] === -1 && solid(q)) {
-          label[q] = id;
-          stack.push(q);
-        }
-      }
-    }
-    sizes.push(n);
-  }
-  const min = Math.max(200, Math.max(0, ...sizes) * 0.003);
-  let removed = 0;
-  sizes.forEach((s) => s < min && removed++);
-  for (let i = 0; i < W * H; i++) {
-    const l = label[i];
-    if (l === -1 || sizes[l] < min) data[i * C + 3] = 0;
-  }
-  await sharp(data, { raw: { width: W, height: H, channels: C } }).png().toFile(path + ".tmp");
+  const { png, removed } = await cleanStickerBuffer(readFileSync(path));
+  writeFileSync(path + ".tmp", png);
   renameSync(path + ".tmp", path);
   return removed;
 }

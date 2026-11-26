@@ -1,6 +1,19 @@
 # Printing straight from the booth web page (no laptop script, no StixCut)
 
-Status: test bench live at `/booth/printer`. Not yet proven on our own printer.
+Status: `/booth/admin` (connect the printer, auto-print paid orders) and the `/booth/printer` test bench are live.
+Proven end to end against a simulated printer only; not yet on our own printer.
+
+## How an order prints
+
+1. Guest pays; the order is in the queue (`/api/booth/queue`), as before.
+2. The admin page claims it and asks `/api/booth/print-job?id=&sheet=` for each sheet. The server downloads the
+   stickers, removes specks, lays them out, traces the cut path and runs the same checks as the laptop station
+   (`pixcut/sheet.mjs`). About 2 s per sheet.
+3. The page sends JPEG + cut path to the printer over its USB or Bluetooth link, shows progress, then marks the order done.
+
+The admin device must stay awake with the page in front: it asks the browser to keep the screen on, reconnects
+by itself when it can, and unprinted orders simply wait in the queue. "Open booth" runs the booth on top of the
+admin page so one tablet can do both.
 
 ## What is known (Nov 2026)
 
@@ -32,6 +45,7 @@ Bluetooth is slow: about 180 bytes per acknowledged write, so a 330 KB sheet is 
 - `station/pixcut/protocol.mjs`: USB protocol (transport-agnostic).
 - `station/pixcut/webusb.mjs`: WebUSB transport (from brencut, MIT).
 - `station/pixcut/ble.mjs`: Web Bluetooth transport + job flow (ours). Tests: `node --test hardware/station/pixcut/ble.test.mjs`.
+- `src/components/booth/print-admin.tsx`: the admin page (`/booth/admin`). `src/lib/print-job.ts`: server-side sheet builder.
 - `src/app/booth/printer/page.tsx`: the test bench. Test sheet in `public/booth/printer-test/`.
 
 ## Next
