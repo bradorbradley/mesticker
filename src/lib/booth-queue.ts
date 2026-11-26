@@ -191,6 +191,14 @@ export async function markVerified(id: string) {
   await getDb()`UPDATE booth_queue SET verified = TRUE WHERE id = ${id}`;
 }
 
+/** One order by id. */
+export async function getOrder(id: string): Promise<QueueOrder | null> {
+  if (inMemory()) return memory().get(id) ?? null;
+  await ensureTable();
+  const rows = await getDb()`SELECT * FROM booth_queue WHERE id = ${id}`;
+  return rows.length ? fromRow(rows[0] as Row) : null;
+}
+
 /** Orders, oldest first. */
 export async function listOrders(status?: QueueStatus, limit = 50): Promise<QueueOrder[]> {
   if (inMemory()) {
