@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isFreeEvent } from "@/lib/booth-event";
 import { getStripe } from "@/lib/stripe";
 import { BOOTH_STYLE, STICKERS_PER_SHEET, bundlePrice, getSheet, parseSheets } from "@/lib/booth-config";
 
@@ -22,7 +23,7 @@ function appOrigin(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!process.env.STRIPE_SECRET_KEY) {
+  if (!process.env.STRIPE_SECRET_KEY || (await isFreeEvent())) {
     return NextResponse.json({ free: true });
   }
   try {

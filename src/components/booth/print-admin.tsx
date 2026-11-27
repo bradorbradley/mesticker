@@ -52,7 +52,8 @@ export default function PrintAdmin() {
   const [printerLine, setPrinterLine] = useState("Not connected");
   const [connecting, setConnecting] = useState(false);
   const [auto, setAuto] = useState(true);
-  const [includeFree, setIncludeFree] = useState(false);
+  const [eventFree, setEventFree] = useState<boolean | null>(null);
+  const [savingEvent, setSavingEvent] = useState(false);
   const [current, setCurrent] = useState<Current | null>(null);
   const [orders, setOrders] = useState<QueueOrder[]>([]);
   const [queueError, setQueueError] = useState("");
@@ -60,8 +61,8 @@ export default function PrintAdmin() {
   const [booth, setBooth] = useState(false);
 
   // the print loop reads these, so it never works from a stale render
-  const live = useRef({ key, link, auto, includeFree, working: false });
-  live.current = { ...live.current, key, link, auto, includeFree };
+  const live = useRef({ key, link, auto, working: false });
+  live.current = { ...live.current, key, link, auto };
   const lastDevice = useRef<{ kind: Kind; device: unknown } | null>(null);
 
   const say = useCallback((line: string) => setLog((l) => [`${new Date().toLocaleTimeString()}  ${line}`, ...l].slice(0, 100)), []);
@@ -73,7 +74,6 @@ export default function PrintAdmin() {
       window.history.replaceState(null, "", window.location.pathname);
     }
     setKey(fromUrl ?? localStorage.getItem(KEY));
-    setIncludeFree(localStorage.getItem("mesticker-print-free") === "1");
     setCan({ usb: usb.supported(), ble: ble.supported() });
   }, []);
 
@@ -187,10 +187,12 @@ export default function PrintAdmin() {
             setOrders(orders);
             setQueueError("");
           }
+          const ev = await fetch("/api/booth/event", { cache: "no-store" }).then((r) => r.json());
+          if (alive && !savingRef.current) setEventFree(ev.free === true);
         } catch (e) {
           if (alive) setQueueError(msg(e));
         }
-        const { link: l, auto: on, includeFree: free } = live.current;
+        const { link: l, auto: on } = live.current;
         if (!l && lastDevice.current && !live.current.working) {
           // dropped (phone slept, cable bumped): take it back without a tap when the browser allows
           try {
@@ -210,7 +212,7 @@ export default function PrintAdmin() {
             setPrinterLine(statusLine(st));
             const ready = (st.state === 20 || st.state === 30) && !st.alerts.length;
             if (ready && on) {
-              const { order } = await queue({ action: "claim", includeUnverified: free });
+              const { order } = await queue({ action: "claim" });
               if (order) await runOrder(order, l);
             }
           } catch (e) {
@@ -232,6 +234,24 @@ export default function PrintAdmin() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
+
+  const savingRef = useRef(false);
+  async function saveEvent(free: boolean) {
+    savingRef.current = true;
+    setSavingEvent(true);
+    setEventFree(free);
+    try {
+      const r = await api("/api/booth/event", { method: "POST", body: JSON.stringify({ free }) });
+      setEventFree(r.free === true);
+      say(r.free ? "Free event ON: booths skip payment, everything prints" : "Free event OFF: guests pay again");
+    } catch (e) {
+      setEventFree(!free);
+      say(`Couldn't change the event: ${msg(e)}`);
+    } finally {
+      savingRef.current = false;
+      setSavingEvent(false);
+    }
+  }
 
   async function reprint(o: QueueOrder) {
     if (!window.confirm(`Print order ${o.id.slice(-6)} again? Uses ${sheetsOf(o)} sheet(s) of paper.`)) return;
@@ -259,7 +279,7 @@ export default function PrintAdmin() {
     );
   }
 
-  const waiting = orders.filter((o) => o.status === "queued" && o.id !== current?.id && (o.verified || (includeFree && !o.checkoutId)));
+  const waiting = orders.filter((o) => o.status === "queued" && o.id !== current?.id && o.verified);
   const recent = orders.filter((o) => o.status !== "queued").sort((a, b) => (b.doneAt ?? b.claimedAt ?? b.createdAt).localeCompare(a.doneAt ?? a.claimedAt ?? a.createdAt)).slice(0, 12);
   const dot = link ? (printerLine === "Ready" ? "bg-green-500" : current ? "bg-violet-500" : "bg-amber-500") : "bg-red-500";
   const btn = "rounded-xl px-4 py-3 text-base font-semibold disabled:opacity-40";
@@ -303,19 +323,13 @@ export default function PrintAdmin() {
         </label>
         <label className="flex items-center justify-between text-sm">
           <span>
-            <b>Also print free / cash orders</b>
+            <b>Free event (prepaid)</b>
             <br />
-            <span className="text-neutral-600">Orders with no card payment</span>
+            <span className="text-neutral-600">
+              {eventFree == null ? "Checking…" : eventFree ? "On: no payment on any booth or guest phone. Everything prints." : "Off: guests pay on their phone"}
+            </span>
           </span>
-          <input
-            type="checkbox"
-            className="h-6 w-6"
-            checked={includeFree}
-            onChange={(e) => {
-              setIncludeFree(e.target.checked);
-              localStorage.setItem("mesticker-print-free", e.target.checked ? "1" : "0");
-            }}
-          />
+          <input type="checkbox" className="h-6 w-6" disabled={eventFree == null || savingEvent} checked={!!eventFree} onChange={(e) => saveEvent(e.target.checked)} />
         </label>
       </section>
 

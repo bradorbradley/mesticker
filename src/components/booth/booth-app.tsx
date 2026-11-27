@@ -486,7 +486,23 @@ export default function BoothApp() {
   );
 
   const outOfPaper = settings !== null && settings.sheetsLeft <= 0;
-  const freeMode = settings?.freeMode ?? BOOTH_FREE_MODE;
+  // the admin page's event switch (server) or this device's staff panel
+  const [eventFree, setEventFree] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const check = () =>
+      fetch("/api/booth/event", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => alive && setEventFree(d.free === true))
+        .catch(() => {});
+    check();
+    const t = setInterval(check, 20000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+  const freeMode = eventFree || (settings?.freeMode ?? BOOTH_FREE_MODE);
 
   // ---- "Take from mobile": the guest's phone takes the photo, then either device picks sheets / pays.
   // This laptop stays the brain (it makes the stickers and sends the print order); the phone
