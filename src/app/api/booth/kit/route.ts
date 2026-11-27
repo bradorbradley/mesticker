@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isFreeEvent } from "@/lib/booth-event";
 import { uploadJson } from "@/lib/storage";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { enqueue, type QueueItem } from "@/lib/booth-queue";
@@ -42,7 +43,8 @@ async function queueOrder(order: { id?: unknown; sheets?: unknown; checkoutId?: 
   const sheets = parseSheets(order.sheets);
   if (!sheets.length) return false;
   const productId = sheets.join("+");
-  const verified = checkoutId ? await checkoutPaid(checkoutId, productId) : false;
+  // no card payment: only a prepaid (free) event lets it print
+  const verified = checkoutId ? await checkoutPaid(checkoutId, productId) : await isFreeEvent();
   try {
     await enqueue({ id, boothId: process.env.BOOTH_ID || "booth-1", productId, checkoutId, verified, kitUrl, guideUrl: guides[0] ?? null, guides, items });
     return true;
