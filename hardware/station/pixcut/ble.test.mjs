@@ -101,3 +101,31 @@ test('a printer error mid-upload stops the job with its message', async () => {
   const { printer } = fakePrinter({ failAt: 1000 });
   await assert.rejects(printer.printAndCut(new Uint8Array(5000), new Uint8Array(700)), /-8013 job timeout/);
 });
+
+test('classic-link mode: big frames, no acknowledgements, fuller job description', async () => {
+  const state = { received: [], polls: 0, declared: null, frames: 0 };
+  let printer;
+  const reply = (o) => printer.onData(frame(new TextEncoder().encode(JSON.stringify(o))));
+  const write = {
+    async writeValue(bytes) {
+      const [[body]] = takeFrames(new Uint8Array(bytes));
+      let o = null;
+      try { o = JSON.parse(text(body)); } catch { /* job data */ }
+      setTimeout(() => {
+        if (o?.method === 'get-prop') reply({ result: state.received.length && state.polls++ < 1 ? ['40', '3021', '::0'] : ['20', '2000', '::0'], id: o.id });
+        else if (o?.method === 'combo-job') { state.declared = o.params; reply({ result: { 'job-id': 9 }, id: o.id }); }
+        else { state.frames++; state.received.push(...body.subarray(4)); }
+      }, 0);
+    },
+  };
+  printer = new PixCutBle(write, () => {}, { chunk: 892, ack: false, pacingMs: 0, channel: 528, extra: true });
+  const jpeg = new Uint8Array(4000).map((_, i) => (i * 7) & 0xff);
+  const plt = new Uint8Array(500).fill(5);
+  const res = await printer.printAndCut(jpeg, plt);
+  assert.equal(res.jobId, 9);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(state.received, [...plt, ...jpeg]);
+  assert.equal(state.frames, Math.ceil(4500 / 892));
+  assert.equal(state.declared[0].params.channel, 528);
+  assert.equal(state.declared[1].params['document-format'], 18);
+});

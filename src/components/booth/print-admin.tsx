@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as usb from "../../../hardware/station/pixcut/webusb.mjs";
 import * as ble from "../../../hardware/station/pixcut/ble.mjs";
+import * as fast from "../../../hardware/station/pixcut/stream.mjs";
 import { PixCut, describeAlerts } from "../../../hardware/station/pixcut/protocol.mjs";
 import type { QueueOrder } from "@/lib/booth-queue";
 
@@ -20,7 +21,7 @@ type Printer = {
   status(): Promise<Status>;
   printAndCut(jpeg: Uint8Array, plt: Uint8Array, o: { onStatus: (s: JobUpdate) => void }): Promise<{ jobId: number }>;
 };
-type Kind = "USB" | "Bluetooth";
+type Kind = "USB" | "Bluetooth" | "Fast Bluetooth";
 type Link = { kind: Kind; printer: Printer; close: () => Promise<void> };
 type Current = { id: string; sheet: number; sheets: number; text: string; progress: number | null; preview?: string };
 type PrintJob = { ok: boolean; issues: string[]; jpeg?: string; plt?: string; preview?: string; error?: string };
@@ -47,7 +48,7 @@ const ago = (iso: string | null) => {
 export default function PrintAdmin() {
   const [key, setKey] = useState<string | null>(null);
   const [keyDraft, setKeyDraft] = useState("");
-  const [can, setCan] = useState({ usb: false, ble: false });
+  const [can, setCan] = useState({ usb: false, ble: false, fast: false });
   const [link, setLink] = useState<Link | null>(null);
   const [printerLine, setPrinterLine] = useState("Not connected");
   const [connecting, setConnecting] = useState(false);
@@ -74,7 +75,7 @@ export default function PrintAdmin() {
       window.history.replaceState(null, "", window.location.pathname);
     }
     setKey(fromUrl ?? localStorage.getItem(KEY));
-    setCan({ usb: usb.supported(), ble: ble.supported() });
+    setCan({ usb: usb.supported(), ble: ble.supported(), fast: fast.supported() });
   }, []);
 
   // keep the screen on: a sleeping phone drops the printer
@@ -110,6 +111,10 @@ export default function PrintAdmin() {
       const { io, close } = await usb.openPrinter(device as never);
       return { kind, printer: new PixCut(io) as unknown as Printer, close };
     }
+    if (kind === "Fast Bluetooth") {
+      const { printer, close } = await fast.openPrinter();
+      return { kind, printer: printer as unknown as Printer, close };
+    }
     const { printer, close } = await ble.openPrinter(device as never);
     return { kind, printer: printer as unknown as Printer, close };
   }, []);
@@ -119,7 +124,7 @@ export default function PrintAdmin() {
     try {
       await live.current.link?.close().catch(() => {});
       setLink(null);
-      const device = kind === "USB" ? ((await usb.findGranted()) ?? (await usb.requestPrinter())) : await ble.requestPrinter();
+      const device = kind === "USB" ? ((await usb.findGranted()) ?? (await usb.requestPrinter())) : kind === "Fast Bluetooth" ? null : await ble.requestPrinter();
       const next = await open(kind, device);
       const st = await next.printer.status();
       lastDevice.current = { kind, device };
@@ -146,7 +151,7 @@ export default function PrintAdmin() {
           if (printedSheets(order.id).includes(s)) continue;
           sent = false;
           setCurrent({ id: order.id, sheet: s + 1, sheets: total, text: "Getting the sheet ready", progress: null });
-          const job: PrintJob = await api(`/api/booth/print-job?id=${encodeURIComponent(order.id)}&sheet=${s}${l.kind === "Bluetooth" ? "&light=1" : ""}`);
+          const job: PrintJob = await api(`/api/booth/print-job?id=${encodeURIComponent(order.id)}&sheet=${s}${l.kind !== "USB" ? "&light=1" : ""}`);
           if (!job.ok || !job.jpeg || !job.plt) throw new Error(`Sheet ${s + 1} failed its check: ${job.issues.join("; ")}`);
           setCurrent({ id: order.id, sheet: s + 1, sheets: total, text: "Sending to printer", progress: 0, preview: job.preview });
           queue({ action: "progress", id: order.id, stage: "printing" }).catch(() => {});
@@ -309,6 +314,11 @@ export default function PrintAdmin() {
                 Connect USB
               </button>
             </div>
+            {can.fast && (
+              <button className={`${btn} w-full bg-pink-600 text-white`} disabled={connecting} onClick={() => connect("Fast Bluetooth")}>
+                Fast connect (app)
+              </button>
+            )}
             {!can.ble && !can.usb && <p className="text-sm text-neutral-600">This browser can&apos;t reach a printer. On iPhone or iPad, open this page in the free Bluefy browser. On Android or a laptop, use Chrome.</p>}
             <p className="text-xs text-neutral-500">Close StixCut and the Liene app first: only one thing can hold the printer.</p>
           </>
