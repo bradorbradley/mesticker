@@ -96,10 +96,20 @@ export async function openPrinter(device, log = () => {}) {
   return { printer, close, device };
 }
 
+/**
+ * PixCut over any Hannto-framed link. Bluetooth LE (default): small frames, each acknowledged on
+ * 0xFF03. The iOS app's classic Bluetooth link (stream.mjs) uses the same class with big frames
+ * and no per-frame acknowledgement: { chunk: 892, ack: false, pacingMs, channel: 528 }.
+ */
 export class PixCutBle {
-  constructor(write, log = () => {}) {
+  constructor(write, log = () => {}, { chunk = BLE_CHUNK, ack = true, pacingMs = 0, channel = 2, extra = false } = {}) {
     this.write = write;
     this.log = log;
+    this.chunk = chunk;
+    this.ack = ack;
+    this.pacingMs = pacingMs;
+    this.channel = channel;
+    this.extra = extra; // send the fuller job description the classic link was seen with
     this.nextId = (Date.now() & 0x7fff) + 1000;
     this.buf = new Uint8Array();
     this.waiting = new Map(); // request id -> { res, rej, timer }
@@ -196,8 +206,8 @@ export class PixCutBle {
 
     onStatus({ phase: 'declare', text: 'declaring job' });
     const r = await this.request('combo-job', [
-      { method: 'print-job', params: { channel: 2, copies: 1, 'file-size': jpeg.length, 'media-size': MEDIA_4X7, 'media-type': 2030, 'job-type': 600 } },
-      { method: 'cut-job', params: { 'file-size': plt.length, 'job-type': 600 } },
+      { method: 'print-job', params: { channel: this.channel, copies: 1, 'file-size': jpeg.length, 'media-size': MEDIA_4X7, 'media-type': 2030, 'job-type': 600, ...(this.extra ? { 'document-format': 9, 'document-name': `${Date.now()}.jpg` } : {}) } },
+      { method: 'cut-job', params: { 'file-size': plt.length, 'job-type': 600, ...(this.extra ? { channel: this.channel, copies: 1, 'document-format': 18, 'document-name': `${Date.now()}.plt`, 'media-size': MEDIA_4X7, 'media-type': 2030 } : {}) } },
     ], 10000);
     const flat = JSON.stringify(r.result ?? r.error ?? '');
     const jobId = (Array.isArray(r.result) ? r.result : [r.result]).map((v) => (v && typeof v === 'object' ? v['job-id'] : v)).map(Number).find((n) => n > 0);
@@ -210,12 +220,15 @@ export class PixCutBle {
     const payload = new Uint8Array(plt.length + jpeg.length);
     payload.set(plt);
     payload.set(jpeg, plt.length);
-    const frames = dataFrames(payload, jobId);
+    const frames = dataFrames(payload, jobId, this.chunk);
+    const t0 = Date.now();
     for (let i = 0; i < frames.length; i++) {
       if (signal?.aborted) throw new Error(`job ${jobId} cancelled during upload (the printer will time it out)`);
-      await this.send(frames[i], true);
+      await this.send(frames[i], this.ack);
+      if (this.pacingMs) await sleep(this.pacingMs);
       if (i % 20 === 0 || i === frames.length - 1) onStatus({ phase: 'upload', text: `job ${jobId}: sending`, progress: (i + 1) / frames.length, jobId });
     }
+    onStatus({ phase: 'sent', text: `job ${jobId}: sent ${Math.round(payload.length / 1024)} KB in ${((Date.now() - t0) / 1000).toFixed(1)} s`, jobId, uploadMs: Date.now() - t0 });
 
     // Long replies get cut off over BLE, so only the short status is polled: done = active, then idle.
     const deadline = Date.now() + timeoutMs;

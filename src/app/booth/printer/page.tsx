@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as usb from "../../../../hardware/station/pixcut/webusb.mjs";
 import * as ble from "../../../../hardware/station/pixcut/ble.mjs";
+import * as fast from "../../../../hardware/station/pixcut/stream.mjs";
 import { PixCut, describeAlerts } from "../../../../hardware/station/pixcut/protocol.mjs";
 
 type Status = { state: number; sub: number; alerts: number[]; label: string; subLabel: string };
@@ -16,14 +17,14 @@ type Printer = {
   status(): Promise<Status>;
   printAndCut(jpeg: Uint8Array, plt: Uint8Array, o: { onStatus: (s: JobUpdate) => void; signal?: AbortSignal }): Promise<{ jobId: number }>;
 };
-type Link = { kind: "USB" | "Bluetooth"; printer: Printer; close: () => Promise<void> };
+type Link = { kind: "USB" | "Bluetooth" | "Fast Bluetooth"; printer: Printer; close: () => Promise<void> };
 
 const TEST = { plt: "/booth/printer-test/sheet.plt", usb: "/booth/printer-test/sheet.jpg", ble: "/booth/printer-test/sheet-small.jpg" };
 const bytes = async (url: string) => new Uint8Array(await (await fetch(url)).arrayBuffer());
 const secs = (ms: number) => `${Math.round(ms / 1000)}s`;
 
 export default function PrinterBench() {
-  const [can, setCan] = useState<{ usb: boolean; ble: boolean } | null>(null);
+  const [can, setCan] = useState<{ usb: boolean; ble: boolean; fast: boolean } | null>(null);
   const [link, setLink] = useState<Link | null>(null);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,7 +35,7 @@ export default function PrinterBench() {
   const say = (line: string) => setLog((l) => [`${new Date().toLocaleTimeString()}  ${line}`, ...l].slice(0, 200));
 
   useEffect(() => {
-    setCan({ usb: usb.supported(), ble: ble.supported() });
+    setCan({ usb: usb.supported(), ble: ble.supported(), fast: fast.supported() });
   }, []);
 
   async function connect(kind: Link["kind"]) {
@@ -47,6 +48,9 @@ export default function PrinterBench() {
         const dev = (await usb.findGranted()) ?? (await usb.requestPrinter());
         const { io, close } = await usb.openPrinter(dev);
         next = { kind, printer: new PixCut(io) as unknown as Printer, close };
+      } else if (kind === "Fast Bluetooth") {
+        const { printer, close } = await fast.openPrinter();
+        next = { kind, printer: printer as unknown as Printer, close };
       } else {
         const dev = await ble.requestPrinter();
         say(`Bluetooth: connecting to ${dev.name ?? "printer"}`);
@@ -141,6 +145,11 @@ export default function PrinterBench() {
           Connect Bluetooth
         </button>
       </section>
+      {can?.fast && (
+        <button className={`${btn} w-full bg-pink-600 text-white`} disabled={busy} onClick={() => connect("Fast Bluetooth")}>
+          Fast connect (app)
+        </button>
+      )}
 
       {link && (
         <section className="space-y-3 rounded-2xl border border-neutral-200 p-4">
