@@ -31,8 +31,11 @@ const MM = DPI / 25.4; // px per mm
 const px = (inches) => Math.round(inches * DPI);
 
 /** Box of a placement on the 1200×2100 sheet, in px. */
+// layouts keep ~30px of paper between slots; insetting each sticker a little keeps neighbouring cut
+// lines (0.5 mm outside each sticker) at least CUT.minGapMm apart even when stickers fill their slots
+const INSET = 8;
 function boxOf(pl) {
-  return { x: px(PRINTABLE.x + pl.x), y: px(PRINTABLE.y + pl.y), w: px(pl.w), h: px(pl.h) };
+  return { x: px(PRINTABLE.x + pl.x) + INSET, y: px(PRINTABLE.y + pl.y) + INSET, w: px(pl.w) - 2 * INSET, h: px(pl.h) - 2 * INSET };
 }
 
 async function stickerStats(file, w, h) {

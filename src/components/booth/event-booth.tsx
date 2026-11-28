@@ -704,7 +704,7 @@ export function EventWait({
 
       {/* QR in the corner during the story too (booth screens) */}
       {phase === "video" && qr && (
-        <div className="absolute left-3 top-3 z-40 flex items-center rounded-2xl bg-white/90 p-2 shadow-lg" style={{ gap: 8 }}>
+        <div className="absolute bottom-20 left-3 z-[55] flex items-center rounded-2xl bg-white/90 p-2 shadow-lg" style={{ gap: 8 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={qr} alt="Scan to get your stickers" style={{ width: `max(72px, ${u(8)})` }} />
           <div className="text-left text-xs font-bold text-[#3b1210]" style={{ maxWidth: "7em" }}>
