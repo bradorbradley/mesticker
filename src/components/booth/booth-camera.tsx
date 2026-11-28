@@ -18,7 +18,7 @@ export default function BoothCamera({
 }: {
   onCapture: (photo: string) => void;
   onBack: () => void;
-  /** booth laptop: show "Take from mobile" (QR → the guest's phone takes the photo) */
+  /** show "Complete from another device" (QR → the guest snaps or uploads on their own phone; the sheet prints here) */
   onMobile?: () => void;
   /** event booths: their own mascot instead of ours */
   mascot?: React.ReactNode;
@@ -195,7 +195,7 @@ export default function BoothCamera({
                 </button>
                 {onMobile && (
                   <button className="btn btn-soft" onClick={onMobile}>
-                    📱 Take from mobile
+                    📲 Complete from another device
                   </button>
                 )}
               </div>
@@ -250,7 +250,7 @@ export default function BoothCamera({
               </button>
               {onMobile && (
                 <button className="btn btn-soft" disabled={count !== null} onClick={onMobile}>
-                  📱 Take from mobile
+                  📲 Complete from another device
                 </button>
               )}
               <button className="btn btn-lg btn-main" disabled={!ready || count !== null} onClick={startCountdown}>
