@@ -563,7 +563,7 @@ export function EventGenerating({ look, photo, ready }: { look: Look; photo: str
  * Every sticker the guest got, big, floating with a little drift: the guest's own stickers (with
  * their name ribbons and white die-cut borders), not a tiny picture of the sheet.
  */
-export function FloatingStickers({ stickers, className, sheet }: { stickers: string[]; className?: string; sheet?: { logo?: string; pill?: string; frame?: string } }) {
+export function FloatingStickers({ stickers, className, sheet }: { stickers: string[]; className?: string; sheet?: { logo?: string; pill?: string; frame?: string; decor?: string[] } }) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useEffect(() => {
@@ -586,8 +586,13 @@ export function FloatingStickers({ stickers, className, sheet }: { stickers: str
   const slots = full ? LAYOUTS.event15 : LAYOUTS.event15.slice(1, -1);
   const portrait = size.h >= size.w * 0.9 && stickers.length >= 6;
   if (portrait) {
-    const srcs = full ? [sheet!.logo!, ...stickers.slice(0, slots.length - 2), sheet!.pill!] : stickers.slice(0, slots.length);
-    const used = full ? [slots[0], ...slots.slice(1, 1 + srcs.length - 2), slots[slots.length - 1]] : slots.slice(0, srcs.length);
+    const decor = full ? (sheet!.decor ?? []) : [];
+    const own = slots.length - 2 - decor.length; // the guest's slots (between the logo and the decorations)
+    const mine = stickers.slice(0, full ? own : slots.length);
+    const srcs = full ? [sheet!.logo!, ...mine, ...(mine.length === own ? decor : []), sheet!.pill!] : mine;
+    const used = full
+      ? [slots[0], ...slots.slice(1, 1 + mine.length), ...(mine.length === own ? slots.slice(1 + own, 1 + own + decor.length) : []), slots[slots.length - 1]]
+      : slots.slice(0, srcs.length);
     const framed = full && !!sheet?.frame;
     const x0 = framed ? 0 : Math.min(...used.map((sl) => sl[0])), y0 = framed ? 0 : Math.min(...used.map((sl) => sl[1]));
     const x1 = framed ? SHEET_W : Math.max(...used.map((sl) => sl[0] + sl[2])), y1 = framed ? SHEET_H : Math.max(...used.map((sl) => sl[1] + sl[3]));
@@ -599,7 +604,7 @@ export function FloatingStickers({ stickers, className, sheet }: { stickers: str
           {framed && <img src={sheet!.frame} alt="" className="absolute inset-0 h-full w-full" />}
           {srcs.map((src, i) => {
             const [x, y, w, h] = used[i];
-            const brand = full && (i === 0 || i === srcs.length - 1);
+            const brand = full && (i === 0 || i > mine.length);
             return (
               <motion.div key={`${i}-${src.slice(-24)}`} className="absolute" style={{ left: (x - x0) * k, top: (y - y0) * k, width: w * k, height: h * k }} {...pop(i)}>
                 <motion.img src={src} alt="" className={img} {...(brand ? {} : float(i, h * k))} />
@@ -653,7 +658,7 @@ export function EventDone({
   stickers: string[];
   onFinish: () => void;
   emailedTo: string | null;
-  sheet?: { logo?: string; pill?: string; frame?: string };
+  sheet?: { logo?: string; pill?: string; frame?: string; decor?: string[] };
   orderId?: string | null;
   handset?: boolean;
 }) {

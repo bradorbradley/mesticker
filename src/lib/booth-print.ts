@@ -10,7 +10,7 @@
  * Runs in the browser via Canvas, like compose-sheet-client.ts.
  */
 
-import { DPI, LAYOUTS, SHEET_H, SHEET_W, SLOT_SHRINK as SHRINK, type LayoutId } from "./sheet-layouts";
+import { DPI, LAYOUTS, SHEET_H, SHEET_W, shrinkOf, type LayoutId } from "./sheet-layouts";
 
 export { LAYOUTS, type LayoutId };
 
@@ -154,6 +154,7 @@ export async function composePrintSheet(srcs: (string | null)[], layout: LayoutI
   // the sheet's printed trim (event sheets), under the stickers
   if (frame) ctx.drawImage(frame, 0, 0, SHEET_W, SHEET_H);
 
+  const SHRINK = shrinkOf(layout);
   slots.forEach(([x, y, w, h, rot], i) => {
     const src = i < srcs.length ? srcs[i] : srcs[0];
     const img = src ? loaded.get(src) : null;
@@ -225,6 +226,7 @@ export async function trimmedAspect(src: string): Promise<number> {
  */
 export function slotPlacement(layout: LayoutId, i: number, aspect: number) {
   const [x, y, w, h] = LAYOUTS[layout][i];
+  const SHRINK = shrinkOf(layout);
   const fw = (aspect >= w / h ? w : h * aspect) * SHRINK;
   const fh = (aspect >= w / h ? w / aspect : h) * SHRINK;
   const r = (px: number) => Math.round((px / DPI) * 100) / 100;
@@ -234,6 +236,7 @@ export function slotPlacement(layout: LayoutId, i: number, aspect: number) {
 /** How big a sticker ends up in a slot, in inches (for the arranging guide). */
 export function slotInches(layout: LayoutId, i: number, aspect: number) {
   const [, , w, h] = LAYOUTS[layout][i];
+  const SHRINK = shrinkOf(layout);
   const fw = (aspect >= w / h ? w : h * aspect) * SHRINK;
   const fh = (aspect >= w / h ? w / aspect : h) * SHRINK;
   const r = (px: number) => Math.round((px / DPI) * 10) / 10;
