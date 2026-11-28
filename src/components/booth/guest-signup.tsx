@@ -48,7 +48,7 @@ export default function GuestSignup({
  * The sign-up fields on their own (email, name, the two pre-ticked choices, the terms line), so they
  * can sit right on the reveal screen: one tap prints. The submit tap also unlocks the story's music.
  */
-export function GuestForm({ event, cta, onDone, compact = false }: { event: PartyEvent; cta: string; onDone: (g: SavedGuest) => void; compact?: boolean }) {
+export function GuestForm({ event, cta, onDone, compact = false, namePlaceholder = "First name" }: { event: PartyEvent; cta: string; onDone: (g: SavedGuest) => void; compact?: boolean; namePlaceholder?: string }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [media, setMedia] = useState(true);
@@ -87,7 +87,7 @@ export function GuestForm({ event, cta, onDone, compact = false }: { event: Part
   return (
     <form onSubmit={submit} className="flex w-full flex-col" style={{ gap: compact ? u(0.9) : u(1.4) }}>
       <div className={cn("grid gap-2", compact ? "grid-cols-2 short:grid-cols-2" : "grid-cols-1 short:grid-cols-2")}>
-        <input type="text" autoComplete="given-name" required value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="First name" aria-label="Name" className={input} />
+        <input type="text" autoComplete="given-name" required value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder={namePlaceholder} aria-label="Name" className={input} />
         <input type="email" inputMode="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" aria-label="Email" className={input} />
       </div>
       <div className={cn("flex flex-col rounded-2xl bg-white/80 text-left text-[13px] leading-snug", compact && "short:flex-row short:gap-3 short:text-[11px] short:leading-tight")} style={{ gap: u(0.7), padding: compact ? "8px 12px" : 14 }}>

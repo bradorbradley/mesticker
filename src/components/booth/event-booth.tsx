@@ -205,7 +205,7 @@ export function storyBeats(event: PartyEvent, look: Look, me: string, pose: (k: 
   const P = (k: number, at: Slot, extra: Partial<Actor> = {}): Actor => ({ key: `p${k}`, src: pose(k), at, anim: "bob", big: true, ...extra });
   const trio = (extra: Partial<Actor> = {}) => [H(0, "L", extra), H(1, "C", extra), H(2, "R", extra)];
   const n = (i: number) => hosts[Math.min(i, hosts.length - 1)].name;
-  // pose order: 0 reindeer, 1 stocking, 2 ornament, 3 sled, 4 snowball, 5 star, 6 skating, 7 snow globe, 8 gingerbread, 9 cocoa, 10 present, 11 with the hosts
+  // sticker order: 0 reindeer, 1 stocking, 2 ornament, 3 sled, 4 snowball, 5 present, 6 solo, 7 carols with the hosts, 8 stockings with the hosts, 9 Santa's sleigh
   // ~29s: one clear idea per frame, long enough to read, always something moving
   return [
     { scene: "home", ms: 2300, cast: trio({ anim: "jump" }), caption: `WELCOME TO ${event.name.toUpperCase()}!`, sfx: "♪♫♪", fx: ["flash"] },
@@ -218,9 +218,9 @@ export function storyBeats(event: PartyEvent, look: Look, me: string, pose: (k: 
     { scene: "street", ms: 2000, cast: [P(3, "LC", { anim: "zoom" })], caption: "DOWN THE HILL…", fx: ["speed"], sfx: "WHOOSH!" },
     { scene: "street", ms: 2000, cast: [P(4, "L", { anim: "jump" }), H(1, "R", { anim: "jump" })], bubble: { who: "h1", text: "Hey! 😂" }, fx: ["impact"], sfx: "SPLAT!" },
     { scene: "street", ms: 2100, cast: [P(0, "LC", { anim: "fly", lift: 18 })], caption: "FOUND THE REINDEER!", fx: ["speed", "flash"], sfx: "GIDDY UP!" },
-    { scene: "roof", ms: 2200, cast: [P(10, "L", { anim: "jump" }), S("RC", { anim: "jump" })], bubble: { who: "santa", text: "Christmas is saved!" }, sfx: "HO HO HO!", fx: ["impact"] },
-    { scene: "home", ms: 2100, cast: [P(8, "L", { anim: "jump" }), H(2, "R")], bubble: { who: "h2", text: "Is that… a gingerbread you?!" }, sfx: "CRUNCH!" },
-    { scene: "home", ms: 3000, cast: [P(11, "C", { anim: "jump", big: true })], caption: "AND EVERYONE SANG!", notes: true, fx: ["flash"], ribbon: "Game time! 🎮" },
+    { scene: "roof", ms: 2400, cast: [P(9, "C", { anim: "fly", big: true, lift: 10 })], caption: "OFF WITH SANTA!", bubble: { who: "p9", text: "Christmas is saved!" }, sfx: "HO HO HO!", fx: ["speed"] },
+    { scene: "home", ms: 2200, cast: [P(8, "C", { anim: "jump", big: true })], caption: "BACK HOME BY THE FIRE…", sfx: "HA HA!", fx: ["flash"] },
+    { scene: "home", ms: 3000, cast: [P(7, "C", { anim: "jump", big: true })], caption: "AND EVERYONE SANG!", notes: true, fx: ["flash"], ribbon: "Game time! 🎮" },
   ];
 }
 
@@ -581,8 +581,8 @@ export function FloatingStickers({ stickers, className }: { stickers: string[]; 
   const img = "h-full w-full object-contain drop-shadow-[0_8px_10px_rgba(60,8,10,0.35)]";
 
   // portrait: laid out like the printed sheet (hero and group big, rows of name stickers and poses), no sheet behind
-  const slots = LAYOUTS.event15.slice(1, 14); // the guest's 13 (no logo, no pill)
-  const portrait = size.h >= size.w * 0.9 && stickers.length >= 8;
+  const slots = LAYOUTS.event15.slice(1, -1); // the guest's own (no logo, no pill)
+  const portrait = size.h >= size.w * 0.9 && stickers.length >= 6;
   if (portrait) {
     const list = stickers.slice(0, slots.length);
     const used = slots.slice(0, list.length);

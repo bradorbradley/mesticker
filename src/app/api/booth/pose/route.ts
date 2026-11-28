@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { boothPresets, resolvePresetPrompt, withEventTheme } from "@/lib/presets";
-import { generateVariationDescriptors } from "@/lib/vision";
+import { countPeople, generateVariationDescriptors } from "@/lib/vision";
 import { generateGroupSticker, generateSticker, requestedGeminiModel, requestedProvider } from "@/lib/image-providers";
 import { loadImageBuffer, toDataUrl } from "@/lib/sheet-render";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
@@ -24,8 +24,12 @@ export async function POST(request: NextRequest) {
   if (isThrottled()) return NextResponse.json({ error: "Busy, try again in a minute" }, { status: 503 });
 
   try {
-    const { photo, styleId, idea, provider: wanted, theme, refs } = await request.json();
+    const { photo, styleId, idea, provider: wanted, theme, refs, people: rawPeople, count } = await request.json();
     if (!photo) return NextResponse.json({ error: "Missing photo" }, { status: 400 });
+    if (count) return NextResponse.json({ people: await countPeople(photo) });
+    // a photo of 2+ people: every sticker draws all of them
+    const people = Math.max(1, Math.min(6, Number(rawPeople) || 1));
+    const crowd = people > 1 ? ` There are ${people} people in the photo: draw ALL ${people} of them together in this sticker, each one recognizable, side by side.` : "";
 
     if (!idea) {
       const { descriptors } = await generateVariationDescriptors(photo);
@@ -45,14 +49,14 @@ export async function POST(request: NextRequest) {
       const image = await generateGroupSticker(
         photo,
         refImgs,
-        `${prompt} The first image is the guest; the other images are characters who must appear exactly as drawn (same faces, hair and outfits). ${pose}. Draw them all together as ONE cute chibi sticker in the same art style, every face fully recognizable. No text, captions or letters anywhere.`
+        `${prompt} The first image is the guest${people > 1 ? `s (${people} people, include every one of them)` : ""}; the other images are characters who must appear exactly as drawn (same faces, hair and outfits). ${pose}. Draw them all together as ONE cute chibi sticker in the same art style, every face fully recognizable. No text, captions or letters anywhere.`
       );
       recordGeneration("preview");
       return NextResponse.json({ image, ms: Date.now() - t0, provider: "gemini", model: "group" });
     }
     const result = await generateSticker(
       photo,
-      `${prompt} Pose and expression for this sticker: ${pose}. Same person, same hairstyle and outfit, fully recognizable. No text, captions or letters anywhere.`,
+      `${prompt} Pose and expression for this sticker: ${pose}. ${people > 1 ? "The same people" : "Same person"}, same hairstyle and outfit, fully recognizable.${crowd} No text, captions or letters anywhere.`,
       "extra", // small sheet stickers: faster tier (see extrasProvider)
       requestedProvider(wanted),
       requestedGeminiModel(wanted)

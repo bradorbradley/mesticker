@@ -163,3 +163,28 @@ export async function generateVariationDescriptors(
     return { descriptors: pickRandom(FALLBACK_POOL, 9), source: "fallback" };
   }
 }
+
+/** How many people are in the photo (1 if unsure): so a couple's stickers draw both of them. */
+export async function countPeople(photoBase64: string): Promise<number> {
+  try {
+    const url = photoBase64.startsWith("data:") ? photoBase64 : `data:image/jpeg;base64,${photoBase64}`;
+    const r = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_tokens: 5,
+      temperature: 0,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "How many people's faces are clearly visible in this photo (ignore pictures, posters and screens)? Reply with only a digit." },
+            { type: "image_url", image_url: { url, detail: "low" } },
+          ],
+        },
+      ],
+    });
+    const n = parseInt(r.choices[0]?.message?.content?.trim() ?? "", 10);
+    return Number.isFinite(n) && n >= 1 ? Math.min(n, 6) : 1;
+  } catch {
+    return 1;
+  }
+}
