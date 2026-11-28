@@ -646,7 +646,10 @@ export function EventDone({
   sheet,
   orderId,
   handset = true,
+  albumUrl,
 }: {
+  /** the event's class photo and gallery, open to guests once their stickers are made */
+  albumUrl?: string | null;
   stickers: string[];
   onFinish: () => void;
   emailedTo: string | null;
@@ -688,6 +691,11 @@ export function EventDone({
           </button>
         )}
         {status && <p className="t-body">{status}</p>}
+        {handset && albumUrl && (
+          <a className="btn btn-soft w-fit" href={albumUrl} target="_blank">
+            🎓 See the class photo
+          </a>
+        )}
         <button className="btn btn-soft w-fit" onClick={onFinish}>
           Done
         </button>

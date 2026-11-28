@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stationAuthorized } from "@/lib/booth-queue";
-import { listGuests } from "@/lib/guests";
+import { guestLog, listGuests } from "@/lib/guests";
+import { listOrders } from "@/lib/booth-queue";
 
 /** Event guests for the admin (station key). ?format=csv downloads a spreadsheet. */
 export const dynamic = "force-dynamic";
@@ -12,6 +13,12 @@ const cell = (v: unknown) => {
 
 export async function GET(request: NextRequest) {
   if (!stationAuthorized(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // ?log=1: every creation with its images and print status (the admin's guest log)
+  if (request.nextUrl.searchParams.get("log")) {
+    const [log, orders] = await Promise.all([guestLog(), listOrders(undefined, 300).catch(() => [])]);
+    const status = new Map(orders.map((o) => [o.id, o.status]));
+    return NextResponse.json({ log: log.map((c) => ({ ...c, print: status.get(c.orderId) ?? null })) });
+  }
   const guests = await listGuests();
   if (request.nextUrl.searchParams.get("format") === "csv") {
     const head = ["email", "name", "signed_up", "events", "orders", "media_release", "marketing_ok", "unsubscribed", "gallery_token"];

@@ -982,6 +982,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                 sheet={{ logo: kit?.find((k) => k.brand && k.n === 1)?.src ?? event.look.logo, pill: kit?.filter((k) => k.brand && k.sheet === 0).at(-1)?.src ?? event.look.pill ?? PILL, frame: event.look.frame }}
                 orderId={printOrder?.id ?? null}
                 handset={handset}
+                albumUrl={guest?.token ? `/booth/album/${event.slug}?t=${encodeURIComponent(guest.token)}` : null}
                 emailedTo={autoEmailedTo}
                 onFinish={reset}
               />
