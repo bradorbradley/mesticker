@@ -156,13 +156,16 @@ export function EventReveal({ sticker, onPrint, onRetake, onRetry, canRetry }: {
 }
 
 /**
- * The welcome video while the sheet prints: a little animated story starring the guest. The hosts
- * say hi, there's a knock, the guest's cartoon walks in, then Santa needs help and the guest goes on
- * an adventure (sledding, a snowball fight, skating, a reindeer ride over the rooftops) using their
- * own pose stickers, with comic captions, speech bubbles and music. Drawn live, so it starts the
- * moment printing does; after the first run the adventure loops until the sheet is done.
+ * The welcome video while the sheet prints, full screen: a little story starring the guest. The
+ * hosts say hi, there's a knock, the guest's cartoon walks in, Santa needs help, and the guest goes on
+ * an adventure using their own pose stickers, with comic captions, speech bubbles and music.
+ *
+ * Staged, not piled up: at most three characters at a time, each in its own spot (left / centre /
+ * right), sized to the stage, bubbles above whoever's talking. Paced to the real wait: the whole
+ * story stretches or tightens to the print's estimated time, then `onEnd` (the save screen).
  */
-type Actor = { key: string; src: string; left: number; bottom: number; h: number; anim?: "bob" | "jump" | "fly" | "zoom" | "still"; flip?: boolean; z?: number; dur?: number };
+type Slot = "L" | "C" | "R" | "LC" | "RC";
+type Actor = { key: string; src: string; at: Slot; anim?: "bob" | "jump" | "fly" | "zoom"; big?: boolean; lift?: number };
 type Beat = {
   scene: "home" | "street" | "roof";
   ms: number;
@@ -173,60 +176,90 @@ type Beat = {
   door?: "knock" | "open";
   notes?: boolean;
 };
+const SLOT_X: Record<Slot, number> = { L: 4, LC: 20, C: 36, RC: 52, R: 68 }; // left edge, % of stage width
+const ACTOR_W = 28; // % of stage width
+const ACTOR_BIG = 34;
 
-export function WelcomeVideo({ event, look, sticker, poses = [], name }: { event: PartyEvent; look: Look; sticker: string | null; poses?: (string | null | false)[]; name: string | null }) {
+export function storyBeats(event: PartyEvent, look: Look, me: string, pose: (k: number) => string, name: string | null): Beat[] {
   const who = name || "friend";
+  const hosts = look.hosts;
+  const H = (i: number, at: Slot, extra: Partial<Actor> = {}): Actor => ({ key: `h${i}`, src: hosts[Math.min(i, hosts.length - 1)].img, at, anim: "bob", ...extra });
+  const santa = look.cameo?.img ?? hosts[0].img;
+  const S = (at: Slot, extra: Partial<Actor> = {}): Actor => ({ key: "santa", src: santa, at, anim: "bob", ...extra });
+  const G = (at: Slot, extra: Partial<Actor> = {}): Actor => ({ key: "guest", src: me, at, anim: "bob", big: true, ...extra });
+  const P = (k: number, at: Slot, extra: Partial<Actor> = {}): Actor => ({ key: `p${k}`, src: pose(k), at, anim: "bob", big: true, ...extra });
+  const trio = (extra: Partial<Actor> = {}) => [H(0, "L", extra), H(1, "C", extra), H(2, "R", extra)];
+  const n = (i: number) => hosts[Math.min(i, hosts.length - 1)].name;
+  return [
+    { scene: "home", ms: 2400, cast: trio(), bubble: { who: "h0", text: `Hi, I'm ${n(0)}!` } },
+    { scene: "home", ms: 2200, cast: trio(), bubble: { who: "h1", text: `I'm ${n(1)}!` } },
+    { scene: "home", ms: 2400, cast: trio(), bubble: { who: "h2", text: `And I'm ${n(2)}!` } },
+    { scene: "home", ms: 2800, cast: trio({ anim: "jump" }), caption: `WELCOME TO ${event.name.toUpperCase()}!` },
+    { scene: "home", ms: 2200, cast: trio(), caption: "KNOCK KNOCK! 🚪", door: "knock" },
+    { scene: "home", ms: 2200, cast: trio(), bubble: { who: "h1", text: "Who could it be?" }, door: "knock" },
+    { scene: "home", ms: 3000, cast: [H(0, "L"), G("RC", { anim: "jump" })], door: "open", ribbon: `It's ${who}!` },
+    { scene: "home", ms: 2600, cast: [H(0, "L", { anim: "jump" }), H(2, "C", { anim: "jump" }), G("R")], door: "open", bubble: { who: "h2", text: `Welcome, ${who}! 🎄` } },
+    { scene: "home", ms: 2600, cast: [G("L"), S("R", { anim: "jump" })], caption: "SUDDENLY…", bubble: { who: "santa", text: "Ho ho… OH NO!" } },
+    { scene: "home", ms: 3000, cast: [G("L"), S("R")], bubble: { who: "santa", text: "My reindeer ran away!" } },
+    { scene: "home", ms: 2500, cast: [G("L", { anim: "jump" }), S("R")], bubble: { who: "guest", text: "I'll find them! 💪" } },
+    { scene: "street", ms: 3200, cast: [P(3, "L", { anim: "zoom" })], caption: "MEANWHILE, OUTSIDE…", bubble: { who: "p3", text: "Wheeeee!" } },
+    { scene: "street", ms: 2800, cast: [P(4, "L", { anim: "jump" }), H(1, "R")], bubble: { who: "h1", text: "Hey! No fair! ❄️" } },
+    { scene: "street", ms: 2800, cast: [P(6, "C", { anim: "zoom" })], caption: `SMOOTH MOVES, ${who.toUpperCase()}!` },
+    { scene: "street", ms: 3000, cast: [P(0, "LC", { anim: "fly", lift: 20 })], caption: "FOUND ONE!", bubble: { who: "p0", text: "Giddy up! 🦌" } },
+    { scene: "roof", ms: 3000, cast: [P(0, "L", { anim: "fly", lift: 30 })], caption: "UP ON THE ROOFTOP…" },
+    { scene: "roof", ms: 3000, cast: [P(5, "L"), S("RC", { anim: "jump" })], bubble: { who: "santa", text: "Presents saved!" } },
+    { scene: "roof", ms: 2600, cast: trio({ anim: "jump" }), caption: "HOORAY FOR " + who.toUpperCase() + "!" },
+    { scene: "home", ms: 2800, cast: [P(1, "C")], caption: "BACK AT 387…", bubble: { who: "p1", text: "Tree's done! ⭐" } },
+    { scene: "home", ms: 2600, cast: [P(7, "C")], bubble: { who: "p7", text: "Cocoa break ☕" } },
+    { scene: "home", ms: 4400, cast: [H(0, "L", { anim: "jump" }), P(2, "C", { anim: "jump" }), H(2, "R", { anim: "jump" })], caption: "AND EVERYONE SANG 🎶", notes: true, ribbon: "Your stickers are almost ready!" },
+  ];
+}
+
+export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, onEnd }: { event: PartyEvent; look: Look; sticker: string | null; poses?: (string | null | false)[]; name: string | null; etaSec?: number; onEnd?: () => void }) {
   const me = sticker ?? look.hosts[0].img;
   const pose = (k: number) => (typeof poses[k] === "string" ? (poses[k] as string) : me);
-  const hosts = look.hosts;
-  const H = (i: number, left: number, extra: Partial<Actor> = {}): Actor => ({ key: `h${i}`, src: hosts[Math.min(i, hosts.length - 1)].img, left, bottom: 6, h: 48, anim: "bob", ...extra });
-  const santa = look.cameo?.img ?? hosts[0].img;
-  const S = (left: number, extra: Partial<Actor> = {}): Actor => ({ key: "santa", src: santa, left, bottom: 5, h: 50, anim: "bob", ...extra });
-  const G = (left: number, extra: Partial<Actor> = {}): Actor => ({ key: "guest", src: me, left, bottom: 6, h: 54, anim: "bob", z: 20, ...extra });
-  const P = (k: number, left: number, extra: Partial<Actor> = {}): Actor => ({ key: `p${k}`, src: pose(k), left, bottom: 8, h: 56, anim: "bob", z: 20, ...extra });
-  const trio = (x = 16, step = 14, extra: Partial<Actor> = {}) => hosts.map((_, i) => H(i, x + i * step, extra));
-  const [h0, h1, h2] = [hosts[0]?.name, hosts[1]?.name ?? hosts[0]?.name, hosts[2]?.name ?? hosts[0]?.name];
-
-  const beats: Beat[] = [
-    { scene: "home", ms: 2300, cast: trio(), bubble: { who: "h0", text: `Hi, I'm ${h0}!` } },
-    { scene: "home", ms: 2100, cast: trio(), bubble: { who: "h1", text: `I'm ${h1}!` } },
-    { scene: "home", ms: 2300, cast: trio(), bubble: { who: "h2", text: `And I'm ${h2}!` } },
-    { scene: "home", ms: 2600, cast: trio(), bubble: { who: "h1", text: `Welcome to ${event.name}!` } },
-    { scene: "home", ms: 2000, cast: trio(), caption: "KNOCK KNOCK!", door: "knock" },
-    { scene: "home", ms: 2300, cast: trio(), bubble: { who: "h0", text: "Ooh, a new guest! Who is it?" }, door: "knock" },
-    { scene: "home", ms: 2800, cast: [...trio(), G(83, { h: 50, anim: "jump" })], door: "open", ribbon: `It's ${who}!` },
-    { scene: "home", ms: 2700, cast: [...trio(16, 14, { anim: "jump" }), G(64)], door: "open", bubble: { who: "h2", text: `Welcome, ${who}! 🎄` } },
-    // the adventure (loops from here)
-    { scene: "home", ms: 2700, cast: [...trio(), G(64), S(1, { anim: "jump", h: 56 })], caption: "SUDDENLY…", bubble: { who: "santa", text: "Ho ho… OH NO!" } },
-    { scene: "home", ms: 3400, cast: [...trio(), G(64), S(1, { h: 56 })], bubble: { who: "santa", text: "My reindeer ran off and the presents are stuck on the roof!" } },
-    { scene: "home", ms: 2600, cast: [...trio(16, 14, { anim: "jump" }), G(64), S(1, { h: 56 })], bubble: { who: "h1", text: `${who}, you're our only hope!` } },
-    { scene: "home", ms: 2500, cast: [...trio(), G(64, { anim: "jump" }), S(1, { h: 56 })], bubble: { who: "guest", text: "Leave it to me! 💪" } },
-    { scene: "street", ms: 3200, cast: [P(3, 4, { anim: "zoom", bottom: 30, h: 46 })], caption: "MEANWHILE, OUTSIDE…", bubble: { who: "p3", text: "Wheeeee!" } },
-    { scene: "street", ms: 3000, cast: [P(3, 58, { anim: "zoom", bottom: 10, h: 46, dur: 3 }), H(0, 72, { anim: "jump", h: 40 })], bubble: { who: "h0", text: "Out of the way!" } },
-    { scene: "street", ms: 3000, cast: [P(4, 8, { anim: "jump" }), H(1, 62, { anim: "jump", h: 42 }), H(2, 76, { h: 42 })], caption: "SNOWBALL FIGHT!", bubble: { who: "h1", text: "Hey! No fair! ❄️" } },
-    { scene: "street", ms: 3000, cast: [P(6, 30, { anim: "zoom", h: 54 })], caption: `SMOOTH MOVES, ${who.toUpperCase()}.` },
-    { scene: "street", ms: 3200, cast: [P(0, 36, { anim: "fly", bottom: 40, h: 50 })], caption: "LOOK! A REINDEER!", bubble: { who: "p0", text: "Giddy up! 🦌" } },
-    { scene: "roof", ms: 3200, cast: [P(0, 6, { anim: "fly", bottom: 44, h: 48 })], caption: "UP ON THE ROOFTOP…", bubble: { who: "p0", text: "To the sleigh!" } },
-    { scene: "roof", ms: 3400, cast: [P(5, 48, { h: 52 }), S(66, { anim: "jump", bottom: 14, h: 50 })], bubble: { who: "santa", text: `Presents saved! Thank you, ${who}!` } },
-    { scene: "roof", ms: 2800, cast: [P(5, 48, { anim: "jump", h: 52 }), S(66, { bottom: 14, h: 50 }), ...trio(6, 13, { anim: "jump", h: 36, bottom: 4 })], caption: "THE WHOLE CITY CHEERED!" },
-    { scene: "home", ms: 3000, cast: [P(1, 6, { h: 60 }), H(2, 50)], caption: "BACK AT 387…", bubble: { who: "h2", text: "The tree is finally done!" } },
-    { scene: "home", ms: 2800, cast: [P(7, 40, { h: 58 }), H(0, 16), H(1, 64)], bubble: { who: "p7", text: "Cocoa break! ☕" } },
-    { scene: "home", ms: 4600, cast: [...trio(8, 13, { anim: "jump" }), P(2, 50, { anim: "jump", h: 58 }), S(70, { anim: "jump", h: 50 })], caption: "AND EVERYONE SANG HAPPILY EVER AFTER", notes: true, ribbon: "Your stickers are almost ready!" },
-  ];
-  const LOOP_FROM = 8;
-
+  const beats = storyBeats(event, look, me, pose, name);
+  // pace the whole story to the estimated wait (fixed once it starts)
+  const pace = useRef<number | null>(null);
+  if (pace.current === null) {
+    const base = beats.reduce((t, b) => t + b.ms, 0);
+    pace.current = etaSec ? Math.min(2.2, Math.max(0.8, (etaSec * 1000 * 0.9) / base)) : 1;
+    try {
+      const forced = Number(localStorage.getItem("mesticker-story-pace")); // testing: e.g. 0.3
+      if (forced > 0) pace.current = forced;
+    } catch {}
+  }
   const [i, setI] = useState(0);
   useEffect(() => {
-    const t = setTimeout(() => setI((x) => (x + 1 < beats.length ? x + 1 : LOOP_FROM)), beats[i].ms);
+    const t = setTimeout(() => (i + 1 < beats.length ? setI(i + 1) : onEnd?.()), beats[i].ms * pace.current!);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [i]);
   const beat = beats[i];
 
-  // music: starts with the video (the guest just tapped Print, so the browser allows it)
+  // measure the stage so characters and bubbles are placed in real pixels
+  const box = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const tall = size.h > size.w * 0.8; // portrait phones: a 4:5 stage, cropped backdrop, no door
+  const stageW = size.w && size.h ? Math.min(size.w, size.h * (tall ? 0.8 : 16 / 9)) : 0;
+  const stageH = tall ? stageW / 0.8 : stageW * (9 / 16);
+  const floor = stageH * 0.05;
+  const widthOf = (a: Actor) => (stageW * (a.big ? ACTOR_BIG : ACTOR_W)) / 100;
+  const heightOf = (a: Actor) => widthOf(a) * 1.18;
+  const xOf = (a: Actor) => (stageW * SLOT_X[a.at]) / 100 + (a.big ? -stageW * 0.03 : 0);
+  const yOf = (a: Actor) => floor + (stageH * (a.lift ?? 0)) / 100;
+
+  // music, unlocked by the Print tap (primeMusic)
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [muted, setMuted] = useState(false);
   const [blocked, setBlocked] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {
     if (!look.music) return;
     if (!music || !music.src.endsWith(look.music)) primeMusic(look.music);
@@ -244,102 +277,96 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name }: { event
     if (audioRef.current) audioRef.current.muted = muted;
   }, [muted]);
 
-  const backdrop = beat.scene === "street" ? look.scenes?.street : beat.scene === "roof" ? look.scenes?.roof : look.scene;
+  const backdrop = (beat.scene === "street" ? look.scenes?.street : beat.scene === "roof" ? look.scenes?.roof : look.scene) ?? look.scene;
   const speaker = beat.bubble ? beat.cast.find((a) => a.key === beat.bubble!.who) : undefined;
+  const bubbleLeft = speaker ? Math.max(8, Math.min(stageW - stageW * 0.46, xOf(speaker) + widthOf(speaker) * 0.15)) : stageW * 0.3;
+  const bubbleBottom = speaker ? Math.min(stageH * 0.78, yOf(speaker) + heightOf(speaker) * 0.92) : stageH * 0.6;
 
   return (
-    <div className="carol-scene relative w-full overflow-hidden rounded-[22px] bg-[#3b1210] shadow-[0_18px_40px_rgba(80,10,10,0.35)]" style={{ aspectRatio: "16 / 9" }}>
-      <AnimatePresence initial={false}>
-        <motion.img key={beat.scene} src={backdrop ?? look.scene} alt="" className="absolute inset-0 h-full w-full object-cover" initial={{ opacity: 0, scale: 1.06 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.7 }} />
-      </AnimatePresence>
-      <Snow />
+    <div ref={box} className="relative flex h-full w-full items-center justify-center overflow-hidden">
+      {/* the same scene, blurred, fills the screen around the stage */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={backdrop} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl brightness-75" />
+      {stageW > 0 && (
+        <div className="relative overflow-hidden rounded-[18px] shadow-[0_18px_50px_rgba(0,0,0,0.45)]" style={{ width: stageW, height: stageH }}>
+          <AnimatePresence initial={false}>
+            <motion.img key={beat.scene} src={backdrop} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: tall ? "40% 50%" : "50% 50%" }} initial={{ opacity: 0, scale: 1.06 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.7 }} />
+          </AnimatePresence>
+          <Snow />
 
-      {/* home: the front door (right side of the backdrop) */}
-      {beat.scene === "home" && (
-        <>
-          <div className="absolute z-[6] rounded-t-[6px]" style={{ left: "86.4%", top: "24%", width: "13.2%", height: "53.4%", background: "radial-gradient(circle at 50% 40%, #fff3c8, #e9a64b 70%, #8a4b1a)" }} />
-          <motion.div
-            className="absolute z-[7] origin-left rounded-t-[6px] border-[2px] border-[#5e1010] bg-[#8f1d1d]"
-            style={{ left: "86.4%", top: "24%", width: "13.2%", height: "53.4%", transformPerspective: 600 }}
-            animate={beat.door === "open" ? { rotateY: -82, x: 0 } : beat.door === "knock" ? { rotateY: 0, x: [0, -3, 3, -2, 2, 0] } : { rotateY: 0, x: 0 }}
-            transition={beat.door === "open" ? { duration: 0.9, ease: "easeOut" } : { duration: 0.45, repeat: beat.door === "knock" ? 3 : 0 }}
-          >
-            <div className="absolute left-1/2 top-[16%] aspect-square w-[62%] -translate-x-1/2 rounded-full border-[5px] border-[#2f6b3a]" />
-            <div className="absolute right-[10%] top-[55%] h-2 w-2 rounded-full bg-[#e8c56b]" />
-          </motion.div>
-        </>
+          {beat.scene === "home" && !tall && (
+            <>
+              <div className="absolute z-[6] rounded-t-[6px]" style={{ left: "86.4%", top: "24%", width: "13.2%", height: "53.4%", background: "radial-gradient(circle at 50% 40%, #fff3c8, #e9a64b 70%, #8a4b1a)" }} />
+              <motion.div
+                className="absolute z-[7] origin-left rounded-t-[6px] border-[2px] border-[#5e1010] bg-[#8f1d1d]"
+                style={{ left: "86.4%", top: "24%", width: "13.2%", height: "53.4%", transformPerspective: 600 }}
+                animate={beat.door === "open" ? { rotateY: -82, x: 0 } : beat.door === "knock" ? { rotateY: 0, x: [0, -3, 3, -2, 2, 0] } : { rotateY: 0, x: 0 }}
+                transition={beat.door === "open" ? { duration: 0.9, ease: "easeOut" } : { duration: 0.45, repeat: beat.door === "knock" ? 3 : 0 }}
+              >
+                <div className="absolute left-1/2 top-[16%] aspect-square w-[62%] -translate-x-1/2 rounded-full border-[5px] border-[#2f6b3a]" />
+              </motion.div>
+            </>
+          )}
+
+          <AnimatePresence>
+            {beat.cast.map((a) => {
+              const x = xOf(a), w = widthOf(a), y = yOf(a);
+              const travel = a.anim === "zoom" || a.anim === "fly" ? stageW * 0.34 : 0;
+              return (
+                <motion.img
+                  key={`${beat.scene}-${a.key}`}
+                  src={a.src}
+                  alt=""
+                  className="absolute object-contain drop-shadow-[0_8px_12px_rgba(0,0,0,0.3)]"
+                  style={{ width: w, height: heightOf(a), bottom: y, zIndex: a.key === "guest" || a.key.startsWith("p") ? 20 : 10 }}
+                  initial={{ opacity: 0, scale: 0.4, left: x - (a.anim === "zoom" ? stageW * 0.15 : 0) }}
+                  animate={{
+                    opacity: 1,
+                    scale: 1,
+                    left: x + travel,
+                    y: a.anim === "jump" ? [0, -stageH * 0.06, 0] : a.anim === "fly" ? [0, -stageH * 0.04, 0] : [0, -stageH * 0.015, 0],
+                    rotate: a.anim === "zoom" ? [-4, 4, -4] : a.anim === "fly" ? [-6, 2, -6] : 0,
+                  }}
+                  exit={{ opacity: 0, scale: 0.6 }}
+                  transition={{
+                    left: { duration: travel ? (beat.ms * pace.current!) / 1000 : 0.8, ease: travel ? "linear" : "easeInOut" },
+                    y: { duration: a.anim === "jump" ? 0.55 : 1.2, repeat: Infinity, ease: "easeInOut" },
+                    rotate: { duration: 0.8, repeat: Infinity },
+                    opacity: { duration: 0.3 },
+                    scale: { type: "spring", stiffness: 180, damping: 14 },
+                  }}
+                />
+              );
+            })}
+          </AnimatePresence>
+
+          <AnimatePresence mode="wait">
+            {beat.caption && (
+              <motion.div key={`c${i}`} className="comic-caption absolute left-[3%] top-[4%] z-40" style={{ maxWidth: "70%", whiteSpace: "normal" }} initial={{ x: -40, opacity: 0, rotate: -6 }} animate={{ x: 0, opacity: 1, rotate: -2 }} exit={{ opacity: 0 }} transition={{ type: "spring", stiffness: 220, damping: 16 }}>
+                {beat.caption}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <AnimatePresence mode="wait">
+            {beat.bubble && (
+              <motion.div key={`b${i}`} className="comic-bubble absolute z-40" style={{ left: bubbleLeft, bottom: bubbleBottom, maxWidth: stageW * 0.46 }} initial={{ scale: 0.3, opacity: 0, y: 12 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.6, opacity: 0 }} transition={{ type: "spring", stiffness: 280, damping: 17 }}>
+                {beat.bubble.text}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {beat.notes && <Notes />}
+          <AnimatePresence>
+            {beat.ribbon && (
+              <motion.div key={`r${i}`} className="absolute inset-x-0 top-[16%] z-40 flex justify-center" initial={{ scale: 0.3, opacity: 0, y: -20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ type: "spring", stiffness: 180, damping: 12, delay: 0.3 }}>
+                <div className="carol-ribbon carol-ribbon-lg">{beat.ribbon}</div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       )}
-
-      {/* the cast */}
-      <AnimatePresence>
-        {beat.cast.map((a) => (
-          <motion.img
-            key={`${beat.scene}-${a.key}`}
-            src={a.src}
-            alt=""
-            className="absolute w-auto drop-shadow-[0_8px_12px_rgba(0,0,0,0.3)]"
-            style={{ height: `${a.h}%`, zIndex: a.z ?? 10, scaleX: a.flip ? -1 : 1 }}
-            initial={{ opacity: 0, scale: 0.5, left: `${a.anim === "zoom" ? a.left - 30 : a.left}%`, bottom: `${a.anim === "fly" ? a.bottom + 30 : a.bottom}%` }}
-            animate={{
-              opacity: 1,
-              scale: 1,
-              left: `${a.anim === "zoom" ? a.left + 30 : a.anim === "fly" ? a.left + 22 : a.left}%`,
-              bottom: `${a.bottom}%`,
-              y: a.anim === "jump" ? [0, -28, 0] : a.anim === "fly" ? [0, -16, 0] : a.anim === "still" ? 0 : [0, -8, 0],
-              rotate: a.anim === "zoom" ? [-4, 4, -4] : a.anim === "fly" ? [-6, 2, -6] : 0,
-            }}
-            exit={{ opacity: 0, scale: 0.6 }}
-            transition={{
-              left: { duration: a.anim === "zoom" || a.anim === "fly" ? (a.dur ?? beat.ms / 1000) : 0.9, ease: a.anim === "zoom" ? "linear" : "easeInOut" },
-              bottom: { duration: a.anim === "fly" ? beat.ms / 1000 : 0.9 },
-              y: { duration: a.anim === "jump" ? 0.55 : 1.2, repeat: Infinity, ease: "easeInOut" },
-              rotate: { duration: 0.8, repeat: Infinity },
-              opacity: { duration: 0.35 },
-              scale: { type: "spring", stiffness: 180, damping: 14 },
-            }}
-          />
-        ))}
-      </AnimatePresence>
-
-      {/* comic caption box */}
-      <AnimatePresence mode="wait">
-        {beat.caption && (
-          <motion.div key={`c${i}`} className="comic-caption absolute left-[3%] top-[5%] z-40" initial={{ x: -40, opacity: 0, rotate: -6 }} animate={{ x: 0, opacity: 1, rotate: -2 }} exit={{ opacity: 0 }} transition={{ type: "spring", stiffness: 220, damping: 16 }}>
-            {beat.caption}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* speech bubble over whoever's talking */}
-      <AnimatePresence mode="wait">
-        {beat.bubble && (
-          <motion.div
-            key={`b${i}`}
-            className="comic-bubble absolute z-40"
-            style={speaker ? { left: `${Math.min(62, Math.max(beat.caption ? 30 : 2, speaker.left - 2))}%`, bottom: `${Math.min(beat.caption ? 62 : 70, speaker.bottom + speaker.h + 2)}%` } : { left: "40%", bottom: "62%" }}
-            initial={{ scale: 0.3, opacity: 0, y: 12 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.6, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 280, damping: 17 }}
-          >
-            {beat.bubble.text}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {beat.notes && <Notes />}
-
-      <AnimatePresence>
-        {beat.ribbon && (
-          <motion.div key={`r${i}`} className="absolute inset-x-0 bottom-[3%] z-40 flex justify-center" initial={{ scale: 0.3, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ type: "spring", stiffness: 180, damping: 12, delay: 0.3 }}>
-            <div className="carol-ribbon carol-ribbon-lg">{beat.ribbon}</div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {look.music && (
         <button
-          className="absolute bottom-[3%] right-[2%] z-50 rounded-full bg-black/45 px-3 py-1.5 text-sm font-bold text-white"
+          className="absolute right-3 top-3 z-50 rounded-full bg-black/45 px-3 py-1.5 text-sm font-bold text-white"
           onClick={() => {
             if (blocked && audioRef.current) audioRef.current.play().then(() => setBlocked(false)).catch(() => {});
             else setMuted((m) => !m);
@@ -510,6 +537,125 @@ export function EventDone({ sticker, sheet, stickers, onFinish, emailedTo }: { s
         <button className="btn btn-soft w-fit" onClick={onFinish}>
           Done
         </button>
+      </div>
+    </div>
+  );
+}
+
+export type WaitInfo = { pct: number; label: string; detail?: string; done: boolean; etaSec: number };
+
+/**
+ * Full-screen wait while the sheet prints: the story, then (if it's still printing) a save screen so
+ * guests keep busy. A slim status bar and "I've got my stickers" float on top. On a booth screen
+ * (not the guest's own phone) a QR gets the stickers onto their phone.
+ */
+export function EventWait({
+  event,
+  look,
+  sticker,
+  poses,
+  name,
+  info,
+  orderId,
+  handset,
+  sheet,
+  stickers,
+  onDone,
+}: {
+  event: PartyEvent;
+  look: Look;
+  sticker: string | null;
+  poses: (string | null | false)[];
+  name: string | null;
+  info: WaitInfo;
+  orderId: string | null;
+  handset: boolean;
+  sheet: string | null;
+  stickers: string[];
+  onDone: () => void;
+}) {
+  const [phase, setPhase] = useState<"video" | "save">("video");
+  const [run, setRun] = useState(0);
+  const [qr, setQr] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+  const firstEta = useRef(info.etaSec);
+  useEffect(() => {
+    if (handset || !orderId) return;
+    QRCode.toDataURL(`${location.origin}/booth/mine/${orderId}`, { width: 320, margin: 1, color: { dark: "#3b1210", light: "#ffffff" } }).then(setQr).catch(() => {});
+  }, [handset, orderId]);
+
+  const save = async () => {
+    setSaved("Getting them ready…");
+    const { saveImages } = await import("./my-order-stickers");
+    setSaved(await saveImages(Array.from(new Set([...(sheet ? [sheet] : []), ...stickers]))).catch(() => "Tip: press and hold a sticker to save it."));
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] overflow-hidden bg-[#2a0d0b]">
+      {phase === "video" ? (
+        <WelcomeVideo key={run} event={event} look={look} sticker={sticker} poses={poses} name={name} etaSec={run ? undefined : firstEta.current} onEnd={() => setPhase("save")} />
+      ) : (
+        <div className="flex h-full w-full flex-col items-center justify-center overflow-y-auto text-center" style={{ gap: u(1.6), padding: `${u(3)} ${u(3)} ${u(14)}` }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={look.scene} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-2xl" />
+          <h2 className="t-h2 relative !text-[#fbefd5]">While it prints…</h2>
+          <p className="t-lead relative !text-[#f3dcb0]">Save all your stickers to your phone, ready to send to friends.</p>
+          {sheet && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={sheet} alt="Your sticker sheet" className="relative max-h-[40vh] w-auto rounded-xl bg-white p-1.5 shadow-2xl" style={{ aspectRatio: "3.9 / 6.7" }} />
+          )}
+          {handset ? (
+            <button className="btn btn-lg btn-main relative" onClick={save}>
+              📲 Save my stickers to Photos
+            </button>
+          ) : (
+            qr && (
+              <div className="card relative flex items-center text-left" style={{ gap: u(1.2), padding: u(1.2) }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={qr} alt="Scan to get your stickers" style={{ width: `max(110px, ${u(13)})` }} />
+                <div className="t-h3" style={{ maxWidth: "9em" }}>
+                  📲 Scan to get your stickers on your phone
+                </div>
+              </div>
+            )
+          )}
+          {saved && <p className="t-body relative !text-[#fbefd5]">{saved}</p>}
+          <button
+            className="btn btn-soft relative"
+            onClick={() => {
+              setRun((r) => r + 1);
+              setPhase("video");
+            }}
+          >
+            ▶ Watch the story again
+          </button>
+        </div>
+      )}
+
+      {/* QR in the corner during the story too (booth screens) */}
+      {phase === "video" && qr && (
+        <div className="absolute left-3 top-3 z-40 flex items-center rounded-2xl bg-white/90 p-2 shadow-lg" style={{ gap: 8 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={qr} alt="Scan to get your stickers" style={{ width: `max(72px, ${u(8)})` }} />
+          <div className="text-left text-xs font-bold text-[#3b1210]" style={{ maxWidth: "7em" }}>
+            Scan for your stickers 📲
+          </div>
+        </div>
+      )}
+
+      {/* status + done, floating */}
+      <div className="absolute inset-x-0 bottom-0 z-50 flex justify-center p-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+        <div className="flex w-full max-w-xl items-center rounded-full bg-black/55 py-2 pl-5 pr-2 text-white backdrop-blur" style={{ gap: 12 }}>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-bold">{info.label}</div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/25">
+              <motion.div className="h-full rounded-full bg-gradient-to-r from-[#e2b65a] to-[#fbefd5]" animate={{ width: `${Math.round(info.pct * 100)}%` }} transition={{ duration: 0.8 }} />
+            </div>
+          </div>
+          <button className={info.done ? "btn btn-main shrink-0" : "btn btn-soft shrink-0 !py-2 text-sm"} onClick={onDone}>
+            {info.done ? "Got them! 🎉" : "I've got my stickers"}
+          </button>
+        </div>
       </div>
     </div>
   );
