@@ -96,6 +96,11 @@ export default function EventTermsPage() {
               <li>If you&apos;d like a digital gallery of the stickers, tell us when booking. You agree to use it only for your event and not for advertising without guests&apos; permission.</li>
               <li>Children under 13 must have a parent or guardian present at the booth.</li>
               <li>We&apos;ll only use photos from your event in our own marketing with your written OK and the permission of anyone shown.</li>
+              <li>
+                For free (host-paid) events we may ask guests to sign up with an email before their photo. Guests choose separately whether we may
+                feature them on social media and whether to get marketing emails; we keep a record of each choice. We&apos;ll put up a small sign
+                at the booth saying we may photograph or film it, and we only post guests who said yes.
+              </li>
             </ul>
           ),
         },

@@ -18,7 +18,8 @@ export default function PrivacyPage() {
           {LEGAL.business} (&quot;we&quot;, &quot;us&quot;) turns photos into cartoon stickers on {LEGAL.site}, at our sticker photo booth, and at
           events we&apos;re booked for. This policy explains what we collect, why, who we share it with, how long we keep it, and the choices you
           have. The short version: we use your photo only to make your stickers, we never sell your information, we don&apos;t use facial
-          recognition, and photos are deleted automatically within about {LEGAL.retentionDays} days.
+          recognition, and photos are deleted automatically within about {LEGAL.retentionDays} days, unless you sign up at an event, where we keep
+          your photo and stickers so we can email them to you and you can come back for them (see “Event sign-ups”).
         </p>
       }
       sections={[
@@ -97,6 +98,7 @@ export default function PrivacyPage() {
           body: (
             <ul>
               <li><b>Photos and generated stickers:</b> deleted automatically from our storage within about {LEGAL.retentionDays} days. Booth photos are only needed for the few minutes it takes to print.</li>
+              <li><b>Event sign-ups:</b> your email, name, consent choices, original photo and stickers are kept for up to {LEGAL.eventRetentionYears} years after your last event, or until you ask us to delete them. Consent records are kept as long as we use anything you agreed to.</li>
               <li><b>Saved creations</b> (if you sign in): kept until you delete them or ask us to; the images themselves still expire as above.</li>
               <li><b>Orders and payment records:</b> kept as long as needed for taxes, accounting and refunds, generally up to 7 years.</li>
               <li><b>Event inquiries:</b> kept for up to 2 years so we can follow up, or until you ask us to delete them.</li>
@@ -118,6 +120,32 @@ export default function PrivacyPage() {
                 At private events, the host may choose to receive copies of guests&apos; stickers (for example for a digital gallery). We&apos;ll
                 tell guests at the booth when that&apos;s the case. Hosts are responsible for how they use any copies they receive.
               </p>
+            </>
+          ),
+        },
+        {
+          id: "event-signups",
+          title: "Event sign-ups",
+          body: (
+            <>
+              <p>
+                At some events, guests sign up with their email before taking a photo (the booth is free for them because the host paid). When you
+                sign up we collect your email, your name if you give it, your original photo, the stickers and sticker sheets made from it, the
+                event, and a record of what you agreed to (the exact wording, your choice, the time, your IP address and browser).
+              </p>
+              <ul>
+                <li><b>To deliver your stickers:</b> we email them to you and give you a private link to see and save them. This is part of the service.</li>
+                <li>
+                  <b>Media release (only if you tick it):</b> we may use photos and videos of you taken at the event, your photo and your stickers on
+                  our social media, website and ads. You can withdraw anytime by emailing {mail}; we&apos;ll stop using them in new posts, but
+                  can&apos;t always remove posts already published or shared by others.
+                </li>
+                <li>
+                  <b>Marketing emails (only if you tick it):</b> new sticker drops, games and products made from your character (for example a mug
+                  or a printable game). Every email has a one-click unsubscribe link.
+                </li>
+                <li>We never sell your information or your photos, and we don&apos;t share them with the event host unless we tell you at the booth.</li>
+              </ul>
             </>
           ),
         },

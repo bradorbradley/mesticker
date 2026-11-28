@@ -1,4 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { getPartyEvent } from "@/lib/party-events";
+import { claimCreation, countOrders, fillCreation, getCreation, guestByIdToken, markEmailed } from "@/lib/guests";
+import { guestEmailReady, sendGuestEmail } from "@/lib/guest-email";
 import { isFreeEvent } from "@/lib/booth-event";
 import { uploadJson } from "@/lib/storage";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
@@ -36,15 +39,62 @@ const okUrl = (url: unknown): url is string => isHosted(url) || isLocal(url);
  * checkout (free mode, cash) are unverified and print only when the station
  * is told to. Never blocks the kit itself.
  */
-async function queueOrder(order: { id?: unknown; sheets?: unknown; checkoutId?: unknown }, kitUrl: string, guides: string[], items: QueueItem[]) {
+type OrderIn = {
+  id?: unknown;
+  sheets?: unknown;
+  checkoutId?: unknown;
+  /** event booth link (src/lib/party-events.ts) and the signed-up guest */
+  event?: unknown;
+  guest?: { id?: unknown; token?: unknown };
+  photoUrl?: unknown;
+  stickerUrl?: unknown;
+  sheetUrls?: unknown;
+};
+
+/** A booked event's order: free if the event is, saved to the guest's record, emailed once. */
+async function eventOrder(order: OrderIn, id: string, items: QueueItem[]): Promise<boolean> {
+  const event = getPartyEvent(order.event);
+  if (!event) return false;
+  const guest = await guestByIdToken(order.guest?.id, order.guest?.token);
+  if (!guest) return false;
+  // the limit counts orders already held; a resend of the same order is always fine
+  const known = await getCreation(id);
+  if (known && known.guestId !== guest.id) return false;
+  if (!known) {
+    if ((await countOrders(guest.id, event.slug)) >= event.maxOrdersPerGuest) return false;
+    if (!(await claimCreation(id, guest.id, event.slug))) return event.free; // a resend raced us
+    const url = (v: unknown) => (okUrl(v) ? v : null);
+    after(async () => {
+      try {
+        const creation = await fillCreation(id, {
+          photoUrl: url(order.photoUrl),
+          stickerUrl: url(order.stickerUrl),
+          stickers: items.map((it) => it.url),
+          sheets: Array.isArray(order.sheetUrls) ? order.sheetUrls.filter(okUrl) : [],
+        });
+        if (guestEmailReady()) {
+          const r = await sendGuestEmail(guest, creation);
+          if (r.sent) await markEmailed(id);
+          else console.error("[booth/kit] guest email failed:", r.error);
+        }
+      } catch (e) {
+        console.error("[booth/kit] saving the guest's creation failed:", e);
+      }
+    });
+  }
+  return event.free;
+}
+
+async function queueOrder(order: OrderIn, kitUrl: string, guides: string[], items: QueueItem[]) {
   const id = String(order?.id ?? "");
   if (!/^[a-zA-Z0-9-]{8,64}$/.test(id)) return false;
   const checkoutId = typeof order.checkoutId === "string" && order.checkoutId.startsWith("cs_") ? order.checkoutId : null;
   const sheets = parseSheets(order.sheets);
   if (!sheets.length) return false;
   const productId = sheets.join("+");
+  const freeEventOrder = order.event ? await eventOrder(order, id, items).catch((e) => (console.error("[booth/kit] event order:", e), false)) : false;
   // no card payment: only a prepaid (free) event lets it print
-  const verified = checkoutId ? await checkoutPaid(checkoutId, productId) : await isFreeEvent();
+  const verified = checkoutId ? await checkoutPaid(checkoutId, productId) : freeEventOrder || (await isFreeEvent());
   try {
     await enqueue({ id, boothId: process.env.BOOTH_ID || "booth-1", productId, checkoutId, verified, kitUrl, guideUrl: guides[0] ?? null, guides, items });
     return true;
