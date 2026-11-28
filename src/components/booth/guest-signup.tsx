@@ -4,41 +4,44 @@ import { useState } from "react";
 import { CONSENT_TEXT } from "@/lib/consent-text";
 import type { PartyEvent } from "@/lib/party-events";
 import { u } from "./units";
+import { primeMusic } from "./event-booth";
 
 /**
- * Event sign-up, shown before the camera on /booth/<event>: email (stickers are emailed),
- * first name, and three separate choices. Only the terms are required; the media release and
- * marketing emails are opt-in, never pre-ticked.
+ * Event sign-up (before printing, or on a guest's phone after a QR scan): email (stickers are
+ * emailed), name, and two choices, ticked by default and easy to untick: posting their photos and
+ * stickers, and marketing emails. Continuing = agreeing to the terms (the line under the button).
  */
 export default function GuestSignup({
   event,
   onDone,
   onCancel,
+  cta = "Print my stickers 🎄",
 }: {
+  cta?: string;
   event: PartyEvent;
   onDone: (g: SavedGuest) => void;
   onCancel: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [terms, setTerms] = useState(false);
-  const [media, setMedia] = useState(false);
-  const [marketing, setMarketing] = useState(false);
+  const [media, setMedia] = useState(true);
+  const [marketing, setMarketing] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim()) && !!name.trim() && terms;
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim()) && !!name.trim();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!valid || busy) return;
+    primeMusic(event.look?.music); // this tap lets the welcome video play its music
     setBusy(true);
     setError("");
     try {
       const res = await fetch("/api/events/guest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event: event.slug, email: email.trim(), name: name.trim() || null, terms, media, marketing }),
+        body: JSON.stringify({ event: event.slug, email: email.trim(), name: name.trim() || null, terms: true, media, marketing }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Couldn't save");
@@ -59,7 +62,7 @@ export default function GuestSignup({
             {event.name}
           </h1>
           <p className="t-body" style={{ marginTop: u(0.6) }}>
-            Free stickers tonight! Where should we send your sticker pack?
+            Your stickers are almost ready! Where should we send your sticker pack?
           </p>
         </div>
 
@@ -90,15 +93,6 @@ export default function GuestSignup({
 
         <div className="flex flex-col rounded-2xl bg-white p-4 text-sm leading-snug" style={{ gap: u(1.2) }}>
           <label className="flex items-start gap-3">
-            <input type="checkbox" className={box} checked={terms} onChange={(e) => setTerms(e.target.checked)} />
-            <span>
-              <b>Required.</b> {CONSENT_TEXT.terms.split("the MeSticker Terms and Privacy Policy")[0]}the MeSticker{" "}
-              <a href="/terms" target="_blank" className="font-semibold text-[var(--purple,#7c5cfc)] underline">Terms</a> and{" "}
-              <a href="/privacy" target="_blank" className="font-semibold text-[var(--purple,#7c5cfc)] underline">Privacy Policy</a>
-              {CONSENT_TEXT.terms.split("the MeSticker Terms and Privacy Policy")[1]}
-            </span>
-          </label>
-          <label className="flex items-start gap-3">
             <input type="checkbox" className={box} checked={media} onChange={(e) => setMedia(e.target.checked)} />
             <span>{CONSENT_TEXT.media}</span>
           </label>
@@ -110,8 +104,13 @@ export default function GuestSignup({
 
         {error && <p className="text-center font-semibold text-[var(--pink,#e5487a)]">{error}</p>}
         <button type="submit" className="btn btn-lg btn-main justify-center" disabled={!valid || busy}>
-          {busy ? "One sec…" : "Take my photo 📸"}
+          {busy ? "One sec…" : cta}
         </button>
+        <p className="t-body text-center" style={{ fontSize: `max(11px, ${u(1)})` }}>
+          By continuing you agree to our{" "}
+          <a href="/terms" target="_blank" className="underline">Terms</a> and{" "}
+          <a href="/privacy" target="_blank" className="underline">Privacy Policy</a> and confirm you&apos;re 18+ (or a parent or guardian of everyone in the photo).
+        </p>
         <button type="button" className="t-body underline" onClick={onCancel}>
           Back
         </button>

@@ -144,6 +144,7 @@ export default function PhoneSnap({ code, eventSlug }: { code: string; eventSlug
       {needsGuest && event && guestChecked && !guest && (
         <GuestSignup
           event={event}
+          cta="Take my photo 📸"
           onCancel={() => history.back()}
           onDone={(g) => {
             saveGuest(event.slug, g);

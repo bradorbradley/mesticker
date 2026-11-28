@@ -23,7 +23,7 @@ import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import type { PartyEvent } from "@/lib/party-events";
 import GuestSignup, { loadSavedGuest, saveGuest, type SavedGuest } from "@/components/booth/guest-signup";
-import { EventAttract, EventReveal, HostsMascot, WelcomeVideo } from "@/components/booth/event-booth";
+import { EventAttract, EventDone, EventGenerating, EventReveal, HostsMascot, WelcomeVideo, primeMusic } from "@/components/booth/event-booth";
 import Mascot from "./mascot";
 import BoothCamera from "./booth-camera";
 import OperatorPanel, { IMAGE_MODELS, providersFor, type BoothSettings, type GenStats } from "./operator-panel";
@@ -754,7 +754,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                 mascot={event?.look ? <HostsMascot look={event.look} style={{ height: u(20) }} className="self-start short:hidden portrait:hidden" /> : undefined}
               />
             )}
-            {step === "generating" && <Generating photo={photo} ready={stickerReady} />}
+            {step === "generating" && (event?.look ? <EventGenerating look={event.look} photo={photo} ready={stickerReady} /> : <Generating photo={photo} ready={stickerReady} />)}
             {step === "reveal" && (
               <Reveal
                 canRetry={tries < MAX_TRIES}
@@ -776,6 +776,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                 }}
                 onPrint={() => {
                   sounds.tap();
+                  primeMusic(event.look?.music);
                   if (event.collectGuest && !guest) {
                     printAfterSignup.current = true;
                     setSignupOpen(true);
@@ -812,10 +813,19 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                 kit={kit}
                 order={printOrder}
                 onDone={() => setStep("done")}
-                waitWith={event?.look ? (status) => <EventWait video={<WelcomeVideo event={event} look={event.look!} sticker={digitalUrl ?? sticker} name={guest?.name ?? null} />} status={status} /> : undefined}
+                waitWith={event?.look ? (status) => <EventWait video={<WelcomeVideo event={event} look={event.look!} sticker={sticker} poses={variants.pose} name={guest?.name ?? null} />} status={status} /> : undefined}
               />
             )}
-            {step === "done" && <Done sticker={sticker} digitalUrl={digitalUrl} emailOn={emailOn} autoEmailedTo={autoEmailedTo} onFinish={reset} claim={event?.collectGuest && printOrder ? { event: event.slug, orderId: printOrder.id } : null} />}
+            {step === "done" && event?.look && (
+              <EventDone
+                sticker={sticker}
+                sheet={printOrder?.sheetUrls?.[0] ?? guides?.[0] ?? null}
+                stickers={[sticker, ...variants.pose].filter((x): x is string => typeof x === "string")}
+                emailedTo={autoEmailedTo}
+                onFinish={reset}
+              />
+            )}
+            {step === "done" && !event?.look && <Done sticker={sticker} digitalUrl={digitalUrl} emailOn={emailOn} autoEmailedTo={autoEmailedTo} onFinish={reset} claim={event?.collectGuest && printOrder ? { event: event.slug, orderId: printOrder.id } : null} />}
           </motion.div>
         </AnimatePresence>
         {signupOpen && event && (

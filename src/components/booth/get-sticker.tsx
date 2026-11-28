@@ -80,6 +80,7 @@ export default function GetSticker({ url, eventSlug, orderId }: { url: string; e
       {wantsGuest && event && checked && !guest && (
         <GuestSignup
           event={event}
+          cta="Send me my stickers ✨"
           onCancel={() => setChecked(false)}
           onDone={(g) => {
             saveGuest(event.slug, g);
