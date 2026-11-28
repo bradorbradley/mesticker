@@ -37,7 +37,7 @@ export function activeProvider(): ImageProvider {
 /**
  * The 14 small sheet stickers (poses / expressions, ~1.1" printed) can use a
  * faster provider than the hero: BOOTH_EXTRAS_PROVIDER=gemini|fal|openai
- * (default: Nano Banana if a Gemini key is set, else the same as the hero). On OpenAI they use BOOTH_EXTRA_QUALITY
+ * (default: the same as the hero; Google only when BOOTH_USE_GEMINI=1). On OpenAI they use BOOTH_EXTRA_QUALITY
  * (default "low": roughly twice as fast, plenty for a 1" sticker).
  */
 export function extrasProvider(): ImageProvider {
@@ -53,7 +53,8 @@ const geminiKey = () =>
 
 export function hasKey(p: ImageProvider) {
   if (p === "openai") return !!process.env.OPENAI_API_KEY;
-  if (p === "gemini") return !!geminiKey();
+  // OpenAI only: Google is off unless BOOTH_USE_GEMINI=1 turns it back on
+  if (p === "gemini") return process.env.BOOTH_USE_GEMINI === "1" && !!geminiKey();
   return !!process.env.FAL_KEY;
 }
 
@@ -194,13 +195,15 @@ export async function generateScene(prompt: string, references: string[], aspect
  */
 export async function generateGroupSticker(photo: string, references: string[], prompt: string, aspectRatio = "4:3") {
   const refs = [photo, ...references].slice(0, 5);
+  const openaiPrompt = `${prompt}\n\nThe first image is the guest; the other images are the characters to include, drawn exactly as they appear. One single sticker, transparent background.`;
+  if (!hasKey("gemini")) return generateFromImages(refs, openaiPrompt, "medium");
   try {
     const img = await generateScene(whiteBackgroundPrompt(prompt), refs, aspectRatio);
     return await cleanBackground(img);
   } catch (err) {
     // Gemini down or out of credits: gpt-image takes several input images too (transparent output)
     console.warn("[group sticker] Gemini failed, trying OpenAI:", err instanceof Error ? err.message : err);
-    return generateFromImages(refs, `${prompt}\n\nThe first image is the guest; the other images are the characters to include, drawn exactly as they appear. One single sticker, transparent background.`, "medium");
+    return generateFromImages(refs, openaiPrompt, "medium");
   }
 }
 
