@@ -11,7 +11,7 @@ import QRCode from "qrcode";
 import type { PartyEvent } from "@/lib/party-events";
 import { u } from "./units";
 import { cn } from "@/lib/utils";
-import { LAYOUTS } from "@/lib/sheet-layouts";
+import { LAYOUTS, SHEET_H, SHEET_W } from "@/lib/sheet-layouts";
 import { CarolGames } from "./games/carol-games";
 
 type Look = NonNullable<PartyEvent["look"]>;
@@ -563,7 +563,7 @@ export function EventGenerating({ look, photo, ready }: { look: Look; photo: str
  * Every sticker the guest got, big, floating with a little drift: the guest's own stickers (with
  * their name ribbons and white die-cut borders), not a tiny picture of the sheet.
  */
-export function FloatingStickers({ stickers, className }: { stickers: string[]; className?: string }) {
+export function FloatingStickers({ stickers, className, sheet }: { stickers: string[]; className?: string; sheet?: { logo?: string; pill?: string; frame?: string } }) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useEffect(() => {
@@ -580,23 +580,29 @@ export function FloatingStickers({ stickers, className }: { stickers: string[]; 
   const pop = (k: number) => ({ initial: { scale: 0, rotate: -15, opacity: 0 }, animate: { scale: 1, rotate: 0, opacity: 1 }, transition: { type: "spring" as const, stiffness: 200, damping: 13, delay: 0.1 + k * 0.06 } });
   const img = "h-full w-full object-contain drop-shadow-[0_8px_10px_rgba(60,8,10,0.35)]";
 
-  // portrait: laid out like the printed sheet (hero and group big, rows of name stickers and poses), no sheet behind
-  const slots = LAYOUTS.event15.slice(1, -1); // the guest's own (no logo, no pill)
+  // portrait: laid out like the printed sheet (logo, hero and groups big, name stickers, poses, the pill,
+  // inside the trim border), without the white sheet behind
+  const full = !!(sheet?.logo && sheet?.pill);
+  const slots = full ? LAYOUTS.event15 : LAYOUTS.event15.slice(1, -1);
   const portrait = size.h >= size.w * 0.9 && stickers.length >= 6;
   if (portrait) {
-    const list = stickers.slice(0, slots.length);
-    const used = slots.slice(0, list.length);
-    const x0 = Math.min(...used.map((sl) => sl[0])), y0 = Math.min(...used.map((sl) => sl[1]));
-    const x1 = Math.max(...used.map((sl) => sl[0] + sl[2])), y1 = Math.max(...used.map((sl) => sl[1] + sl[3]));
+    const srcs = full ? [sheet!.logo!, ...stickers.slice(0, slots.length - 2), sheet!.pill!] : stickers.slice(0, slots.length);
+    const used = full ? [slots[0], ...slots.slice(1, 1 + srcs.length - 2), slots[slots.length - 1]] : slots.slice(0, srcs.length);
+    const framed = full && !!sheet?.frame;
+    const x0 = framed ? 0 : Math.min(...used.map((sl) => sl[0])), y0 = framed ? 0 : Math.min(...used.map((sl) => sl[1]));
+    const x1 = framed ? SHEET_W : Math.max(...used.map((sl) => sl[0] + sl[2])), y1 = framed ? SHEET_H : Math.max(...used.map((sl) => sl[1] + sl[3]));
     const k = Math.min(size.w / (x1 - x0), size.h / (y1 - y0));
     return (
       <div ref={box} className={cn("relative", className)}>
         <div className="absolute left-1/2 top-1/2" style={{ width: (x1 - x0) * k, height: (y1 - y0) * k, transform: "translate(-50%, -50%)" }}>
-          {list.map((src, i) => {
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {framed && <img src={sheet!.frame} alt="" className="absolute inset-0 h-full w-full" />}
+          {srcs.map((src, i) => {
             const [x, y, w, h] = used[i];
+            const brand = full && (i === 0 || i === srcs.length - 1);
             return (
               <motion.div key={`${i}-${src.slice(-24)}`} className="absolute" style={{ left: (x - x0) * k, top: (y - y0) * k, width: w * k, height: h * k }} {...pop(i)}>
-                <motion.img src={src} alt="" className={img} {...float(i, h * k)} />
+                <motion.img src={src} alt="" className={img} {...(brand ? {} : float(i, h * k))} />
               </motion.div>
             );
           })}
@@ -606,7 +612,7 @@ export function FloatingStickers({ stickers, className }: { stickers: string[]; 
   }
 
   // landscape: the column count that gives the biggest stickers while showing every one
-  const list = Array.from(new Set(stickers)).slice(0, 15);
+  const list = Array.from(new Set([...(sheet?.logo ? [sheet.logo] : []), ...stickers, ...(sheet?.pill ? [sheet.pill] : [])])).slice(0, 15);
   const n = list.length || 1;
   let cols = 1, cell = 0;
   for (let c = 1; c <= n; c++) {
@@ -629,26 +635,58 @@ export function FloatingStickers({ stickers, className }: { stickers: string[]; 
   );
 }
 
-/** The end: all their stickers floating, big, and one tap to save every one to their photos. */
-export function EventDone({ stickers, onFinish, emailedTo }: { sticker?: string | null; sheet?: string | null; stickers: string[]; onFinish: () => void; emailedTo: string | null }) {
+/**
+ * The end (right after the games): the whole sheet's stickers floating, big. On a phone, one tap saves
+ * every sticker to Photos; on the booth's tablet, a QR sends them to the guest's own phone.
+ */
+export function EventDone({
+  stickers,
+  onFinish,
+  emailedTo,
+  sheet,
+  orderId,
+  handset = true,
+}: {
+  stickers: string[];
+  onFinish: () => void;
+  emailedTo: string | null;
+  sheet?: { logo?: string; pill?: string; frame?: string };
+  orderId?: string | null;
+  handset?: boolean;
+}) {
   const [status, setStatus] = useState<string | null>(null);
+  const [qr, setQr] = useState<string | null>(null);
+  useEffect(() => {
+    if (handset || !orderId) return;
+    QRCode.toDataURL(`${location.origin}/booth/mine/${orderId}`, { width: 360, margin: 1, color: { dark: "#3b1210", light: "#ffffff" } }).then(setQr).catch(() => {});
+  }, [handset, orderId]);
   const save = async () => {
     setStatus("Getting them ready…");
     const { saveImages } = await import("./my-order-stickers");
     setStatus(await saveImages(Array.from(new Set(stickers))).catch(() => "Tip: press and hold any sticker to save it."));
   };
   return (
-    <div className="flex h-full w-full landscape:flex-row landscape:items-center portrait:flex-col" style={{ gap: u(1.6), padding: `${u(1.5)} ${u(2)} max(${u(2)}, env(safe-area-inset-bottom))` }}>
+    <div className="flex h-full w-full landscape:flex-row landscape:items-center portrait:flex-col" style={{ gap: u(1.6), padding: `${u(1)} ${u(2)} max(${u(2)}, env(safe-area-inset-bottom))` }}>
       <Snow />
-      <FloatingStickers stickers={stickers} className="min-h-0 flex-1 landscape:h-full" />
+      <FloatingStickers stickers={stickers} sheet={sheet} className="min-h-0 flex-1 landscape:h-full" />
       <div className="z-10 flex shrink-0 flex-col items-center text-center landscape:w-[34%]" style={{ gap: u(1) }}>
         <h2 className="t-h2">
           Merry <span className="pop">Christmas!</span>
         </h2>
         <p className="t-body">Grab your sheet from the printer and peel away.{emailedTo ? ` We're emailing every sticker to ${emailedTo}.` : ""}</p>
-        <button className="btn btn-lg btn-main w-fit" onClick={save}>
-          📲 Save my stickers to Photos
-        </button>
+        {qr ? (
+          <div className="card flex items-center text-left" style={{ gap: u(1.2), padding: u(1.2) }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qr} alt="Scan to get your stickers" style={{ width: `max(120px, ${u(14)})` }} />
+            <div className="t-h3" style={{ maxWidth: "9em" }}>
+              📲 Scan to save your stickers to your phone
+            </div>
+          </div>
+        ) : (
+          <button className="btn btn-lg btn-main w-fit" onClick={save}>
+            📲 Save my stickers to Photos
+          </button>
+        )}
         {status && <p className="t-body">{status}</p>}
         <button className="btn btn-soft w-fit" onClick={onFinish}>
           Done
@@ -712,9 +750,9 @@ export function EventWait({
   return (
     <div className="fixed inset-0 z-[60] overflow-hidden bg-[#2a0d0b]">
       {phase === "video" ? (
-        <WelcomeVideo key={run} event={event} look={look} sticker={sticker} poses={poses} name={name} etaSec={run ? undefined : firstEta.current} onEnd={() => setPhase(run ? "save" : "games")} />
+        <WelcomeVideo key={run} event={event} look={look} sticker={sticker} poses={poses} name={name} etaSec={run ? undefined : firstEta.current} onEnd={() => setPhase("games")} />
       ) : phase === "games" ? (
-        <CarolGames stickers={gameStickers} hero={sticker ?? look.hosts[0].img} hosts={look.hosts.map((h) => ({ name: h.name, img: h.cut ?? h.img }))} name={name} durationMs={60000} onDone={() => setPhase("save")} />
+        <CarolGames stickers={gameStickers} hero={sticker ?? look.hosts[0].img} hosts={look.hosts.map((h) => ({ name: h.name, img: h.cut ?? h.img }))} name={name} durationMs={60000} onDone={onDone} />
       ) : (
         <div className="relative flex h-full w-full items-center text-center landscape:flex-row portrait:flex-col" style={{ gap: u(1.6), padding: "16px 16px 84px" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
