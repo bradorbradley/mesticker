@@ -1,9 +1,17 @@
+import { Lobster } from "next/font/google";
 import BoothApp from "@/components/booth/booth-app";
 import { PARTY_EVENTS } from "@/lib/party-events";
 
-export const metadata = { title: "MeSticker · Christmas Carol Party" };
+// the invite's retro script, for headings, the ribbon and the welcome video
+const carolFont = Lobster({ weight: "400", subsets: ["latin"], variable: "--font-carol", display: "swap" });
 
-/** QR code at the Christmas Carol Party: free stickers, guests sign up with their email first. */
+export const metadata = { title: "387 Christmas Carols · MeSticker" };
+
+/** 387 Christmas Carols (December 4): the booth themed for the hosts, free, one sheet. */
 export default function ChristmasCarolBooth() {
-  return <BoothApp event={PARTY_EVENTS.christmascarol} />;
+  return (
+    <div className={carolFont.variable}>
+      <BoothApp event={PARTY_EVENTS.christmascarol} />
+    </div>
+  );
 }

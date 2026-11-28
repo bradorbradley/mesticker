@@ -22,7 +22,8 @@ import BoothReveal from "./booth-reveal";
 import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import type { PartyEvent } from "@/lib/party-events";
-import GuestSignup, { loadSavedGuest, saveGuest } from "@/components/booth/guest-signup";
+import GuestSignup, { loadSavedGuest, saveGuest, type SavedGuest } from "@/components/booth/guest-signup";
+import { EventAttract, EventReveal, HostsMascot, WelcomeVideo } from "@/components/booth/event-booth";
 import Mascot from "./mascot";
 import BoothCamera from "./booth-camera";
 import OperatorPanel, { IMAGE_MODELS, providersFor, type BoothSettings, type GenStats } from "./operator-panel";
@@ -36,10 +37,16 @@ type Step = "attract" | "camera" | "generating" | "reveal" | "sheets" | "printin
 type VariantKind = "pose" | "face";
 /** 7 extras per set: null = still making, false = failed */
 type Variants = Record<VariantKind, (string | null | false)[]>;
+/**
+ * The event this page is for (/booth/<slug>), set once by BoothApp. Event sheets use their own
+ * layout (logo on top, 8 themed poses) and their own artwork.
+ */
+let ACTIVE_EVENT: PartyEvent | null = null;
 const EXTRAS = 7;
-const SLOTS = Array.from({ length: EXTRAS }, (_, i) => i);
-const EMPTY_VARIANTS: Variants = { pose: SLOTS.map(() => null), face: SLOTS.map(() => null) };
-const SHEET_LAYOUT = "pack12" as const;
+const slotsOf = (kind: VariantKind) => Array.from({ length: kind === "pose" && ACTIVE_EVENT?.poses ? ACTIVE_EVENT.poses.length : EXTRAS }, (_, i) => i);
+const emptyVariants = (): Variants => ({ pose: slotsOf("pose").map(() => null), face: slotsOf("face").map(() => null) });
+const sheetLayout = () => (ACTIVE_EVENT?.look ? ("event11" as const) : ("pack13" as const));
+const PILL = "/brand/handle-pill.png";
 
 /** Expressions for the Big Feelings sheet (same pose ideas engine isn't needed). */
 const EXPRESSIONS = [
@@ -69,17 +76,22 @@ const IDEAS_TIMEOUT_MS = 3500;
  * then 3 rows of 3). "main" = their sticker; [kind, i] = extra i of that set.
  * Big slots get the strongest stickers; the small last row repeats favourites.
  */
-type Src = "main" | [VariantKind, number];
+type Src = "main" | "logo" | "pill" | [VariantKind, number];
 const SHEET_RECIPES: Record<SheetKind, Src[]> = {
-  pose: ["main", ["pose", 0], ["pose", 1], ["pose", 2], ["pose", 3], ["pose", 4], ["pose", 5], ["pose", 6], "main", ["pose", 0], ["pose", 3], ["pose", 5]],
-  face: ["main", ["face", 0], ["face", 1], ["face", 2], ["face", 3], ["face", 4], ["face", 5], ["face", 6], "main", ["face", 0], ["face", 2], ["face", 4]],
-  best: ["main", ["face", 0], ["pose", 0], ["pose", 1], ["face", 1], ["pose", 2], ["face", 2], ["pose", 3], ["face", 3], ["pose", 4], ["face", 4], "main"],
+  pose: ["main", ["pose", 0], ["pose", 1], ["pose", 2], ["pose", 3], ["pose", 4], ["pose", 5], ["pose", 6], "main", ["pose", 0], ["pose", 3], ["pose", 5], "pill"],
+  face: ["main", ["face", 0], ["face", 1], ["face", 2], ["face", 3], ["face", 4], ["face", 5], ["face", 6], "main", ["face", 0], ["face", 2], ["face", 4], "pill"],
+  best: ["main", ["face", 0], ["pose", 0], ["pose", 1], ["face", 1], ["pose", 2], ["face", 2], ["pose", 3], ["face", 3], ["pose", 4], ["face", 4], "main", "pill"],
 };
+/** event11: the event logo, the guest, their 8 themed poses, the handle pill */
+const EVENT_RECIPE: Src[] = ["logo", "main", ["pose", 0], ["pose", 1], ["pose", 2], ["pose", 3], ["pose", 4], ["pose", 5], ["pose", 6], ["pose", 7], "pill"];
 
 /** Raw sticker per slot: null while an extra is still being made (preview only); failed extras fall back to the main sticker. */
 function sheetSources(kind: SheetKind, main: string, variants: Variants, preview: boolean): (string | null)[] {
-  return SHEET_RECIPES[kind].map((s) => {
+  const look = ACTIVE_EVENT?.look;
+  return (look ? EVENT_RECIPE : SHEET_RECIPES[kind]).map((s) => {
     if (s === "main") return main;
+    if (s === "logo") return look?.logo ?? main;
+    if (s === "pill") return look?.pill ?? PILL;
     const v = variants[s[0]][s[1]];
     return v ? v : v === null && preview ? null : main;
   });
@@ -109,7 +121,7 @@ const bordered = (src: string) => {
 /** One sheet exactly as it will print (pending extras drawn as placeholders when previewing). */
 async function buildSheet(kind: SheetKind, main: string, variants: Variants, preview: boolean, numbers = false) {
   const srcs = await Promise.all(sheetSources(kind, main, variants, preview).map((s) => (s ? bordered(s) : Promise.resolve(null))));
-  return composePrintSheet(srcs, SHEET_LAYOUT, { numbers });
+  return composePrintSheet(srcs, sheetLayout(), { numbers });
 }
 
 /** Every sticker placement for the guest's sheets, for the print station. */
@@ -124,7 +136,7 @@ async function buildKit(sheets: SheetKind[], main: string, variants: Variants): 
       Promise.all(
         sheetSources(kind, main, variants, false).map(async (raw, i) => {
           const src = await bordered(raw!);
-          return { sheet, n: i + 1, src, ...slotPlacement(SHEET_LAYOUT, i, await aspect(src)) };
+          return { sheet, n: i + 1, src, ...slotPlacement(sheetLayout(), i, await aspect(src)) };
         })
       )
     )
@@ -178,6 +190,7 @@ async function uploadUrl(image: string): Promise<string> {
 }
 
 export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
+  ACTIVE_EVENT = event ?? null;
   // event links (/booth/<slug>): same booth, free, event theme. Guests sign up when they scan a QR on their
   // phone: here when the booth's "use your phone" QR opened this page (?qr=1), or via /booth/snap and /booth/get.
   const eventSlug = useRef(event?.slug ?? null);
@@ -185,10 +198,16 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
   useEffect(() => {
     const qr = new URLSearchParams(location.search).get("qr") === "1";
     setFromQr(qr);
+    fromQrRef.current = qr;
     if (qr && eventSlug.current) setGuest(loadSavedGuest(eventSlug.current));
   }, []);
-  const [guest, setGuest] = useState<{ id: string; token: string; email: string } | null>(null);
+  const [guest, setGuest] = useState<SavedGuest | null>(null);
   const [signupOpen, setSignupOpen] = useState(false);
+  const guestRef = useRef(guest);
+  guestRef.current = guest;
+  const fromQrRef = useRef(false);
+  /** event looks: sign-up comes right before printing, then the print starts */
+  const printAfterSignup = useRef(false);
   const photoUrl = useRef<Promise<string | null> | null>(null);
   const collectGuest = useRef(!!event?.collectGuest);
   const [step, setStep] = useState<Step>("attract");
@@ -220,8 +239,8 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
   }, []);
 
   // ---- Pose / Mix packs: 8 extra stickers, started the moment the photo is taken
-  const [variants, setVariantsState] = useState<Variants>(EMPTY_VARIANTS);
-  const variantsRef = useRef<Variants>(EMPTY_VARIANTS);
+  const [variants, setVariantsState] = useState<Variants>(emptyVariants);
+  const variantsRef = useRef<Variants>(emptyVariants());
   const genId = useRef(0);
   const setVariant = (kind: VariantKind, i: number, v: string | false, id: number) => {
     if (id !== genId.current) return; // a newer photo/style replaced this one
@@ -234,8 +253,8 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
     variantJobs.current = {};
     ideasJob.current = null;
     variantPhoto.current = null;
-    variantsRef.current = EMPTY_VARIANTS;
-    setVariantsState(EMPTY_VARIANTS);
+    variantsRef.current = emptyVariants();
+    setVariantsState(variantsRef.current);
   };
 
   useEffect(() => {
@@ -284,6 +303,8 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
     setAutoEmailedTo(null);
     photoUrl.current = null;
     setSignupOpen(false);
+    printAfterSignup.current = false;
+    if (!fromQrRef.current) setGuest(null);
     resetVariants();
     setOperatorOpen(false);
     printCopy.current = null;
@@ -360,7 +381,9 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
     const ideas: Promise<string[]> =
       kind === "face"
         ? Promise.resolve(EXPRESSIONS)
-        : (ideasJob.current ??= Promise.race([
+        : ACTIVE_EVENT?.poses
+          ? Promise.resolve(ACTIVE_EVENT.poses)
+          : (ideasJob.current ??= Promise.race([
             // poses designed for this person, if the vision engine answers quickly; otherwise the stock poses, so Pose Party doesn't lag
             post({ photo: image }).then((d: { ideas: string[] }) => (d.ideas?.length ? d.ideas : POSES)),
             new Promise<string[]>((r) => setTimeout(() => r(POSES), IDEAS_TIMEOUT_MS)),
@@ -369,7 +392,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
       .then((list) =>
         // stagger so 14 image requests don't all land in the same instant
         Promise.allSettled(
-          SLOTS.map((i) =>
+          slotsOf(kind).map((i) =>
             wait(i * 350 + (kind === "face" ? 175 : 0))
               .then(() => retry(() => post({ photo: image, styleId: styleRef.current, idea: list[i % list.length], theme: themeRef.current })))
               .then((d) => setVariant(kind, i, d.image, id))
@@ -377,7 +400,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
           )
         )
       )
-      .catch(() => SLOTS.forEach((i) => variantsRef.current[kind][i] === null && setVariant(kind, i, false, id)));
+      .catch(() => slotsOf(kind).forEach((i) => variantsRef.current[kind][i] === null && setVariant(kind, i, false, id)));
   };
 
   const startVariantsRef = useRef(startVariants);
@@ -401,7 +424,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
     variantPhoto.current = image;
     if (collectGuest.current) photoUrl.current = uploadUrl(image).catch(() => null);
     startVariantsRef.current("pose");
-    startVariantsRef.current("face");
+    if (!ACTIVE_EVENT?.look) startVariantsRef.current("face");
     try {
       const res = await main;
       const data = await res.json();
@@ -494,11 +517,12 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
             sheets,
             checkoutId: checkoutId ?? null,
             event: event.slug,
-            ...(guest ? { guest: { id: guest.id, token: guest.token } } : {}),
+            ...(guestRef.current ? { guest: { id: guestRef.current.id, token: guestRef.current.token } } : {}),
             photoUrl: photo,
             stickerUrl,
             sheetUrls: sheetUrls.filter((u): u is string => !!u),
           });
+          const guest = guestRef.current;
           if (guest) {
             const [user, domain] = guest.email.split("@");
             setAutoEmailedTo(`${user.slice(0, 2)}•••@${domain}`);
@@ -530,7 +554,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
         console.error("print file failed", e);
       }
     },
-    [sticker, picked, emailOn, buildPrintFiles, event, guest]
+    [sticker, picked, emailOn, buildPrintFiles, event]
   );
 
   const outOfPaper = settings !== null && settings.sheetsLeft <= 0;
@@ -555,7 +579,8 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
   // ---- "Take from mobile": the guest's phone takes the photo, then either device picks sheets / pays.
   // This laptop stays the brain (it makes the stickers and sends the print order); the phone
   // follows through /api/booth/pair. Both poll every 1.5 s.
-  const isPhone = useIsPhone();
+  // a real phone (not an iPad in portrait): no "take from mobile" QR on the device that IS the phone
+  const handset = useIsHandset();
   const [pairCode, setPairCode] = useState<string | null>(null);
   const [pairQr, setPairQr] = useState<string | null>(null);
   const [pairOpen, setPairOpen] = useState(false);
@@ -662,7 +687,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
   }, [step, freeMode]);
 
   return (
-    <div className="booth fixed inset-0 z-40 flex flex-col overflow-hidden">
+    <div className={cn("booth fixed inset-0 z-40 flex flex-col overflow-hidden", event?.look?.themeClass)}>
       <TopBar
         step={step}
         canJump={(s) =>
@@ -688,7 +713,22 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
             exit={{ opacity: 0, scale: 1.02 }}
             transition={{ duration: 0.25 }}
           >
-            {step === "attract" && (
+            {step === "attract" && event?.look && (
+              <EventAttract
+                event={event}
+                look={event.look}
+                outOfPaper={outOfPaper}
+                phone={handset}
+                qrPath={`/booth/${event.slug}?qr=1`}
+                onStart={() => {
+                  sounds.unlock();
+                  sounds.tap();
+                  document.documentElement.requestFullscreen?.().catch(() => {});
+                  setStep("camera");
+                }}
+              />
+            )}
+            {step === "attract" && !event?.look && (
               <Attract
                 outOfPaper={outOfPaper}
                 freeMode={freeMode}
@@ -710,7 +750,8 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                   setPhoto(p);
                   generate(p);
                 }}
-                onMobile={isPhone ? undefined : startPairing}
+                onMobile={handset ? undefined : startPairing}
+                mascot={event?.look ? <HostsMascot look={event.look} style={{ height: u(20) }} className="self-start short:hidden portrait:hidden" /> : undefined}
               />
             )}
             {step === "generating" && <Generating photo={photo} ready={stickerReady} />}
@@ -724,7 +765,25 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                 }}
               />
             )}
-            {step === "sheets" && sticker && (
+            {step === "sheets" && sticker && event?.look && (
+              <EventReveal
+                sticker={sticker}
+                canRetry={tries < MAX_TRIES}
+                onRetry={() => photo && generate(photo)}
+                onRetake={() => {
+                  setPhoto(null);
+                  setStep("camera");
+                }}
+                onPrint={() => {
+                  sounds.tap();
+                  if (event.collectGuest && !guest) {
+                    printAfterSignup.current = true;
+                    setSignupOpen(true);
+                  } else startPrint();
+                }}
+              />
+            )}
+            {step === "sheets" && sticker && !event?.look && (
               <SheetShop
                 photo={photo}
                 sticker={sticker}
@@ -747,7 +806,15 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                 onPayUrl={pairCode ? onPayUrl : undefined}
               />
             )}
-            {step === "printing" && <PrintKit guides={guides} kit={kit} order={printOrder} onDone={() => setStep("done")} />}
+            {step === "printing" && (
+              <PrintKit
+                guides={guides}
+                kit={kit}
+                order={printOrder}
+                onDone={() => setStep("done")}
+                waitWith={event?.look ? (status) => <EventWait video={<WelcomeVideo event={event} look={event.look!} sticker={digitalUrl ?? sticker} name={guest?.name ?? null} />} status={status} /> : undefined}
+              />
+            )}
             {step === "done" && <Done sticker={sticker} digitalUrl={digitalUrl} emailOn={emailOn} autoEmailedTo={autoEmailedTo} onFinish={reset} claim={event?.collectGuest && printOrder ? { event: event.slug, orderId: printOrder.id } : null} />}
           </motion.div>
         </AnimatePresence>
@@ -757,9 +824,13 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
             onCancel={() => setSignupOpen(false)}
             onDone={(g) => {
               setGuest(g);
-              saveGuest(event.slug, g);
+              guestRef.current = g;
+              if (fromQrRef.current) saveGuest(event.slug, g);
               setSignupOpen(false);
-              setStep("camera");
+              if (printAfterSignup.current) {
+                printAfterSignup.current = false;
+                startPrint();
+              } else setStep("camera");
             }}
           />
         )}
@@ -1104,7 +1175,7 @@ function Reveal({ canRetry, onRetry, onRetake }: { canRetry: boolean; onRetry: (
   return (
     <Split>
       <div className="flex items-center justify-center landscape:h-full landscape:w-[36%] portrait:w-full portrait:min-h-0 portrait:flex-1">
-        <Mascot className="h-[75%] max-h-full" />
+        {ACTIVE_EVENT?.look ? <HostsMascot look={ACTIVE_EVENT.look} className="h-[60%] max-h-full w-full" /> : <Mascot className="h-[75%] max-h-full" />}
       </div>
       <div className="flex flex-col landscape:w-[48%] portrait:items-center portrait:text-center" style={{ gap: u(2) }}>
         <h2 className="t-h2">
@@ -1136,6 +1207,28 @@ function bundleHint(count: number) {
 }
 
 /** A phone held upright: the guest is on their own device, so "Pay" beats a QR. */
+function useIsHandset() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 600px), (max-height: 500px) and (pointer: coarse)");
+    const f = () => setOn(mq.matches);
+    f();
+    mq.addEventListener("change", f);
+    return () => mq.removeEventListener("change", f);
+  }, []);
+  return on;
+}
+
+/** Event looks: the welcome video with the print status under it. */
+function EventWait({ video, status }: { video: React.ReactNode; status: React.ReactNode }) {
+  return (
+    <div className="flex h-full w-full items-center justify-center landscape:flex-row portrait:flex-col" style={{ gap: u(2.4), padding: `${u(1)} ${u(3)} ${u(2)}` }}>
+      <div className="landscape:w-[62%] portrait:w-full">{video}</div>
+      <div className="landscape:w-[32%] portrait:w-full">{status}</div>
+    </div>
+  );
+}
+
 function useIsPhone() {
   const [phone, setPhone] = useState(false);
   useEffect(() => {
@@ -1149,7 +1242,7 @@ function useIsPhone() {
 }
 
 /** Where each sticker sits on a pack12 sheet, as % of the sheet (for the loading spinners). */
-const SLOT_CENTERS = LAYOUTS[SHEET_LAYOUT].map(([x, y, w, h]) => ({ left: ((x + w / 2) / SHEET_W) * 100, top: ((y + h / 2) / SHEET_H) * 100, size: (Math.min(w, h) / SHEET_W) * 100 }));
+const slotCenters = () => LAYOUTS[sheetLayout()].map(([x, y, w, h]) => ({ left: ((x + w / 2) / SHEET_W) * 100, top: ((y + h / 2) / SHEET_H) * 100, size: (Math.min(w, h) / SHEET_W) * 100 }));
 
 /**
  * The moment the sticker lands, in two parts on one scrolling screen:
@@ -1315,7 +1408,7 @@ function SheetShop({
                       <span
                         key={i}
                         className="absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
-                        style={{ left: `${SLOT_CENTERS[i].left}%`, top: `${SLOT_CENTERS[i].top}%`, width: `${SLOT_CENTERS[i].size * 0.5}%`, aspectRatio: "1" }}
+                        style={{ left: `${slotCenters()[i].left}%`, top: `${slotCenters()[i].top}%`, width: `${slotCenters()[i].size * 0.5}%`, aspectRatio: "1" }}
                       >
                         <motion.span
                           className="block h-full w-full rounded-full border-[3px] border-[var(--purple)] border-t-transparent"
@@ -1634,7 +1727,7 @@ function printPhase(sent: "sending" | "queued" | "error", p: OrderProgress | nul
   };
 }
 
-function PrintKit({ guides, kit, order, onDone }: { guides: string[] | null; kit: KitItem[] | null; order: PrintOrder | null; onDone: () => void }) {
+function PrintKit({ guides, kit, order, onDone, waitWith }: { guides: string[] | null; kit: KitItem[] | null; order: PrintOrder | null; onDone: () => void; waitWith?: (status: React.ReactNode) => React.ReactNode }) {
   const [sent, setSent] = useState<"sending" | "queued" | "error">("sending");
   const [progress, setProgress] = useState<OrderProgress | null>(null);
   const [skew, setSkew] = useState(0);
@@ -1720,7 +1813,7 @@ function PrintKit({ guides, kit, order, onDone }: { guides: string[] | null; kit
     </div>
   );
 
-  return <PlayWhileYouWait status={status} />;
+  return waitWith ? <>{waitWith(status)}</> : <PlayWhileYouWait status={status} />;
 }
 
 // ================================================================ done

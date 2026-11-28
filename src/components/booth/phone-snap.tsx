@@ -129,6 +129,8 @@ export default function PhoneSnap({ code, eventSlug }: { code: string; eventSlug
   );
 
   const step = laptop?.step ?? "";
+  // event booths with their own look print one fixed sheet: no picking
+  const single = !!getPartyEvent(laptop?.event ?? eventSlug)?.look;
   const pickedKey = picked.join("+");
   const payReady = !!laptop?.payUrl && laptop.payFor === pickedKey;
   const price = bundlePrice(picked.length);
@@ -228,10 +230,18 @@ export default function PhoneSnap({ code, eventSlug }: { code: string; eventSlug
             <div style={{ fontSize: 56 }}>✨</div>
           )}
           <h1 className="t-h2 !text-[28px]">
-            Pick your <span className="pop">sheets</span>
+            {single ? (
+              <>
+                Look at <span className="pop">you!</span>
+              </>
+            ) : (
+              <>
+                Pick your <span className="pop">sheets</span>
+              </>
+            )}
           </h1>
-          <p className="t-body -mt-2">Same as on the booth screen: change them here or there.</p>
-          <div className="flex w-full max-w-sm flex-col" style={{ gap: 10 }}>
+          <p className="t-body -mt-2">{single ? "Your sheet gets this cartoon plus 8 festive poses." : "Same as on the booth screen: change them here or there."}</p>
+          <div className={single ? "hidden" : "flex w-full max-w-sm flex-col"} style={{ gap: 10 }}>
             {SHEET_DESIGNS.map((d) => {
               const on = picked.includes(d.id);
               return (
@@ -260,7 +270,7 @@ export default function PhoneSnap({ code, eventSlug }: { code: string; eventSlug
                   post({ print: true }).catch(() => setPrintAsked(false));
                 }}
               >
-                {printAsked ? "Sending to the printer…" : `🖨️ Print ${picked.length === 1 ? "my sheet" : `my ${picked.length} sheets`}`}
+                {printAsked ? "Sending to the printer…" : single ? "🖨️ Print my stickers" : `🖨️ Print ${picked.length === 1 ? "my sheet" : `my ${picked.length} sheets`}`}
               </button>
             ) : payReady ? (
               <a className="btn btn-lg btn-main justify-center" href={laptop!.payUrl!}>

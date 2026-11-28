@@ -16,7 +16,7 @@ export default function GuestSignup({
   onCancel,
 }: {
   event: PartyEvent;
-  onDone: (g: { id: string; token: string; email: string }) => void;
+  onDone: (g: SavedGuest) => void;
   onCancel: () => void;
 }) {
   const [email, setEmail] = useState("");
@@ -42,7 +42,7 @@ export default function GuestSignup({
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Couldn't save");
-      onDone({ id: d.guestId, token: d.token, email: email.trim() });
+      onDone({ id: d.guestId, token: d.token, email: email.trim(), name: name.trim() });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save, try again");
       setBusy(false);
@@ -120,7 +120,7 @@ export default function GuestSignup({
   );
 }
 
-export type SavedGuest = { id: string; token: string; email: string };
+export type SavedGuest = { id: string; token: string; email: string; name?: string };
 
 /** The guest signed up on this phone before (their own phone, after a QR scan). */
 export function loadSavedGuest(slug: string): SavedGuest | null {

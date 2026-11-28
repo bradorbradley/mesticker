@@ -53,6 +53,28 @@ export const LAYOUTS = {
   ] as Slot[],
   /** one big sticker (~3.6") */
   big1: [[35, 335, 1100, 1340, 0]] as Slot[],
+  /**
+   * The booth's sheets: pack12 a little tighter, plus the @mesticker.fun handle pill (slot 13)
+   * centred along the bottom.
+   */
+  pack13: [
+    [30, 30, 660, 660, 0], [720, 30, 420, 315, 0], [720, 375, 420, 315, 0],
+    [30, 720, 350, 360, 0], [410, 720, 350, 360, 0], [790, 720, 350, 360, 0],
+    [30, 1110, 350, 330, 0], [410, 1110, 350, 330, 0], [790, 1110, 350, 330, 0],
+    [30, 1470, 350, 300, 0], [410, 1470, 350, 300, 0], [790, 1470, 350, 300, 0],
+    [185, 1800, 800, 190, 0],
+  ] as Slot[],
+  /**
+   * A booked event's sheet: the event's logo sticker across the top (slot 1), the guest's hero
+   * sticker, 8 action poses, and the handle pill along the bottom (slot 11).
+   */
+  event11: [
+    [135, 25, 900, 320, 0],
+    [30, 375, 640, 640, 0], [700, 375, 440, 305, 0], [700, 710, 440, 305, 0],
+    [30, 1045, 350, 365, 0], [410, 1045, 350, 365, 0], [790, 1045, 350, 365, 0],
+    [30, 1440, 350, 330, 0], [410, 1440, 350, 330, 0], [790, 1440, 350, 330, 0],
+    [185, 1800, 800, 190, 0],
+  ] as Slot[],
 };
 export type LayoutId = keyof typeof LAYOUTS;
 
@@ -63,6 +85,8 @@ export const LAYOUT_INFO: Record<LayoutId, string> = {
   kit8: "8 slots, no tilt (easy to copy by hand in the Liene app): a big #1 (~2.2\") top-left, #2–3 beside it, #4–5 medium, #6–8 small. Best for you + 7 poses.",
   pack12: "12 slots, no tilt: a ~2.2\" hero top-left, two ~1.1\" beside it, then three rows of three (~1.1–1.3\"). Best for 12 stickers: you + 7 poses + repeats.",
   big1: "1 slot: a single ~3.6\" sticker.",
+  pack13: "13 slots, no tilt: pack12 slightly tighter, plus a wide slot along the bottom for the @mesticker.fun handle pill.",
+  event11: "11 slots, no tilt: an event logo across the top, a ~2.1\" hero, 8 poses, and the handle pill along the bottom.",
 };
 
 type Pt = [number, number];
