@@ -16,7 +16,7 @@
  * otherwise our own flood-fill cutout).
  */
 
-import { generateAtQuality } from "@/lib/generation";
+import { generateAtQuality, generateFromImages } from "@/lib/generation";
 import { removeBackground } from "@/lib/removebg";
 import { cutoutWhiteBackground } from "@/lib/cutout";
 
@@ -193,8 +193,15 @@ export async function generateScene(prompt: string, references: string[], aspect
  * stickers): the guest's photo first, then the reference images, white background removed.
  */
 export async function generateGroupSticker(photo: string, references: string[], prompt: string, aspectRatio = "4:3") {
-  const img = await generateScene(whiteBackgroundPrompt(prompt), [photo, ...references].slice(0, 5), aspectRatio);
-  return cleanBackground(img);
+  const refs = [photo, ...references].slice(0, 5);
+  try {
+    const img = await generateScene(whiteBackgroundPrompt(prompt), refs, aspectRatio);
+    return await cleanBackground(img);
+  } catch (err) {
+    // Gemini down or out of credits: gpt-image takes several input images too (transparent output)
+    console.warn("[group sticker] Gemini failed, trying OpenAI:", err instanceof Error ? err.message : err);
+    return generateFromImages(refs, `${prompt}\n\nThe first image is the guest; the other images are the characters to include, drawn exactly as they appear. One single sticker, transparent background.`, "medium");
+  }
 }
 
 // ---------------------------------------------------------------- fal.ai FLUX Kontext
