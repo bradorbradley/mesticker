@@ -27,7 +27,7 @@ export default function GuestSignup({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim()) && terms;
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim()) && !!name.trim() && terms;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -77,11 +77,10 @@ export default function GuestSignup({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="font-semibold">
-            First name <span className="font-normal text-[var(--muted,#8a86a0)]">(optional)</span>
-          </span>
+          <span className="font-semibold">Name</span>
           <input
             autoComplete="given-name"
+            required
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={80}
