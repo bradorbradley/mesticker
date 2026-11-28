@@ -1,4 +1,4 @@
-import type { Creation, Guest } from "@/lib/guests";
+import { getCreation, getGuest, markEmailed, type Creation, type Guest } from "@/lib/guests";
 import { getPartyEvent } from "@/lib/party-events";
 import { LEGAL } from "@/lib/legal";
 
@@ -50,4 +50,15 @@ export async function sendGuestEmail(guest: Guest, c: Creation): Promise<{ sent:
   });
   if (!res.ok) return { sent: false, error: `Resend ${res.status}: ${(await res.text()).slice(0, 200)}` };
   return { sent: true };
+}
+
+/** Email a guest their creation once it's saved and theirs (no-op otherwise, or if already sent). */
+export async function deliverCreation(orderId: string) {
+  const c = await getCreation(orderId);
+  if (!c?.ready || !c.guestId || c.emailedAt || !guestEmailReady()) return;
+  const guest = await getGuest(c.guestId);
+  if (!guest) return;
+  const r = await sendGuestEmail(guest, c);
+  if (r.sent) await markEmailed(orderId);
+  else console.error("[guest-email] failed:", r.error);
 }

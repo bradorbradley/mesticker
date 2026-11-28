@@ -51,6 +51,8 @@ export async function POST(request: NextRequest) {
         payFor: typeof s.payFor === "string" ? s.payFor : null,
         freeMode: !!s.freeMode,
         paid: !!s.paid,
+        event: typeof s.event === "string" && /^[a-z0-9-]{1,40}$/.test(s.event) ? s.event : null,
+        orderId: typeof s.orderId === "string" && /^[a-zA-Z0-9-]{8,64}$/.test(s.orderId) ? s.orderId : null,
       });
       return NextResponse.json({ ok: true });
     }
