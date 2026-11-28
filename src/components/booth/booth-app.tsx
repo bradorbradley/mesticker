@@ -885,7 +885,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                   setPhoto(p);
                   generate(p);
                 }}
-                onMobile={handset ? undefined : startPairing}
+                onMobile={startPairing}
                 mascot={event?.look ? <HostsMascot look={event.look} style={{ height: u(20) }} className="self-start short:hidden portrait:hidden" /> : undefined}
               />
             )}
@@ -1087,12 +1087,12 @@ function PhonePairOverlay({ qr, connected, onClose }: { qr: string | null; conne
         </div>
         <div className="flex max-w-md flex-col" style={{ gap: u(1.2) }}>
           <h2 className="t-h2">
-            Use your <span className="pop">phone</span>
+            Complete from <span className="pop">another device</span>
           </h2>
           <ol className="t-lead" style={{ display: "grid", gap: u(0.6) }}>
-            <li>1. Scan with your phone camera</li>
+            <li>1. Scan with your phone&apos;s camera</li>
             <li>2. Snap a selfie or pick a photo</li>
-            <li>3. Your stickers appear right here. Pick sheets and pay on your phone or this screen</li>
+            <li>3. Your cartoon appears right here, then your stickers print</li>
           </ol>
           {connected ? (
             <motion.div className="t-lead font-bold text-[#15803d]" animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.6, repeat: Infinity }}>
