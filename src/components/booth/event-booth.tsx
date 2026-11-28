@@ -206,21 +206,23 @@ export function storyBeats(event: PartyEvent, look: Look, me: string, pose: (k: 
   const trio = (extra: Partial<Actor> = {}) => [H(0, "L", extra), H(1, "C", extra), H(2, "R", extra)];
   const n = (i: number) => hosts[Math.min(i, hosts.length - 1)].name;
   // sticker order: 0 reindeer, 1 stocking, 2 ornament, 3 sled, 4 snowball, 5 present, 6 solo, 7 carols with the hosts, 8 stockings with the hosts, 9 Santa's sleigh
-  // ~29s: one clear idea per frame, long enough to read, always something moving
+  // One room, one story, two games: the guest arrives, Santa swipes the presents (Target Practice
+  // wins them back), then nobody remembers who's coming (Memory Match), then everyone sings.
   return [
-    { scene: "home", ms: 2300, cast: trio({ anim: "jump" }), caption: `WELCOME TO ${event.name.toUpperCase()}!`, sfx: "♪♫♪", fx: ["flash"] },
-    { scene: "home", ms: 2300, cast: trio(), bubble: { who: "h1", text: `We're ${n(0)}, ${n(1)} & ${n(2)}!` } },
-    { scene: "home", ms: 1700, cast: trio(), caption: "KNOCK KNOCK!", door: "knock", fx: ["shake"], sfx: "KNOCK!" },
-    { scene: "home", ms: 2100, cast: [H(0, "L"), G("RC", { anim: "jump" })], door: "open", ribbon: `It's ${who}!`, fx: ["impact", "flash"], sfx: "TA-DA!" },
-    { scene: "home", ms: 1900, cast: [G("L"), S("R", { anim: "jump" })], caption: "SUDDENLY…", fx: ["shake", "impact"], sfx: "CRASH!" },
-    { scene: "home", ms: 2300, cast: [G("L"), S("R")], bubble: { who: "santa", text: "My reindeer escaped! Help!" } },
-    { scene: "home", ms: 1700, cast: [G("L", { anim: "jump" }), S("R")], bubble: { who: "guest", text: "On it! 💪" }, fx: ["speed"] },
-    { scene: "street", ms: 2000, cast: [P(3, "LC", { anim: "zoom" })], caption: "DOWN THE HILL…", fx: ["speed"], sfx: "WHOOSH!" },
-    { scene: "street", ms: 2000, cast: [P(4, "L", { anim: "jump" }), H(1, "R", { anim: "jump" })], bubble: { who: "h1", text: "Hey! 😂" }, fx: ["impact"], sfx: "SPLAT!" },
-    { scene: "street", ms: 2100, cast: [P(0, "LC", { anim: "fly", lift: 18 })], caption: "FOUND THE REINDEER!", fx: ["speed", "flash"], sfx: "GIDDY UP!" },
-    { scene: "roof", ms: 2400, cast: [P(9, "C", { anim: "fly", big: true, lift: 10 })], caption: "OFF WITH SANTA!", bubble: { who: "p9", text: "Christmas is saved!" }, sfx: "HO HO HO!", fx: ["speed"] },
-    { scene: "home", ms: 2200, cast: [P(8, "C", { anim: "jump", big: true })], caption: "BACK HOME BY THE FIRE…", sfx: "HA HA!", fx: ["flash"] },
-    { scene: "home", ms: 3000, cast: [P(7, "C", { anim: "jump", big: true })], caption: "AND EVERYONE SANG!", notes: true, fx: ["flash"], ribbon: "Game time! 🎮" },
+    { scene: "home", ms: 2400, cast: trio({ anim: "jump" }), caption: `WELCOME TO ${event.name.toUpperCase()}!`, sfx: "♪♫♪", fx: ["flash"] },
+    { scene: "home", ms: 2400, cast: trio(), bubble: { who: "h1", text: `We're ${n(0)}, ${n(1)} & ${n(2)}!` } },
+    { scene: "home", ms: 1800, cast: trio(), caption: "KNOCK KNOCK!", door: "knock", fx: ["shake"], sfx: "KNOCK!" },
+    { scene: "home", ms: 2400, cast: [H(0, "L"), G("RC", { anim: "jump" })], door: "open", ribbon: `It's ${who}!`, fx: ["impact", "flash"], sfx: "TA-DA!" },
+    { scene: "home", ms: 2300, cast: [H(0, "L"), H(1, "LC"), G("R")], bubble: { who: "h1", text: `Welcome, ${who}! Presents are under the tree 🎁` } },
+    { scene: "home", ms: 2300, cast: [G("R"), S("L", { anim: "jump" })], caption: "BUT WAIT…", bubble: { who: "santa", text: "Ho ho ho… mine now!" }, fx: ["shake"], sfx: "SWIPE!" },
+    { scene: "home", ms: 2400, cast: [G("LC", { anim: "jump" }), H(2, "R", { anim: "jump" })], bubble: { who: "h2", text: "He took the presents! Get him!" }, fx: ["speed"], sfx: "HEY!" },
+    { scene: "home", ms: 28000, cast: [], game: 1 },
+    { scene: "home", ms: 2500, cast: [G("L", { anim: "jump" }), S("R")], bubble: { who: "santa", text: "Okay, okay! Here, take them back!" }, sfx: "SPLAT!", fx: ["impact"] },
+    { scene: "home", ms: 2300, cast: [P(5, "C", { anim: "jump", big: true })], caption: "PRESENTS SAVED!", fx: ["flash"], sfx: "YAY!" },
+    { scene: "home", ms: 2600, cast: trio(), bubble: { who: "h0", text: "Wait… who else is coming tonight?" } },
+    { scene: "home", ms: 2300, cast: [H(1, "L"), G("R", { anim: "jump" })], bubble: { who: "guest", text: "Let's match the guest list!" }, fx: ["speed"] },
+    { scene: "home", ms: 30000, cast: [], game: 2 },
+    { scene: "home", ms: 3200, cast: [P(7, "C", { anim: "jump", big: true })], caption: "AND EVERYONE SANG!", notes: true, fx: ["flash"], ribbon: "Merry Christmas! 🎄" },
   ];
 }
 
@@ -421,7 +423,18 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
       )}
       {beat.game != null && (
         <div className="absolute inset-0 z-[52] bg-[#2a0d0b]">
-          <CarolGames key={i} only={beat.game} durationMs={beat.ms} stickers={gameStickers} hero={me} hosts={look.hosts.map((h) => ({ name: h.name, img: h.cut ?? h.img }))} name={name} onDone={next} />
+          <CarolGames
+            key={i}
+            only={beat.game}
+            durationMs={beat.ms}
+            stickers={gameStickers}
+            hero={me}
+            hosts={look.hosts.map((h) => ({ name: h.name, img: h.cut ?? h.img }))}
+            name={name}
+            onDone={next}
+            label={beat.game === 1 ? "Game 1 of 2" : "Game 2 of 2"}
+            {...(beat.game === 1 ? { targets: [look.cameo?.cut ?? look.cameo?.img ?? me], howto: "Tap Santa when he pops up to win the presents back!" } : { howto: "Who's coming to the party? Flip two cards to find a pair!" })}
+          />
         </div>
       )}
       {look.music && beat.game == null && (
@@ -665,9 +678,9 @@ export function EventDone({
   const [status, setStatus] = useState<string | null>(null);
   const [qr, setQr] = useState<string | null>(null);
   useEffect(() => {
-    if (handset || !orderId) return;
+    if (!orderId) return;
     QRCode.toDataURL(`${location.origin}/booth/mine/${orderId}`, { width: 360, margin: 1, color: { dark: "#3b1210", light: "#ffffff" } }).then(setQr).catch(() => {});
-  }, [handset, orderId]);
+  }, [orderId]);
   const save = async () => {
     setStatus("Getting them ready…");
     const { saveImages } = await import("./my-order-stickers");
@@ -677,33 +690,37 @@ export function EventDone({
     <div className="flex h-full w-full landscape:flex-row landscape:items-center portrait:flex-col" style={{ gap: u(1.6), padding: `${u(1)} ${u(2)} max(${u(2)}, env(safe-area-inset-bottom))` }}>
       <Snow />
       <FloatingStickers stickers={stickers} sheet={sheet} className="min-h-0 flex-1 landscape:h-full" />
-      <div className="z-10 flex shrink-0 flex-col items-center text-center landscape:w-[34%]" style={{ gap: u(1) }}>
+      <div className="z-10 flex shrink-0 flex-col items-center text-center landscape:w-[34%]" style={{ gap: handset ? 6 : u(1) }}>
         <h2 className="t-h2">
           Merry <span className="pop">Christmas!</span>
         </h2>
-        <p className="t-body">Grab your sheet from the printer and peel away.{emailedTo ? ` We're emailing every sticker to ${emailedTo}.` : ""}</p>
-        {qr ? (
-          <div className="card flex items-center text-left" style={{ gap: u(1.2), padding: u(1.2) }}>
+        <p className="t-body" style={{ fontSize: handset ? 13 : undefined, lineHeight: 1.25 }}>Grab your sheet from the printer.{emailedTo ? ` We're emailing every sticker to ${emailedTo}.` : ""}</p>
+        {/* always: a QR that sends every sticker to the guest's own phone (this screen may be the booth's) */}
+        {qr && (
+          <div className="card flex items-center text-left" style={{ gap: handset ? 10 : u(1.2), padding: handset ? 8 : u(1.2) }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qr} alt="Scan to get your stickers" style={{ width: `max(120px, ${u(14)})` }} />
-            <div className="t-h3" style={{ maxWidth: "9em" }}>
-              📲 Scan to save your stickers to your phone
+            <img src={qr} alt="Scan to get your stickers" style={{ width: handset ? 64 : `max(120px, ${u(14)})` }} />
+            <div className={handset ? "text-sm font-bold leading-tight" : "t-h3"} style={{ maxWidth: handset ? "13em" : "10em" }}>
+              📲 Scan with a phone to get all your stickers
             </div>
           </div>
-        ) : (
+        )}
+        {handset && (
           <button className="btn btn-lg btn-main w-fit" onClick={save}>
             📲 Save my stickers to Photos
           </button>
         )}
         {status && <p className="t-body">{status}</p>}
-        {handset && albumUrl && (
-          <a className="btn btn-soft w-fit" href={albumUrl} target="_blank">
-            🎓 See the class photo
-          </a>
-        )}
-        <button className="btn btn-soft w-fit" onClick={onFinish}>
-          Done
-        </button>
+        <div className="flex flex-wrap justify-center" style={{ gap: u(0.8) }}>
+          {handset && albumUrl && (
+            <a className="btn btn-soft w-fit" href={albumUrl} target="_blank">
+              🎓 Class photo
+            </a>
+          )}
+          <button className="btn btn-soft w-fit" onClick={onFinish}>
+            Done
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -763,7 +780,7 @@ export function EventWait({
   return (
     <div className="fixed inset-0 z-[60] overflow-hidden bg-[#2a0d0b]">
       {phase === "video" ? (
-        <WelcomeVideo key={run} event={event} look={look} sticker={sticker} poses={poses} name={name} etaSec={run ? undefined : firstEta.current} onEnd={() => setPhase("games")} />
+        <WelcomeVideo key={run} event={event} look={look} sticker={sticker} poses={poses} name={name} etaSec={run ? undefined : firstEta.current} games={!run} onEnd={onDone} />
       ) : phase === "games" ? (
         <CarolGames stickers={gameStickers} hero={sticker ?? look.hosts[0].img} hosts={look.hosts.map((h) => ({ name: h.name, img: h.cut ?? h.img }))} name={name} durationMs={60000} onDone={onDone} />
       ) : (

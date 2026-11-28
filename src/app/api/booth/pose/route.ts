@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { boothPresets, resolvePresetPrompt, withEventTheme } from "@/lib/presets";
+import { boothPresets, LIKENESS_DETAILS, resolvePresetPrompt, withEventTheme } from "@/lib/presets";
 import { countPeople, generateVariationDescriptors } from "@/lib/vision";
 import { generateGroupSticker, generateSticker, requestedGeminiModel, requestedProvider } from "@/lib/image-providers";
 import { loadImageBuffer, toDataUrl } from "@/lib/sheet-render";
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     if (!boothPresets.some((p) => p.id === styleId && p.id !== "custom" && p.id !== "random")) {
       return NextResponse.json({ error: "Invalid style" }, { status: 400 });
     }
-    const prompt = withEventTheme(resolvePresetPrompt(styleId).prompt, theme);
+    const prompt = withEventTheme(resolvePresetPrompt(styleId).prompt, theme) + LIKENESS_DETAILS;
     const pose = String(idea).slice(0, 300);
     // a group sticker: the guest plus other characters (our own images only, e.g. the event's hosts)
     if (Array.isArray(refs) && refs.length) {

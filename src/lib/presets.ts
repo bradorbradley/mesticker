@@ -96,6 +96,13 @@ export const eventStyleOptions = boothPresets.filter((p) => p.id !== "random" &&
  * A booked event's theme from the staff panel ("holiday party: Santa hat,
  * ugly sweater"), worked into the character's outfit and props. No text.
  */
+/** Likeness: the cartoon must read as THIS person, in the mood they had when the photo was taken. */
+export const LIKENESS =
+  " Likeness matters most: copy each person's real facial expression from the photo exactly (the same smile, smirk, serious look, tongue out, wink, raised eyebrow, open or closed mouth), and keep their distinctive details: face shape, skin tone, eye color, eyebrows, facial hair and stubble, hairstyle and hair color, glasses or sunglasses, hats, headphones, earrings and jewelry. Draw every person in the photo, and nobody else.";
+/** Poses change the expression on purpose, but the person's features and accessories stay. */
+export const LIKENESS_DETAILS =
+  " Keep each person's distinctive details exactly: face shape, skin tone, eye color, facial hair and stubble, hairstyle and hair color, glasses or sunglasses, hats, headphones and jewelry.";
+
 export function withEventTheme(prompt: string, theme: unknown): string {
   const t = String(theme ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
   if (!t) return prompt;

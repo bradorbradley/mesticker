@@ -50,6 +50,10 @@ export type CarolGamesProps = {
   onDone: () => void;
   /** play just this one game (0 toss, 1 target practice, 2 memory); durationMs is then its budget */
   only?: number;
+  /** story chapters: who pops up in Target Practice (e.g. just Santa), the card's one-liner, and the "Game 1 of 2" label */
+  targets?: string[];
+  howto?: string;
+  label?: string;
 };
 
 type GameProps = {
@@ -294,7 +298,7 @@ const KEYFRAMES = `
 
 type Phase = "intro" | "play" | "result";
 
-export function CarolGames({ stickers, hero, hosts, name, durationMs = 75000, onDone, only }: CarolGamesProps) {
+export function CarolGames({ stickers, hero, hosts, name, durationMs = 75000, onDone, only, targets, howto, label }: CarolGamesProps) {
   const off = only == null ? 0 : Math.max(0, Math.min(GAMES.length - 1, Math.floor(only)));
   const games = only == null ? GAMES : [GAMES[off]];
   const pool = useMemo(() => buildPool(stickers, hero, hosts), [stickers, hero, hosts]);
@@ -403,7 +407,7 @@ export function CarolGames({ stickers, hero, hosts, name, durationMs = 75000, on
             }}
             data-testid="game-label"
           >
-            Game {at + 1} of {GAMES.length}
+            {label ?? `Game ${at + 1} of ${GAMES.length}`}
           </span>
           <AnimatePresence mode="wait">
             <motion.h2
@@ -459,7 +463,7 @@ export function CarolGames({ stickers, hero, hosts, name, durationMs = 75000, on
         </div>
 
         {/* overall progress: one segment per game */}
-        <div className="flex w-full" style={{ gap: u(0.5) }}>
+        <div className={only == null ? "flex w-full" : "hidden"} style={{ gap: u(0.5) }}>
           {GAMES.map((g, i) => (
             <div key={g.id} className="relative flex-1 overflow-hidden rounded-full" style={{ height: `max(4px, ${u(0.45)})`, background: "rgba(163,22,28,0.14)" }}>
               {i < at || (i === at && stage.phase === "result") ? (
@@ -491,7 +495,7 @@ export function CarolGames({ stickers, hero, hosts, name, durationMs = 75000, on
             background: PAPER,
           }}
         >
-          <Game key={game.id} pool={pool} hosts={hosts} name={name} durationMs={per} active={playing} onComplete={completeCurrent} onResult={setResult} />
+          <Game key={game.id} pool={game.id === "target" && targets?.length ? targets : pool} hosts={hosts} name={name} durationMs={per} active={playing} onComplete={completeCurrent} onResult={setResult} />
 
           {/* result toast */}
           <AnimatePresence>
@@ -523,14 +527,14 @@ export function CarolGames({ stickers, hero, hosts, name, durationMs = 75000, on
       {/* instruction card */}
       <AnimatePresence>
         {stage.phase === "intro" && (
-          <IntroCard key={`intro-${game.id}`} n={at + 1} game={game} pool={pool} onStart={() => start(stage.idx)} />
+          <IntroCard key={`intro-${game.id}`} n={at + 1} game={game} pool={game.id === "target" && targets?.length ? targets : pool} howto={howto} label={label} onStart={() => start(stage.idx)} />
         )}
       </AnimatePresence>
     </div>
   );
 }
 
-function IntroCard({ n, game, pool, onStart }: { n: number; game: GameDef; pool: string[]; onStart: () => void }) {
+function IntroCard({ n, game, pool, onStart, howto, label }: { n: number; game: GameDef; pool: string[]; onStart: () => void; howto?: string; label?: string }) {
   const Example = game.Example;
   return (
     <motion.div
@@ -576,11 +580,11 @@ function IntroCard({ n, game, pool, onStart }: { n: number; game: GameDef; pool:
             className="rounded-full font-bold uppercase"
             style={{ background: RED, color: CREAM, fontSize: 12, padding: "3px 12px", letterSpacing: "0.08em", boxShadow: `0 0 0 2px ${GOLD}` }}
           >
-            Game {n} of {GAMES.length}
+            {label ?? `Game ${n} of ${GAMES.length}`}
           </span>
           <div style={{ ...script, color: RED, fontSize: "clamp(28px, 6vmin, 44px)", lineHeight: 1.05, textShadow: "0 2px 0 #fff" }}>{game.title}</div>
           <div className="font-bold" style={{ color: INK, fontSize: "clamp(16px, 2.6vmin, 21px)", lineHeight: 1.25 }} data-testid="intro-howto">
-            {game.howto}
+            {howto ?? game.howto}
           </div>
           <button
             type="button"

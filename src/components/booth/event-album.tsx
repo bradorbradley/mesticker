@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import ImageRevealSlider from "@/components/image-reveal";
 import type { AlbumEntry } from "@/lib/guests";
 
 type Person = { name: string; img: string; host?: boolean };
@@ -106,11 +107,11 @@ export default function EventAlbum({ name, when, hosts, entries, owner }: { name
         {owner && <p className="mt-1 text-sm font-semibold">Owner view: everyone, including guests who didn&apos;t tick &quot;feature me&quot;.</p>}
 
         <div className="mx-auto mt-6 rounded-[28px] border-4 bg-white/60 p-4 sm:p-8" style={{ borderColor: RED, boxShadow: `inset 0 0 0 3px ${GOLD}` }}>
-          <div className="flex flex-wrap items-end justify-center gap-x-6 gap-y-2">
+          <div className="flex flex-wrap items-end justify-center gap-x-2 gap-y-2">
             {hosts.map((h) => (
-              <figure key={h.name} className="w-[26%] max-w-[170px]">
+              <figure key={h.name} className="w-[30%] sm:w-[22%] md:w-[15%] lg:w-[13%]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={h.img} alt={h.name} className="mx-auto aspect-square w-full object-contain" />
+                <img src={h.img} alt={h.name} className="mx-auto aspect-square w-full object-contain drop-shadow-[0_6px_8px_rgba(60,8,10,0.25)]" />
                 <figcaption style={{ ...script, color: RED, fontSize: "clamp(16px, 2.6vw, 26px)" }}>{h.name}</figcaption>
               </figure>
             ))}
@@ -140,16 +141,13 @@ export default function EventAlbum({ name, when, hosts, entries, owner }: { name
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {entries.map((e) => (
               <figure key={e.orderId} className="overflow-hidden rounded-3xl bg-white shadow-md">
-                <div className="grid grid-cols-2">
-                  {e.photoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={e.photoUrl} alt="" loading="lazy" className="aspect-square h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex aspect-square items-center justify-center bg-[#f3dcb0] text-3xl">📸</div>
-                  )}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={e.stickerUrl} alt="" loading="lazy" className="aspect-square h-full w-full bg-[#fff8ea] object-contain p-2" />
-                </div>
+                {e.photoUrl ? (
+                  // drag the handle: the real photo on one side, the cartoon on the other
+                  <ImageRevealSlider beforeSrc={e.photoUrl} afterSrc={e.stickerUrl} altBefore={`${e.name ?? "Guest"}, the photo`} altAfter={`${e.name ?? "Guest"}, the cartoon`} initial={50} height={340} className="rounded-none shadow-none" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={e.stickerUrl} alt="" loading="lazy" className="h-[340px] w-full bg-[#fff8ea] object-contain p-2" />
+                )}
                 <figcaption className="py-2 text-center" style={{ ...script, fontSize: 22 }}>{e.name ?? "Guest"}</figcaption>
               </figure>
             ))}
