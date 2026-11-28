@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
   const event = getPartyEvent(body.event);
   if (!event?.collectGuest) return NextResponse.json({ error: "Unknown event" }, { status: 404 });
   if (!validEmail(body.email)) return NextResponse.json({ error: "Enter a valid email" }, { status: 400 });
+  if (typeof body.name !== "string" || !body.name.trim()) return NextResponse.json({ error: "Enter your name" }, { status: 400 });
   if (body.terms !== true) return NextResponse.json({ error: "Please agree to the terms to continue" }, { status: 400 });
   try {
     const consents = (["terms", "media", "marketing"] as const).map((kind) => ({ kind, given: body[kind] === true, text: `[${CONSENT_VERSION}] ${CONSENT_TEXT[kind]}` }));
