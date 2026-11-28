@@ -27,9 +27,9 @@ export interface PartyEvent {
     /** printed trim around the sheet (transparent PNG, 1170x2010: the printable area) */
     frame?: string;
     /** the hosts as chibi characters: the booth's mascots and the welcome video's cast */
-    hosts: { name: string; img: string }[];
+    hosts: { name: string; img: string; cut?: string }[];
     /** a cameo in the welcome video (e.g. Santa) */
-    cameo?: { name: string; img: string };
+    cameo?: { name: string; img: string; cut?: string };
     /** welcome video backdrops: the party (home) and the adventure */
     scene?: string;
     scenes?: { street?: string; roof?: string };
@@ -44,6 +44,8 @@ export interface PartyEvent {
   groupPose?: string;
   /** poses (by index) that get the guest's name on a ribbon */
   namePoses?: number[];
+  /** other ideas for some pose slots, one picked per guest, so every sheet is a little different */
+  poseAlts?: Record<number, string[]>;
 }
 
 export const PARTY_EVENTS: Record<string, PartyEvent> = {
@@ -62,11 +64,11 @@ export const PARTY_EVENTS: Record<string, PartyEvent> = {
       frame: "/events/carol/frame.png",
       hosts: [
         // Fred and Alex are the twins; Augustine has the dark curly hair
-        { name: "Fred", img: "/events/carol/host-left.webp" },
-        { name: "Augustine", img: "/events/carol/host-middle.webp" },
-        { name: "Alex", img: "/events/carol/host-right.webp" },
+        { name: "Fred", img: "/events/carol/host-left.webp", cut: "/events/carol/host-left-cut.webp" },
+        { name: "Augustine", img: "/events/carol/host-middle.webp", cut: "/events/carol/host-middle-cut.webp" },
+        { name: "Alex", img: "/events/carol/host-right.webp", cut: "/events/carol/host-right-cut.webp" },
       ],
-      cameo: { name: "Santa", img: "/events/carol/host-santa.webp" },
+      cameo: { name: "Santa", img: "/events/carol/host-santa.webp", cut: "/events/carol/host-santa-cut.webp" },
       scene: "/events/carol/scene.webp",
       scenes: { street: "/events/carol/scene-street.webp", roof: "/events/carol/scene-roof.webp" },
       music: "/events/carol/music.mp3",
@@ -88,6 +90,25 @@ export const PARTY_EVENTS: Record<string, PartyEvent> = {
     ],
     groupPose: "the guest standing in the middle with the three choir singers around them, all four singing Christmas carols together holding lit candles and open songbooks, joyful, musical notes floating around them",
     namePoses: [0, 1, 2],
+    // slots the welcome story doesn't use can change from guest to guest
+    poseAlts: {
+      5: [
+        "on tiptoes hanging a shiny red ornament on a decorated Christmas tree",
+        "tangled up in twinkly Christmas lights, laughing",
+      ],
+      6: [
+        "building a snowman with a top hat, carrot nose and scarf, snow on their mittens",
+        "making a snow angel in fresh snow, seen from above, big grin",
+      ],
+      7: [
+        "flying in Santa's sleigh piled with presents past the stars, inside a round badge with a night-sky background",
+        "singing a carol into a candy cane like a microphone, musical notes around them",
+      ],
+      9: [
+        "wearing reindeer antlers and a glowing red nose, giggling",
+        "baking Christmas cookies, flour on their nose, holding a tray of iced star cookies",
+      ],
+    },
   },
 };
 

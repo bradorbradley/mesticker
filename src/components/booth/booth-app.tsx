@@ -22,7 +22,7 @@ import BoothReveal from "./booth-reveal";
 import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import type { PartyEvent } from "@/lib/party-events";
-import GuestSignup, { loadSavedGuest, saveGuest, type SavedGuest } from "@/components/booth/guest-signup";
+import GuestSignup, { GuestForm, loadSavedGuest, saveGuest, type SavedGuest } from "@/components/booth/guest-signup";
 import { EventAttract, EventDone, EventGenerating, EventReveal, EventWait, HostsMascot, primeMusic, type WaitInfo } from "@/components/booth/event-booth";
 import Mascot from "./mascot";
 import BoothCamera from "./booth-camera";
@@ -44,7 +44,16 @@ type Variants = Record<VariantKind, (string | null | false)[]>;
 let ACTIVE_EVENT: PartyEvent | null = null;
 const EXTRAS = 7;
 /** event poses, plus the guest-with-the-hosts sticker as the last "pose" */
-const eventIdeas = () => (ACTIVE_EVENT?.poses ? [...ACTIVE_EVENT.poses, ...(ACTIVE_EVENT.groupPose ? [ACTIVE_EVENT.groupPose] : [])] : null);
+/** the event's sheet ideas: its poses (some slots swapped for a random alternative, so sheets differ), then the group sticker */
+const eventIdeas = () => {
+  const ev = ACTIVE_EVENT;
+  if (!ev?.poses) return null;
+  const pick = (i: number, base: string) => {
+    const opts = [base, ...(ev.poseAlts?.[i] ?? [])];
+    return opts[Math.floor(Math.random() * opts.length)];
+  };
+  return [...ev.poses.map((p, i) => pick(i, p)), ...(ev.groupPose ? [ev.groupPose] : [])];
+};
 const slotsOf = (kind: VariantKind) => Array.from({ length: kind === "pose" && ACTIVE_EVENT?.poses ? eventIdeas()!.length : EXTRAS }, (_, i) => i);
 /** the guest's name, for the name stickers on event sheets (set once they sign up) */
 let ACTIVE_NAME: string | null = null;
@@ -147,10 +156,15 @@ const isBrandSlot = (i: number) => {
 
 /** Bordered copies are slow to make; reuse them between the live preview and printing. */
 const borderCache = new Map<string, Promise<string>>();
+// one at a time, with a breath between, so the canvas work never freezes the screen (the story, the games)
+let borderQueue: Promise<unknown> = Promise.resolve();
+const breath = () => new Promise((r) => setTimeout(r, 24));
 const bordered = (src: string) => {
   if (!borderCache.has(src)) {
     if (borderCache.size > 60) borderCache.clear();
-    borderCache.set(src, addStickerBorder(src));
+    const job = borderQueue.then(breath).then(() => addStickerBorder(src));
+    borderQueue = job.catch(() => null);
+    borderCache.set(src, job);
   }
   return borderCache.get(src)!;
 };
@@ -249,6 +263,16 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
   const photoUrl = useRef<Promise<string | null> | null>(null);
   const collectGuest = useRef(!!event?.collectGuest);
   const [step, setStep] = useState<Step>("attract");
+  // warm the story's art while the guest looks at their cartoon, so it starts instantly
+  useEffect(() => {
+    const look = event?.look;
+    if (step !== "sheets" || !look) return;
+    [look.scene, look.scenes?.street, look.scenes?.roof, look.cameo?.cut, ...look.hosts.map((h) => h.cut ?? h.img)].forEach((u) => {
+      if (!u) return;
+      const im = new Image();
+      im.src = u;
+    });
+  }, [step, event]);
   const [photo, setPhoto] = useState<string | null>(null);
   const [sticker, setSticker] = useState<string | null>(null);
   const [tries, setTries] = useState(0);
@@ -279,9 +303,19 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
   // ---- Pose / Mix packs: 8 extra stickers, started the moment the photo is taken
   const [variants, setVariantsState] = useState<Variants>(emptyVariants);
   const variantsRef = useRef<Variants>(emptyVariants());
+  // draw the stickers' white borders while the guest types their name, so Print starts the story at once
+  useEffect(() => {
+    if (step !== "sheets" || !event?.look || !sticker) return;
+    const recipe = eventRecipe();
+    sheetSources("pose", sticker, variants, true).forEach((raw, i) => {
+      const r = recipe[i];
+      const named = Array.isArray(r) && event.namePoses?.includes(r[1]);
+      if (raw && !named) bordered(raw).catch(() => {});
+    });
+  }, [step, event, sticker, variants]);
   // what the guest takes home: the stickers exactly as printed (name ribbons, die-cut borders), else the raw ones
   const guestStickers = kit?.some((k) => !k.brand)
-    ? Array.from(new Set(kit.filter((k) => !k.brand).map((k) => k.src)))
+    ? kit.filter((k) => !k.brand && k.sheet === 0).sort((a, b) => a.n - b.n).map((k) => k.src)
     : [sticker, ...variants.pose].filter((x): x is string => typeof x === "string");
   const genId = useRef(0);
   const setVariant = (kind: VariantKind, i: number, v: string | false, id: number) => {
@@ -836,6 +870,23 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                     setSignupOpen(true);
                   } else startPrint();
                 }}
+                form={
+                  event.collectGuest && !guest ? (
+                    <GuestForm
+                      event={event}
+                      compact
+                      cta="🖨️ Print my stickers"
+                      onDone={(g) => {
+                        sounds.tap();
+                        setGuest(g);
+                        guestRef.current = g;
+                        ACTIVE_NAME = g.name?.trim() || null;
+                        if (fromQrRef.current) saveGuest(event.slug, g);
+                        startPrint();
+                      }}
+                    />
+                  ) : undefined
+                }
               />
             )}
             {step === "sheets" && sticker && !event?.look && (

@@ -3,16 +3,20 @@
 /* eslint-disable @next/next/no-img-element -- stickers are data: URLs / blob URLs, next/image can't help */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useAnimationFrame, useMotionValue, type Transition } from "framer-motion";
+import { Pointer } from "lucide-react";
 import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import { u } from "../units";
 
 /**
- * Carol Games — four quick mini-games starring the guest's own stickers, played
- * while their sheet prints (387 Christmas Carols). Snowball Toss → Figure-8 Skate →
- * Present Shuffle → Memory Match, each on its own countdown, with a "New stickers
- * unlocked!" flourish in between. Calls onDone() after the last one (or Skip).
+ * Carol Games — three mini-games starring the guest's stickers, the hero and the
+ * hosts, played while the sheet prints (387 Christmas Carols):
+ *   Snowball Toss (4 throws) → Target Practice → Memory Match.
+ * Each game opens with a short instruction card (with a looping example) that
+ * auto-starts after a few seconds; the game's clock only runs during play.
+ * After each game a ~1s result toast, then the next card. onDone() fires once
+ * after the last game (or Skip / safety timer).
  */
 
 const RED = "#a3161c";
@@ -22,7 +26,11 @@ const PAPER = "#fffaf0";
 const GOLD = "#e2b65a";
 const INK = "#3b1210";
 
-const UNLOCK_MS = 1200;
+/** the instruction card starts the game by itself after this long */
+const INTRO_AUTO_MS = 5000;
+/** result toast between games */
+const RESULT_MS = 1200;
+const TOSS_THROWS = 4;
 const STICKER_SHADOW = "drop-shadow(0 0 2px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 4px 5px rgba(60,8,10,0.35))";
 
 type Host = { name: string; img: string };
@@ -32,33 +40,43 @@ export type CarolGamesProps = {
   stickers: string[];
   /** the guest's main cartoon sticker */
   hero: string;
-  /** host chibis, for flavor */
+  /** the hosts — regular characters in every game */
   hosts: { name: string; img: string }[];
   /** guest name for captions */
   name: string | null;
-  /** total budget for all four games, default 80 s */
+  /** total PLAY time across the games (instruction cards not counted), default 75 s */
   durationMs?: number;
-  /** all games finished (or skipped / time ran out) */
+  /** all games finished (or skipped / time ran out) — fires exactly once */
   onDone: () => void;
-  /** play just this one game (0–3), e.g. as a chapter of the story; durationMs is then its budget */
+  /** play just this one game (0 toss, 1 target practice, 2 memory); durationMs is then its budget */
   only?: number;
 };
 
 type GameProps = {
-  pool: string[]; // distinct guest stickers, never empty
-  hero: string;
+  /** distinct characters, interleaved (hero, host, pose, host, pose…), never empty */
+  pool: string[];
   hosts: Host[];
   name: string | null;
   durationMs: number;
+  /** false while the instruction card / result toast is up: no input, no spawning */
+  active: boolean;
+  /** the game finished on its own (all throws / all pairs) */
   onComplete: () => void;
   onResult: (r: string) => void;
 };
 
-const GAMES: { id: string; title: string; Comp: (p: GameProps) => React.ReactElement }[] = [
-  { id: "snow", title: "Snowball Toss", Comp: SnowballToss },
-  { id: "skate", title: "Figure-8 Skate", Comp: FigureEight },
-  { id: "shuffle", title: "Present Shuffle", Comp: PresentShuffle },
-  { id: "memory", title: "Memory Match", Comp: MemoryMatch },
+type GameDef = {
+  id: string;
+  title: string;
+  howto: string;
+  Comp: (p: GameProps) => React.ReactElement;
+  Example: (p: { pool: string[] }) => React.ReactElement;
+};
+
+const GAMES: GameDef[] = [
+  { id: "toss", title: "Snowball Toss", howto: "Swipe up to throw! You get 4 snowballs.", Comp: SnowballToss, Example: TossExample },
+  { id: "target", title: "Target Practice", howto: "Tap the characters when they pop up!", Comp: TargetPractice, Example: TargetExample },
+  { id: "memory", title: "Memory Match", howto: "Peek, then flip two cards to find a pair!", Comp: MemoryMatch, Example: MemoryExample },
 ];
 
 // ---------------------------------------------------------------- helpers
@@ -78,6 +96,22 @@ const shuffled = <T,>(arr: T[]) => {
   }
   return a;
 };
+
+/** [hero, host0, pose0, host1, pose1, host2, pose2, pose3…] — distinct, so neighbours differ */
+function buildPool(stickers: string[], hero: string, hosts: Host[]) {
+  const poses = stickers.filter(Boolean);
+  const hostImgs = hosts.map((x) => x.img).filter(Boolean);
+  const out: string[] = [];
+  const add = (s?: string) => {
+    if (s && !out.includes(s)) out.push(s);
+  };
+  add(hero);
+  for (let i = 0; i < Math.max(poses.length, hostImgs.length); i++) {
+    add(hostImgs[i]);
+    add(poses[i]);
+  }
+  return out.length ? out : [hero];
+}
 
 function useBox<T extends HTMLElement>() {
   const ref = useRef<T>(null);
@@ -111,14 +145,18 @@ const comic: React.CSSProperties = {
   letterSpacing: "0.04em",
 };
 const script: React.CSSProperties = { fontFamily: 'var(--font-carol, "Lobster"), "Fredoka", cursive' };
+const pill: React.CSSProperties = {
+  ...comic,
+  background: "#ffe36e",
+  color: "#1a1a1a",
+  border: "2px solid #1a1a1a",
+  boxShadow: "3px 3px 0 #1a1a1a",
+};
 
-/** a little caption pill floating at the top of a game */
-function Caption({ children, className }: { children: React.ReactNode; className?: string }) {
+/** a little caption pill floating in a game */
+function Caption({ children, className, style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
   return (
-    <div
-      className={cn("pointer-events-none absolute inset-x-0 z-20 flex justify-center", className)}
-      style={{ top: u(1) }}
-    >
+    <div className={cn("pointer-events-none absolute inset-x-0 z-20 flex justify-center", className)} style={{ top: u(1), ...style }}>
       <motion.div
         key={String(children)}
         initial={{ scale: 0.7, opacity: 0 }}
@@ -146,7 +184,7 @@ function Burst({ text, size, color = "#ffe36e" }: { text: string; size: number; 
   const pts = Array.from({ length: 24 }, (_, i) => {
     const r = i % 2 ? 0.62 : 1;
     const a = (i / 24) * Math.PI * 2;
-    return `${50 + Math.cos(a) * 50 * r},${50 + Math.sin(a) * 50 * r}`;
+    return `${(50 + Math.cos(a) * 50 * r).toFixed(2)},${(50 + Math.sin(a) * 50 * r).toFixed(2)}`; // fixed so SSR and client agree
   }).join(" ");
   return (
     <div className="relative" style={{ width: size, height: size }}>
@@ -160,6 +198,42 @@ function Burst({ text, size, color = "#ffe36e" }: { text: string; size: number; 
         {text}
       </div>
     </div>
+  );
+}
+
+/** a puff of snow (misses) */
+function Puff({ size }: { size: number }) {
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      {Array.from({ length: 7 }, (_, i) => (
+        <span
+          key={i}
+          className="absolute rounded-full bg-white"
+          style={{
+            width: size * 0.24,
+            height: size * 0.24,
+            left: size / 2 + Math.cos(i) * size * 0.32 - size * 0.12,
+            top: size / 2 + Math.sin(i) * size * 0.3 - size * 0.12,
+            boxShadow: "0 1px 3px rgba(60,60,100,0.4)",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function Snowball({ size, style, className }: { size: number; style?: React.CSSProperties; className?: string }) {
+  return (
+    <div
+      className={cn("rounded-full", className)}
+      style={{
+        width: size,
+        height: size,
+        background: "radial-gradient(circle at 35% 30%, #fff 0%, #f3f7fb 50%, #c9d8e8 100%)",
+        boxShadow: "0 2px 6px rgba(40,40,80,0.35)",
+        ...style,
+      }}
+    />
   );
 }
 
@@ -189,6 +263,28 @@ function Snow({ count = 26 }: { count?: number }) {
   );
 }
 
+function Sparkles({ n = 14 }: { n?: number }) {
+  return (
+    <div className="pointer-events-none absolute inset-0" aria-hidden>
+      {Array.from({ length: n }, (_, i) => (
+        <svg
+          key={i}
+          viewBox="0 0 20 20"
+          className="absolute"
+          style={{
+            left: `${seeded(i + 40) * 96}%`,
+            top: `${seeded(i + 80) * 92}%`,
+            width: 10 + seeded(i + 120) * 16,
+            animation: `cg-twinkle ${0.9 + seeded(i + 160) * 1.2}s ease-in-out ${seeded(i + 200)}s infinite`,
+          }}
+        >
+          <path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z" fill={GOLD} />
+        </svg>
+      ))}
+    </div>
+  );
+}
+
 const KEYFRAMES = `
 @keyframes cg-fall { from { transform: translate3d(0,-20px,0); } to { transform: translate3d(var(--dx,0),110vh,0); } }
 @keyframes cg-twinkle { 0%,100% { opacity: .35; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.15); } }
@@ -196,17 +292,16 @@ const KEYFRAMES = `
 
 // ---------------------------------------------------------------- shell
 
-export function CarolGames({ stickers, hero, hosts, name, durationMs = 80000, onDone, only }: CarolGamesProps) {
-  const off = only == null ? 0 : Math.max(0, Math.min(GAMES.length - 1, only));
+type Phase = "intro" | "play" | "result";
+
+export function CarolGames({ stickers, hero, hosts, name, durationMs = 75000, onDone, only }: CarolGamesProps) {
+  const off = only == null ? 0 : Math.max(0, Math.min(GAMES.length - 1, Math.floor(only)));
   const games = only == null ? GAMES : [GAMES[off]];
-  const pool = useMemo(() => {
-    const s = Array.from(new Set(stickers.filter(Boolean)));
-    return s.length ? s : [hero];
-  }, [stickers, hero]);
-  const per = Math.max(3000, (durationMs - games.length * UNLOCK_MS) / games.length);
+  const pool = useMemo(() => buildPool(stickers, hero, hosts), [stickers, hero, hosts]);
+  const per = Math.max(8000, durationMs / games.length);
   const last = games.length - 1;
 
-  const [stage, setStage] = useState<{ idx: number; phase: "play" | "unlock" }>({ idx: 0, phase: "play" });
+  const [stage, setStage] = useState<{ idx: number; phase: Phase }>({ idx: 0, phase: "intro" });
   const [result, setResult] = useState("");
   const [now, setNow] = useState(0);
   const startedAt = useRef(0);
@@ -222,34 +317,46 @@ export function CarolGames({ stickers, hero, hosts, name, durationMs = 80000, on
     onDoneRef.current();
   }, []);
 
-  const complete = useCallback((idx: number) => {
-    setStage((s) => (s.idx === idx && s.phase === "play" ? { idx, phase: "unlock" } : s));
+  const start = useCallback((idx: number) => {
+    setStage((s) => (s.idx === idx && s.phase === "intro" ? { idx, phase: "play" } : s));
   }, []);
+  const complete = useCallback((idx: number) => {
+    setStage((s) => (s.idx === idx && s.phase === "play" ? { idx, phase: "result" } : s));
+  }, []);
+  const advance = useCallback(
+    (idx: number) => {
+      if (idx >= last) finishAll();
+      else {
+        setResult("");
+        setStage({ idx: idx + 1, phase: "intro" });
+      }
+    },
+    [last, finishAll]
+  );
 
-  // per-stage timers: play → (time up) unlock → next game / done
+  // intro (auto-starts) → play (per-game clock) → result toast → next intro / done
   useEffect(() => {
     if (doneRef.current) return;
+    if (stage.phase === "intro") {
+      const t = setTimeout(() => start(stage.idx), INTRO_AUTO_MS);
+      return () => clearTimeout(t);
+    }
     if (stage.phase === "play") {
       startedAt.current = Date.now();
+      setNow(Date.now());
       const t = setTimeout(() => complete(stage.idx), per);
       return () => clearTimeout(t);
     }
     sounds.success();
-    const t = setTimeout(() => {
-      if (stage.idx >= last) finishAll();
-      else {
-        setResult("");
-        setStage({ idx: stage.idx + 1, phase: "play" });
-      }
-    }, UNLOCK_MS);
+    const t = setTimeout(() => advance(stage.idx), RESULT_MS);
     return () => clearTimeout(t);
-  }, [stage, per, last, complete, finishAll]);
+  }, [stage, per, start, complete, advance]);
 
-  // safety net: never run past the budget
+  // safety net: never run past the whole budget, even if nobody touches anything
   useEffect(() => {
-    const t = setTimeout(finishAll, durationMs + 2500);
+    const t = setTimeout(finishAll, games.length * (INTRO_AUTO_MS + per + RESULT_MS) + 3000);
     return () => clearTimeout(t);
-  }, [durationMs, finishAll]);
+  }, [games.length, per, finishAll]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 250);
@@ -260,27 +367,25 @@ export function CarolGames({ stickers, hero, hosts, name, durationMs = 80000, on
 
   const skip = () => {
     sounds.tap();
-    if (stage.idx >= last) finishAll();
-    else {
-      setResult("");
-      setStage({ idx: stage.idx + 1, phase: "play" });
-    }
+    advance(stage.idx);
   };
 
   const game = games[stage.idx];
-  const at = off + stage.idx; // position among all four games
+  const at = off + stage.idx; // position among all three games
   const Game = game.Comp;
-  const secsLeft = now && stage.phase === "play" ? Math.max(0, Math.ceil((startedAt.current + per - now) / 1000)) : null;
-  const hurry = secsLeft !== null && secsLeft <= 3;
-
-  // 1–3 of the guest's stickers to "unlock" after each game
-  const unlocked = useMemo(() => {
-    const n = Math.min(3, pool.length);
-    return Array.from({ length: n }, (_, k) => pool[(at * 3 + k) % pool.length]);
-  }, [pool, at]);
+  const playing = stage.phase === "play";
+  const secsLeft =
+    stage.phase === "intro"
+      ? Math.round(per / 1000)
+      : stage.phase === "result"
+        ? 0
+        : now
+          ? Math.max(0, Math.ceil((startedAt.current + per - now) / 1000))
+          : Math.round(per / 1000);
+  const hurry = playing && secsLeft <= 3;
 
   return (
-    <div className="absolute inset-0 flex flex-col overflow-hidden" style={{ color: INK }}>
+    <div className="absolute inset-0 flex flex-col overflow-hidden" style={{ color: INK }} data-testid="carol-games" data-game={game.id} data-phase={stage.phase}>
       <style>{KEYFRAMES}</style>
 
       {/* header: game label, title, timer, skip, bars */}
@@ -313,17 +418,16 @@ export function CarolGames({ stickers, hero, hosts, name, durationMs = 80000, on
               {game.title}
             </motion.h2>
           </AnimatePresence>
-          {secsLeft !== null && (
-            <motion.span
-              key={hurry ? secsLeft : "calm"}
-              initial={hurry ? { scale: 1.5 } : false}
-              animate={{ scale: 1 }}
-              className="shrink-0 tabular-nums"
-              style={{ ...comic, color: hurry ? RED : INK, fontSize: `max(17px, ${u(2.2)})` }}
-            >
-              {secsLeft}s
-            </motion.span>
-          )}
+          <motion.span
+            key={hurry ? secsLeft : "calm"}
+            initial={hurry ? { scale: 1.5 } : false}
+            animate={{ scale: 1 }}
+            className="shrink-0 tabular-nums"
+            style={{ ...comic, color: hurry ? RED : INK, fontSize: `max(17px, ${u(2.2)})` }}
+            data-testid="secs"
+          >
+            {secsLeft}s
+          </motion.span>
           <button
             type="button"
             onClick={skip}
@@ -335,7 +439,7 @@ export function CarolGames({ stickers, hero, hosts, name, durationMs = 80000, on
           </button>
         </div>
 
-        {/* this game's countdown */}
+        {/* this game's countdown (full while the card shows, shrinks during play) */}
         <div
           className="relative w-full overflow-hidden rounded-full"
           style={{ height: `max(10px, ${u(1.1)})`, background: "rgba(163,22,28,0.14)", boxShadow: "inset 0 1px 2px rgba(60,8,10,0.25)" }}
@@ -345,28 +449,22 @@ export function CarolGames({ stickers, hero, hosts, name, durationMs = 80000, on
             data-testid="game-bar"
             className="absolute inset-y-0 left-0 rounded-full"
             style={{
-              background: hurry
-                ? `linear-gradient(90deg, #d32f2f, ${RED})`
-                : `repeating-linear-gradient(-45deg, ${GOLD} 0 10px, #f0cf83 10px 20px)`,
+              background: hurry ? `linear-gradient(90deg, #d32f2f, ${RED})` : `repeating-linear-gradient(-45deg, ${GOLD} 0 10px, #f0cf83 10px 20px)`,
               boxShadow: "inset 0 -2px 0 rgba(0,0,0,0.12)",
             }}
-            initial={{ width: stage.phase === "play" ? "100%" : "0%" }}
-            animate={{ width: "0%" }}
-            transition={{ duration: stage.phase === "play" ? per / 1000 : 0, ease: "linear" }}
+            initial={{ width: stage.phase === "result" ? "0%" : "100%" }}
+            animate={{ width: playing ? "0%" : stage.phase === "intro" ? "100%" : "0%" }}
+            transition={{ duration: playing ? per / 1000 : 0, ease: "linear" }}
           />
         </div>
 
         {/* overall progress: one segment per game */}
         <div className="flex w-full" style={{ gap: u(0.5) }}>
           {GAMES.map((g, i) => (
-            <div
-              key={g.id}
-              className="relative flex-1 overflow-hidden rounded-full"
-              style={{ height: `max(4px, ${u(0.45)})`, background: "rgba(163,22,28,0.14)" }}
-            >
-              {i < at || (i === at && stage.phase === "unlock") ? (
+            <div key={g.id} className="relative flex-1 overflow-hidden rounded-full" style={{ height: `max(4px, ${u(0.45)})`, background: "rgba(163,22,28,0.14)" }}>
+              {i < at || (i === at && stage.phase === "result") ? (
                 <div className="absolute inset-0" style={{ background: RED }} />
-              ) : i === at ? (
+              ) : i === at && playing ? (
                 <motion.div
                   key={stage.idx}
                   data-testid="overall-bar"
@@ -393,116 +491,578 @@ export function CarolGames({ stickers, hero, hosts, name, durationMs = 80000, on
             background: PAPER,
           }}
         >
-          <Game
-            key={game.id}
-            pool={pool}
-            hero={hero}
-            hosts={hosts}
-            name={name}
-            durationMs={per}
-            onComplete={completeCurrent}
-            onResult={setResult}
-          />
-        </div>
+          <Game key={game.id} pool={pool} hosts={hosts} name={name} durationMs={per} active={playing} onComplete={completeCurrent} onResult={setResult} />
 
-        {/* between games: "New stickers unlocked!" */}
-        <AnimatePresence>
-          {stage.phase === "unlock" && (
-            <motion.div
-              key={`unlock-${stage.idx}`}
-              data-testid="unlock"
-              className="absolute inset-0 z-30 flex flex-col items-center justify-center overflow-hidden"
-              style={{
-                borderRadius: u(2.2),
-                background: `radial-gradient(circle at 50% 45%, #c0262c 0%, ${RED} 45%, ${RED_DARK} 100%)`,
-                gap: u(1.2),
-              }}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.05 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Snow count={18} />
-              <Sparkles />
+          {/* result toast */}
+          <AnimatePresence>
+            {stage.phase === "result" && (
               <motion.div
-                initial={{ y: -20, scale: 0.6 }}
-                animate={{ y: 0, scale: 1 }}
-                transition={{ type: "spring", stiffness: 420, damping: 16 }}
-                className="relative px-4 text-center"
-                style={{ ...script, color: CREAM, fontSize: `max(24px, ${u(3.6)})`, lineHeight: 1.05, textShadow: `0 3px 0 ${RED_DARK}` }}
+                key={`res-${stage.idx}`}
+                className="absolute inset-0 z-30 flex items-center justify-center"
+                style={{ background: "rgba(255,250,240,0.45)" }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                data-testid="result-toast"
               >
-                New stickers unlocked!
-              </motion.div>
-              <div className="relative flex items-end justify-center" style={{ gap: u(1.4) }}>
-                {unlocked.map((src, k) => (
-                  <motion.div
-                    key={k}
-                    initial={{ scale: 0, rotate: -30, y: 30 }}
-                    animate={{ scale: 1, rotate: [-8, 6, -4][k] ?? 0, y: 0 }}
-                    transition={{ type: "spring", stiffness: 520, damping: 13, delay: 0.12 + k * 0.13 }}
-                    className="rounded-[18%]"
-                    style={{
-                      width: `min(${u(13)}, 26vw, 24vh)`,
-                      height: `min(${u(13)}, 26vw, 24vh)`,
-                      background: "rgba(255,250,240,0.16)",
-                      boxShadow: `0 0 0 2px ${GOLD}`,
-                      padding: u(0.6),
-                    }}
-                  >
-                    <Sticker src={src} className="h-full w-full" />
-                  </motion.div>
-                ))}
-              </div>
-              {result && (
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.35 }}
-                  className="relative rounded-full"
-                  style={{ ...comic, background: "#ffe36e", color: "#1a1a1a", border: "2px solid #1a1a1a", fontSize: `max(15px, ${u(1.9)})`, padding: `${u(0.2)} ${u(1.4)}` }}
+                  initial={{ scale: 0.3, rotate: -12 }}
+                  animate={{ scale: 1, rotate: -3 }}
+                  transition={{ type: "spring", stiffness: 480, damping: 12 }}
+                  className="max-w-[90%] rounded-[20px] text-center"
+                  style={{ ...script, background: RED, color: CREAM, border: `3px solid ${GOLD}`, fontSize: `max(24px, ${u(3.8)})`, lineHeight: 1.1, padding: `${u(1)} ${u(3)}`, boxShadow: "0 8px 20px rgba(60,8,10,0.4)" }}
                 >
-                  {result}
+                  {result || "Nice!"}
                 </motion.div>
-              )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* instruction card */}
+      <AnimatePresence>
+        {stage.phase === "intro" && (
+          <IntroCard key={`intro-${game.id}`} n={at + 1} game={game} pool={pool} onStart={() => start(stage.idx)} />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function IntroCard({ n, game, pool, onStart }: { n: number; game: GameDef; pool: string[]; onStart: () => void }) {
+  const Example = game.Example;
+  return (
+    <motion.div
+      className="absolute inset-0 z-40 flex items-center justify-center"
+      style={{ background: "rgba(60,8,10,0.55)", padding: u(2) }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.2 } }}
+      data-testid="intro"
+    >
+      <motion.div
+        role="dialog"
+        aria-label={game.title}
+        className="relative flex w-full max-w-[440px] flex-col items-center overflow-hidden text-center [@media(max-height:520px)]:max-w-[620px] [@media(max-height:520px)]:flex-row [@media(max-height:520px)]:text-left"
+        style={{
+          background: `linear-gradient(180deg, ${PAPER} 0%, ${CREAM} 100%)`,
+          border: `3px solid ${GOLD}`,
+          borderRadius: 24,
+          boxShadow: `0 0 0 3px ${RED}, 0 16px 40px rgba(40,4,6,0.5)`,
+          padding: "max(16px, 2.4vmin)",
+          gap: "max(10px, 1.6vmin)",
+        }}
+        initial={{ scale: 0.7, y: 30 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 420, damping: 24 }}
+      >
+        <div
+          className="relative shrink-0 overflow-hidden"
+          style={{
+            width: 200,
+            height: 132,
+            borderRadius: 16,
+            background: "linear-gradient(180deg, #2a1a3e 0%, #5a2a4a 45%, #f3d6c0 85%, #fff6ea 100%)",
+            boxShadow: `inset 0 0 0 2px ${GOLD}`,
+          }}
+          data-testid="intro-example"
+        >
+          <Example pool={pool} />
+        </div>
+        <div className="flex min-w-0 flex-col items-center [@media(max-height:520px)]:items-start" style={{ gap: "max(8px, 1.2vmin)" }}>
+          <span
+            className="rounded-full font-bold uppercase"
+            style={{ background: RED, color: CREAM, fontSize: 12, padding: "3px 12px", letterSpacing: "0.08em", boxShadow: `0 0 0 2px ${GOLD}` }}
+          >
+            Game {n} of {GAMES.length}
+          </span>
+          <div style={{ ...script, color: RED, fontSize: "clamp(28px, 6vmin, 44px)", lineHeight: 1.05, textShadow: "0 2px 0 #fff" }}>{game.title}</div>
+          <div className="font-bold" style={{ color: INK, fontSize: "clamp(16px, 2.6vmin, 21px)", lineHeight: 1.25 }} data-testid="intro-howto">
+            {game.howto}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              sounds.unlock();
+              sounds.tap();
+              onStart();
+            }}
+            className="relative overflow-hidden rounded-full"
+            style={{
+              ...comic,
+              background: RED,
+              color: CREAM,
+              border: `3px solid ${GOLD}`,
+              boxShadow: `0 5px 0 ${RED_DARK}, 0 8px 16px rgba(60,8,10,0.35)`,
+              fontSize: "clamp(22px, 3.6vmin, 30px)",
+              padding: "6px 34px",
+              marginTop: 4,
+            }}
+            data-testid="intro-go"
+          >
+            {/* fills up until the card starts the game by itself */}
+            <motion.span
+              aria-hidden
+              className="absolute inset-y-0 left-0"
+              style={{ background: "rgba(255,255,255,0.18)" }}
+              initial={{ width: "0%" }}
+              animate={{ width: "100%" }}
+              transition={{ duration: INTRO_AUTO_MS / 1000, ease: "linear" }}
+            />
+            <span className="relative">Let&apos;s go!</span>
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------- examples (looping, in a 200×132 box)
+
+function Hand({ style, animate, transition }: { style?: React.CSSProperties; animate: Record<string, number[]>; transition: Transition }) {
+  return (
+    <motion.div className="pointer-events-none absolute left-0 top-0 z-10" style={{ width: 34, height: 34, ...style }} animate={animate} transition={transition}>
+      <Pointer size={34} strokeWidth={2.2} color="#1a1a1a" fill="#fff" style={{ filter: "drop-shadow(0 2px 2px rgba(0,0,0,0.35))" }} />
+    </motion.div>
+  );
+}
+
+function TossExample({ pool }: { pool: string[] }) {
+  const loop = { duration: 2.6, repeat: Infinity, ease: "easeInOut" } as const;
+  const times = [0, 0.12, 0.3, 0.55, 0.62, 0.85, 1];
+  return (
+    <>
+      {/* snowy ledge + wreath with a character */}
+      <div className="absolute inset-x-0" style={{ top: 50, height: 30, background: "linear-gradient(180deg,#fff,#e4edf6)", borderRadius: "50% 50% 0 0 / 60% 60% 0 0" }} />
+      <div className="absolute" style={{ left: 74, top: 44, width: 52, height: 16, borderRadius: "50%", border: "5px solid #2f7a3c", boxShadow: "0 0 0 2px #fff inset" }} />
+      <motion.div
+        className="absolute"
+        style={{ left: 80, top: 8, width: 40, height: 44 }}
+        animate={{ rotate: [0, 0, 0, 0, -16, 10, 0], scale: [1, 1, 1, 1, 0.9, 1.05, 1] }}
+        transition={{ ...loop, times }}
+      >
+        <Sticker src={pool[0]} className="h-full w-full" />
+      </motion.div>
+      {/* ball: rests, gets swiped, arcs up and shrinks */}
+      <motion.div
+        className="absolute left-0 top-0"
+        animate={{ x: [88, 88, 88, 92, 92, 88, 88], y: [104, 104, 92, 22, 22, 104, 104], scale: [1, 1, 1, 0.5, 0, 0, 1], opacity: [1, 1, 1, 1, 0, 0, 1] }}
+        transition={{ ...loop, times }}
+      >
+        <Snowball size={24} />
+      </motion.div>
+      {/* splat */}
+      <motion.div
+        className="absolute left-0 top-0"
+        style={{ x: 70, y: 0 }}
+        animate={{ scale: [0, 0, 0, 0, 1, 1, 0], opacity: [0, 0, 0, 0, 1, 1, 0] }}
+        transition={{ ...loop, times }}
+      >
+        <Burst text="SPLAT!" size={60} />
+      </motion.div>
+      <Hand animate={{ x: [104, 96, 96, 100, 104, 104, 104], y: [124, 108, 84, 70, 110, 124, 124], opacity: [0, 1, 1, 0, 0, 0, 0] }} transition={{ ...loop, times }} />
+    </>
+  );
+}
+
+function TargetExample({ pool }: { pool: string[] }) {
+  const loop = { duration: 2.4, repeat: Infinity, ease: "easeInOut" } as const;
+  const times = [0, 0.12, 0.35, 0.45, 0.55, 0.8, 1];
+  const a = pool[1 % pool.length];
+  return (
+    <>
+      {[20, 76, 132].map((x, i) => (
+        <div key={i} className="absolute" style={{ left: x, top: 92, width: 50, height: 22 }}>
+          <div className="absolute inset-0" style={{ borderRadius: "50% 50% 18% 18% / 90% 90% 22% 22%", background: "radial-gradient(ellipse at 40% 25%, #fff 0%, #f2f6fb 55%, #d6e3f0 100%)" }} />
+        </div>
+      ))}
+      {/* the popper (clipped behind the middle bank) */}
+      <div className="absolute overflow-hidden" style={{ left: 76, top: 40, width: 50, height: 60 }}>
+        <motion.div
+          className="absolute left-[3px] top-0"
+          style={{ width: 44, height: 56 }}
+          animate={{ y: [60, 4, 4, 4, 4, 60, 60], rotate: [0, 0, 0, -16, 10, 0, 0] }}
+          transition={{ ...loop, times }}
+        >
+          <Sticker src={a} className="h-full w-full" />
+        </motion.div>
+      </div>
+      <motion.div className="absolute left-0 top-0" style={{ x: 70, y: 22 }} animate={{ scale: [0, 0, 0, 1, 1, 0, 0], opacity: [0, 0, 0, 1, 1, 0, 0] }} transition={{ ...loop, times }}>
+        <Burst text="POW!" size={60} />
+      </motion.div>
+      <Hand animate={{ x: [170, 150, 102, 98, 102, 170, 170], y: [130, 110, 72, 76, 72, 130, 130], scale: [1, 1, 1, 0.8, 1, 1, 1], opacity: [0, 1, 1, 1, 1, 0, 0] }} transition={{ ...loop, times }} />
+    </>
+  );
+}
+
+function MemoryExample({ pool }: { pool: string[] }) {
+  const loop = { duration: 3, repeat: Infinity, ease: "easeInOut" } as const;
+  const times = [0, 0.12, 0.2, 0.4, 0.48, 0.62, 0.82, 0.92, 1];
+  const face = pool[2 % pool.length];
+  const xs = [18, 62, 106, 150];
+  // card 0 flips at .2, card 2 at .48, both glow, flip back at .92
+  const flipA = [0, 0, 180, 180, 180, 180, 180, 0, 0];
+  const flipB = [0, 0, 0, 0, 180, 180, 180, 0, 0];
+  const glow = [0, 0, 0, 0, 0, 1, 1, 0, 0];
+  return (
+    <>
+      {xs.map((x, i) => {
+        const flips = i === 0 ? flipA : i === 2 ? flipB : null;
+        return (
+          <div key={i} className="absolute" style={{ left: x, top: 34, width: 34, height: 44, perspective: 300 }}>
+            <motion.div
+              className="absolute inset-0"
+              style={{ transformStyle: "preserve-3d" }}
+              animate={flips ? { rotateY: flips } : undefined}
+              transition={{ ...loop, times }}
+            >
+              <div className="absolute inset-0" style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}>
+                <CardBack small />
+              </div>
+              <div
+                className="absolute inset-0"
+                style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg)", background: PAPER, borderRadius: 6, border: `2px solid ${GOLD}`, padding: 2 }}
+              >
+                <Sticker src={face} className="h-full w-full" />
+              </div>
+            </motion.div>
+            {flips && (
+              <motion.div
+                className="pointer-events-none absolute -inset-1 rounded-[8px]"
+                style={{ boxShadow: `0 0 0 3px ${GOLD}, 0 0 14px ${GOLD}` }}
+                animate={{ opacity: glow }}
+                transition={{ ...loop, times }}
+              />
+            )}
+          </div>
+        );
+      })}
+      <Hand
+        animate={{ x: [60, 30, 30, 118, 118, 160, 160, 160, 60], y: [130, 64, 60, 64, 60, 110, 130, 130, 130], opacity: [0, 1, 1, 1, 1, 1, 0, 0, 0] }}
+        transition={{ ...loop, times }}
+      />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- 1. Snowball Toss (4 throws)
+
+type Flight = { id: number; x0: number; y0: number; x1: number; y1: number; ms: number };
+type Outcome = { id: number; hit: boolean; x: number; y: number };
+
+function SnowballToss({ pool, active, onComplete, onResult }: GameProps) {
+  const [ref, { w, h }] = useBox<HTMLDivElement>();
+  const S = Math.max(60, Math.min(w * 0.34, h * 0.3)); // target character size
+  const ty = Math.max(S * 0.55, h * 0.24); // character centre
+  const ledgeTop = ty + S * 0.38;
+  const ball = Math.max(40, Math.min(w, h) * 0.13);
+  const bx = w / 2;
+  const by = h - ball * 0.5 - Math.max(16, h * 0.05);
+  const amp = Math.max(0, Math.min(w * 0.22, w / 2 - S * 0.6));
+
+  const targets = useMemo(() => Array.from({ length: TOSS_THROWS }, (_, k) => pool[k % pool.length]), [pool]);
+  const [throwIdx, setThrowIdx] = useState(0);
+  const [marks, setMarks] = useState<("hit" | "miss")[]>([]);
+  const [flight, setFlight] = useState<Flight | null>(null);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [wobble, setWobble] = useState(0);
+  const [thrown, setThrown] = useState(false);
+  const busy = useRef(false);
+  const down = useRef<{ x: number; y: number; id: number } | null>(null);
+  const nextId = useRef(1);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  const later = (ms: number, fn: () => void) => timers.current.push(setTimeout(fn, ms));
+
+  // the target slides gently side to side (a bit quicker each throw)
+  const tx = useMotionValue(0);
+  const phase = useRef(0);
+  const throwRef = useRef(0);
+  useEffect(() => {
+    throwRef.current = throwIdx;
+  }, [throwIdx]);
+  useAnimationFrame((_, delta) => {
+    const period = [8000, 7000, 6200, 5600][Math.min(3, throwRef.current)];
+    phase.current += (Math.min(delta, 50) / period) * Math.PI * 2;
+    tx.set(Math.sin(phase.current) * amp);
+  });
+
+  const hits = marks.filter((m) => m === "hit").length;
+  useEffect(() => {
+    onResult(`${hits} of ${TOSS_THROWS} hits!`);
+  }, [hits, onResult]);
+
+  const throwBall = (dx: number, dy: number) => {
+    if (!active || busy.current || throwIdx >= TOSS_THROWS || !w) return;
+    busy.current = true;
+    setThrown(true);
+    sounds.unlock();
+    sounds.tap();
+    // direction from the swipe; a tap (or a weird swipe) goes straight up
+    const up = -dy;
+    const slope = up > 12 ? Math.max(-1.6, Math.min(1.6, dx / up)) : 0;
+    const x1 = Math.max(ball / 2, Math.min(w - ball / 2, bx + slope * (by - ty)));
+    const ms = 560;
+    const f: Flight = { id: nextId.current++, x0: bx, y0: by, x1, y1: ty, ms };
+    setFlight(f);
+    later(ms, () => {
+      const centre = w / 2 + tx.get();
+      const hit = Math.abs(x1 - centre) < S * 0.48; // generous: aiming at the character mostly works
+      setFlight(null);
+      setOutcome({ id: f.id, hit, x: hit ? centre : x1, y: hit ? ty : ledgeTop + S * 0.05 });
+      setMarks((m) => [...m, hit ? "hit" : "miss"]);
+      if (hit) {
+        setWobble((x) => x + 1);
+        sounds.tick();
+      }
+      later(950, () => {
+        setOutcome(null);
+        const n = throwRef.current + 1;
+        setThrowIdx(n);
+        if (n >= TOSS_THROWS) later(250, onComplete);
+        else busy.current = false;
+      });
+    });
+  };
+
+  const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    down.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  };
+  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = down.current;
+    if (!d || d.id !== e.pointerId) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    if (dy < -50) {
+      down.current = null;
+      throwBall(dx, dy);
+    }
+  };
+  const onUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = down.current;
+    down.current = null;
+    if (!d || d.id !== e.pointerId) return;
+    throwBall(e.clientX - d.x, e.clientY - d.y);
+  };
+
+  const src = targets[Math.min(throwIdx, TOSS_THROWS - 1)];
+  const ballReady = !flight && throwIdx < TOSS_THROWS && !outcome;
+
+  return (
+    <div
+      ref={ref}
+      className="absolute inset-0 touch-none select-none overflow-hidden"
+      style={{ background: "linear-gradient(180deg, #2a1a3e 0%, #5a2a4a 30%, #f3d6c0 70%, #fff6ea 100%)" }}
+      onPointerDown={onDown}
+      onPointerMove={onMove}
+      onPointerUp={onUp}
+      onPointerCancel={() => (down.current = null)}
+      data-testid="toss-area"
+      data-throw={throwIdx}
+      data-hits={hits}
+    >
+      <div
+        className="pointer-events-none absolute rounded-full"
+        style={{ right: "7%", top: "5%", width: Math.min(w, h) * 0.11, height: Math.min(w, h) * 0.11, background: "#fff3cf", boxShadow: "0 0 30px 8px rgba(255,236,180,0.5)" }}
+      />
+      <Sparkles n={8} />
+      <Snow count={18} />
+
+      {w > 0 && (
+        <>
+          {/* snowy ledge the target rides on */}
+          <div
+            className="pointer-events-none absolute inset-x-0"
+            style={{
+              top: ledgeTop,
+              height: Math.max(40, S * 0.75),
+              background: "linear-gradient(180deg, #ffffff 0%, #eef3f9 45%, rgba(214,227,240,0) 100%)",
+              borderRadius: "50% 50% 0 0 / 40% 40% 0 0",
+            }}
+          />
+          {/* snowy ground the ball rests on */}
+          <div
+            className="pointer-events-none absolute"
+            style={{
+              left: "-10%",
+              right: "-10%",
+              bottom: 0,
+              height: h - by + ball * 0.25,
+              background: "radial-gradient(ellipse at 50% 0%, #ffffff 0%, #f1f5fa 55%, #dde7f2 100%)",
+              borderRadius: "50% 50% 0 0 / 30% 30% 0 0",
+              boxShadow: "0 -3px 0 rgba(255,255,255,0.6)",
+            }}
+          />
+
+          {/* the target: wreath platform + character, sliding */}
+          <motion.div className="pointer-events-none absolute left-0 top-0" style={{ x: tx, left: w / 2 - S / 2, top: ty - S / 2, width: S, height: S }} data-testid="toss-target">
+            <div
+              className="absolute left-1/2 rounded-[50%]"
+              style={{
+                bottom: -S * 0.02,
+                width: S * 1.05,
+                height: S * 0.3,
+                marginLeft: -S * 0.525,
+                border: `${Math.max(5, S * 0.08)}px solid #2f7a3c`,
+                boxShadow: `inset 0 0 0 2px #fff, 0 3px 0 rgba(0,0,0,0.15)`,
+                background: "radial-gradient(ellipse, #ffffff 0%, #e8eff7 70%)",
+              }}
+            >
+              {[0.1, 0.35, 0.65, 0.9].map((p, i) => (
+                <span key={i} className="absolute rounded-full" style={{ left: `${p * 100}%`, top: i % 2 ? "-30%" : "75%", width: 7, height: 7, background: i % 2 ? RED : GOLD }} />
+              ))}
+            </div>
+            <AnimatePresence mode="popLayout">
+              <motion.div
+                key={`${throwIdx}-${src}`}
+                className="absolute inset-x-0 top-0"
+                style={{ height: S * 0.92, transformOrigin: "50% 95%" }}
+                initial={{ scale: 0, y: -S * 0.4 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0, opacity: 0, transition: { duration: 0.15 } }}
+                transition={{ type: "spring", stiffness: 420, damping: 16 }}
+              >
+                <motion.div
+                  key={wobble}
+                  className="relative h-full w-full"
+                  style={{ transformOrigin: "50% 95%" }}
+                  animate={wobble ? { rotate: [0, -18, 14, -9, 5, 0], scale: [1, 0.86, 1.06, 0.97, 1] } : { rotate: [0, -3, 3, 0] }}
+                  transition={wobble ? { duration: 0.6 } : { duration: 1.4, repeat: Infinity }}
+                >
+                  <Sticker src={src} className="h-full w-full" />
+                  {outcome?.hit && (
+                    <motion.div
+                      className="absolute rounded-[45%] bg-white"
+                      style={{ left: "32%", top: "18%", width: S * 0.36, height: S * 0.26, boxShadow: "0 0 6px #fff, 6px 4px 0 -2px #fff, -6px 6px 0 -3px #fff" }}
+                      initial={{ scale: 0 }}
+                      animate={{ scale: [0, 1.3, 1] }}
+                      transition={{ duration: 0.25 }}
+                    />
+                  )}
+                </motion.div>
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
+
+          {/* swipe hint above the resting ball */}
+          {active && !thrown && ballReady && (
+            <motion.div
+              className="pointer-events-none absolute"
+              style={{ left: bx - 14, top: by - ball * 0.5 - 46, width: 28, height: 40 }}
+              animate={{ y: [8, -8, 8], opacity: [0.4, 1, 0.4] }}
+              transition={{ duration: 1.1, repeat: Infinity }}
+            >
+              <svg viewBox="0 0 28 40" className="h-full w-full">
+                <path d="M14 38 V6 M4 16 L14 4 L24 16" stroke="#fff" strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <path d="M14 38 V6 M4 16 L14 4 L24 16" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              </svg>
             </motion.div>
           )}
-        </AnimatePresence>
+
+          {/* the resting ball */}
+          <AnimatePresence>
+            {ballReady && (
+              <motion.div
+                key={`rest-${throwIdx}`}
+                className="pointer-events-none absolute"
+                style={{ left: bx - ball / 2, top: by - ball / 2 }}
+                initial={{ scale: 0, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ opacity: 0, transition: { duration: 0.05 } }}
+                transition={{ type: "spring", stiffness: 500, damping: 18 }}
+                data-testid="toss-ball"
+              >
+                <Snowball size={ball} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* ball in flight: arcs up, shrinks with distance */}
+          {flight && (
+            <motion.div
+              key={flight.id}
+              className="pointer-events-none absolute left-0 top-0 z-10"
+              style={{ marginLeft: -ball / 2, marginTop: -ball / 2 }}
+              initial={{ x: flight.x0, y: flight.y0, scale: 1 }}
+              animate={{
+                x: [flight.x0, flight.x0 + (flight.x1 - flight.x0) * 0.55, flight.x1],
+                y: [flight.y0, flight.y1 - Math.min(h * 0.12, S * 0.6), flight.y1],
+                scale: [1, 0.68, 0.42],
+              }}
+              transition={{ duration: flight.ms / 1000, ease: "easeOut", times: [0, 0.6, 1] }}
+            >
+              <Snowball size={ball} />
+            </motion.div>
+          )}
+
+          {/* splat / puff */}
+          <AnimatePresence>
+            {outcome && (
+              <motion.div
+                key={outcome.id}
+                className="pointer-events-none absolute z-20"
+                style={{ left: outcome.x - (outcome.hit ? S * 0.6 : S * 0.3), top: outcome.y - (outcome.hit ? S * 0.6 : S * 0.3) }}
+                initial={{ scale: 0.2, rotate: -20 }}
+                animate={{ scale: 1, rotate: 0 }}
+                exit={{ scale: 1.3, opacity: 0, transition: { duration: 0.2 } }}
+                transition={{ type: "spring", stiffness: 600, damping: 14 }}
+                data-testid={outcome.hit ? "toss-hit" : "toss-miss"}
+              >
+                {outcome.hit ? <Burst text="SPLAT!" size={S * 1.2} /> : <Puff size={S * 0.6} />}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {outcome && !outcome.hit && <Caption style={{ top: Math.min(h * 0.62, ledgeTop + S * 0.6) }}>So close!</Caption>}
+        </>
+      )}
+
+      {/* hits */}
+      <div className="pointer-events-none absolute z-20 rounded-full" style={{ left: u(1), top: u(1), ...pill, fontSize: `max(16px, ${u(2)})`, padding: `${u(0.1)} ${u(1.2)}` }} data-testid="toss-score">
+        Hits {hits}
+      </div>
+
+      {/* 4 snowball pips */}
+      <div className="pointer-events-none absolute z-20 flex items-center" style={{ left: u(1.2), bottom: u(1.2), gap: 8 }} data-testid="toss-pips">
+        {Array.from({ length: TOSS_THROWS }, (_, i) => {
+          const m = marks[i];
+          const current = i === throwIdx && !m;
+          return (
+            <motion.div
+              key={i}
+              className="relative flex items-center justify-center rounded-full"
+              style={{
+                width: 22,
+                height: 22,
+                background: m ? (m === "hit" ? GOLD : "rgba(255,255,255,0.35)") : "radial-gradient(circle at 35% 30%, #fff 0%, #eef3f9 55%, #c9d8e8 100%)",
+                border: `2px solid ${m === "hit" ? "#1a1a1a" : m ? "rgba(26,26,26,0.35)" : "#1a1a1a"}`,
+                ...comic,
+                fontSize: 13,
+                color: "#1a1a1a",
+              }}
+              animate={current && active ? { scale: [1, 1.2, 1] } : { scale: 1 }}
+              transition={current && active ? { duration: 0.9, repeat: Infinity } : { duration: 0.2 }}
+              data-mark={m ?? ""}
+            >
+              {m === "hit" ? "✓" : m === "miss" ? "×" : ""}
+            </motion.div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function Sparkles({ n = 14 }: { n?: number }) {
-  return (
-    <div className="pointer-events-none absolute inset-0" aria-hidden>
-      {Array.from({ length: n }, (_, i) => (
-        <svg
-          key={i}
-          viewBox="0 0 20 20"
-          className="absolute"
-          style={{
-            left: `${seeded(i + 40) * 96}%`,
-            top: `${seeded(i + 80) * 92}%`,
-            width: 10 + seeded(i + 120) * 16,
-            animation: `cg-twinkle ${0.9 + seeded(i + 160) * 1.2}s ease-in-out ${seeded(i + 200)}s infinite`,
-          }}
-        >
-          <path d="M10 0 L12 8 L20 10 L12 12 L10 20 L8 12 L0 10 L8 8 Z" fill={GOLD} />
-        </svg>
-      ))}
-    </div>
-  );
-}
+// ---------------------------------------------------------------- 2. Target Practice (whack-a-mole, relaxed)
 
-// ---------------------------------------------------------------- 1. Snowball Toss
-
-type Pop = { id: number; hole: number; src: string; bonus: boolean; until: number; hit: boolean };
+type Pop = { id: number; hole: number; src: string; until: number; hit: boolean };
 type Ball = { id: number; x0: number; y0: number; x: number; y: number };
-type Pow = { id: number; x: number; y: number; text: string; bonus: boolean; hit: boolean };
+type Pow = { id: number; x: number; y: number; text: string; hit: boolean };
 
 const POWS = ["POW!", "SPLAT!", "BAM!", "WHAM!", "BOOF!"];
 
-function SnowballToss({ pool, hosts, name, onResult }: GameProps) {
+function TargetPractice({ pool, active, onResult }: GameProps) {
   const [ref, { w, h }] = useBox<HTMLDivElement>();
   const land = w > h * 1.2;
   const cols = land ? 4 : 3;
@@ -519,47 +1079,40 @@ function SnowballToss({ pool, hosts, name, onResult }: GameProps) {
   const [pows, setPows] = useState<Pow[]>([]);
   const [score, setScore] = useState(0);
   const [bump, setBump] = useState(0);
-  const [hint, setHint] = useState(true);
   const nextId = useRef(1);
+  const turn = useRef(TOSS_THROWS); // rotation through the pool, picking up where the toss left off
+  const popsRef = useRef<Pop[]>([]);
+  useEffect(() => {
+    popsRef.current = pops;
+  }, [pops]);
 
   useEffect(() => {
-    onResult(`${score} snowball ${score === 1 ? "hit" : "hits"}`);
+    onResult(`${score} ${score === 1 ? "hit" : "hits"}!`);
   }, [score, onResult]);
 
+  // spawner: one at a time to begin with, at most two later; each stays up ~1.6–2.2 s
   useEffect(() => {
-    const t = setTimeout(() => setHint(false), 3200);
-    return () => clearTimeout(t);
-  }, []);
-
-  // spawner
-  useEffect(() => {
-    if (!holes) return;
+    if (!holes || !active) return;
     let alive = true;
     let timer: ReturnType<typeof setTimeout>;
+    const began = Date.now();
     const spawn = () => {
       if (!alive) return;
       const now = Date.now();
-      setPops((cur) => {
-        const live = cur.filter((p) => p.until > now);
-        if (live.filter((p) => !p.hit).length >= 2) return live;
-        const free = Array.from({ length: holes }, (_, i) => i).filter((i) => !live.some((p) => p.hole === i));
-        if (!free.length) return live;
-        const bonus = hosts.length > 0 && Math.random() < 0.14;
-        return [
-          ...live,
-          {
-            id: nextId.current++,
-            hole: pick(free),
-            src: bonus ? pick(hosts).img : pick(pool),
-            bonus,
-            until: now + rnd(800, 1200),
-            hit: false,
-          },
-        ];
-      });
-      timer = setTimeout(spawn, rnd(380, 700));
+      // decided outside the state updater (dev StrictMode runs updaters twice)
+      const live = popsRef.current.filter((p) => p.until > now);
+      const max = now - began < 7000 ? 1 : 2;
+      const free = Array.from({ length: holes }, (_, i) => i).filter((i) => !live.some((p) => p.hole === i));
+      if (live.filter((p) => !p.hit).length < max && free.length) {
+        // next character in rotation that isn't already on screen
+        let src = pool[turn.current++ % pool.length];
+        for (let k = 0; k < pool.length && live.some((p) => p.src === src); k++) src = pool[turn.current++ % pool.length];
+        const pop: Pop = { id: nextId.current++, hole: pick(free), src, until: now + rnd(1600, 2200), hit: false };
+        setPops((cur) => [...cur.filter((p) => p.until > now), pop]);
+      }
+      timer = setTimeout(spawn, rnd(850, 1300));
     };
-    timer = setTimeout(spawn, 350);
+    timer = setTimeout(spawn, 300);
     const sweep = setInterval(() => {
       const now = Date.now();
       setPops((cur) => (cur.some((p) => p.until <= now) ? cur.filter((p) => p.until > now) : cur));
@@ -569,7 +1122,7 @@ function SnowballToss({ pool, hosts, name, onResult }: GameProps) {
       clearTimeout(timer);
       clearInterval(sweep);
     };
-  }, [holes, pool, hosts]);
+  }, [holes, pool, active]);
 
   const holeCenter = (hole: number) => {
     const c = hole % cols;
@@ -580,8 +1133,8 @@ function SnowballToss({ pool, hosts, name, onResult }: GameProps) {
   };
 
   const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!active) return;
     sounds.unlock();
-    setHint(false);
     const r = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
@@ -592,7 +1145,7 @@ function SnowballToss({ pool, hosts, name, onResult }: GameProps) {
       if (p.hit || p.until <= now) continue;
       const { cx, cy } = holeCenter(p.hole);
       const d = Math.hypot(x - cx, y - cy);
-      if (d < S * 0.62 && d < best) {
+      if (d < S * 0.65 && d < best) {
         best = d;
         target = p;
       }
@@ -602,17 +1155,15 @@ function SnowballToss({ pool, hosts, name, onResult }: GameProps) {
     setTimeout(() => setBalls((b) => b.filter((q) => q.id !== ball.id)), 320);
     sounds.tap();
     if (target) {
-      const pts = target.bonus ? 3 : 1;
       const tid = target.id;
       setPops((cur) => cur.map((p) => (p.id === tid ? { ...p, hit: true, until: Date.now() + 850 } : p)));
-      setScore((s) => s + pts);
+      setScore((s) => s + 1);
       setTimeout(() => {
         setBump((b) => b + 1);
-        if (target.bonus) sounds.success();
-        else sounds.tick();
+        sounds.tick();
       }, 260);
     }
-    const pow: Pow = { id: nextId.current++, x, y, text: target ? (target.bonus ? "+3!" : pick(POWS)) : "poof", bonus: !!target?.bonus, hit: !!target };
+    const pow: Pow = { id: nextId.current++, x, y, text: target ? pick(POWS) : "poof", hit: !!target };
     setTimeout(() => setPows((p) => [...p, pow]), 260);
     setTimeout(() => setPows((p) => p.filter((q) => q.id !== pow.id)), 1000);
   };
@@ -623,9 +1174,8 @@ function SnowballToss({ pool, hosts, name, onResult }: GameProps) {
       className="absolute inset-0 touch-none overflow-hidden"
       style={{ background: "linear-gradient(180deg, #2a1a3e 0%, #5a2a4a 38%, #f3d6c0 78%, #fff6ea 100%)" }}
       onPointerDown={onDown}
-      data-testid="snow-area"
+      data-testid="target-area"
     >
-      {/* night sky, stars and a moon */}
       <div
         className="pointer-events-none absolute rounded-full"
         style={{ right: "8%", top: "6%", width: Math.min(w, h) * 0.13, height: Math.min(w, h) * 0.13, background: "#fff3cf", boxShadow: "0 0 30px 8px rgba(255,236,180,0.5)" }}
@@ -640,11 +1190,8 @@ function SnowballToss({ pool, hosts, name, onResult }: GameProps) {
           const winBottom = bankTop + bankH * 0.45;
           return (
             <div key={hole}>
-              {/* sticker window: clipped so stickers rise from behind the bank */}
-              <div
-                className="pointer-events-none absolute overflow-hidden"
-                style={{ left: cx - S * 0.6, width: S * 1.2, top: winBottom - S * 1.15, height: S * 1.15 }}
-              >
+              {/* sticker window: clipped so characters rise from behind the bank */}
+              <div className="pointer-events-none absolute overflow-hidden" style={{ left: cx - S * 0.6, width: S * 1.2, top: winBottom - S * 1.15, height: S * 1.15 }}>
                 <AnimatePresence>
                   {pop && (
                     <motion.div
@@ -653,8 +1200,10 @@ function SnowballToss({ pool, hosts, name, onResult }: GameProps) {
                       style={{ width: S, height: S, marginLeft: -S / 2 }}
                       initial={{ y: S }}
                       animate={{ y: S * 0.04 }}
-                      exit={{ y: S, transition: { duration: 0.16 } }}
-                      transition={{ type: "spring", stiffness: 520, damping: 20 }}
+                      exit={{ y: S, transition: { duration: 0.22 } }}
+                      transition={{ type: "spring", stiffness: 380, damping: 22 }}
+                      data-testid="pop"
+                      data-src={pop.src}
                     >
                       <motion.div
                         className="h-full w-full"
@@ -662,14 +1211,10 @@ function SnowballToss({ pool, hosts, name, onResult }: GameProps) {
                         animate={
                           pop.hit
                             ? { rotate: [0, -18, 14, -10, 6, 0], scale: [1, 0.86, 1.06, 0.96, 1], transition: { delay: 0.25, duration: 0.55 } }
-                            : { rotate: [0, -3, 3, 0], transition: { duration: 0.6, repeat: Infinity } }
+                            : { rotate: [0, -3, 3, 0], transition: { duration: 0.9, repeat: Infinity } }
                         }
                       >
-                        <Sticker
-                          src={pop.src}
-                          className="h-full w-full"
-                          style={pop.bonus ? { filter: `${STICKER_SHADOW} drop-shadow(0 0 8px ${GOLD})` } : undefined}
-                        />
+                        <Sticker src={pop.src} className="h-full w-full" />
                         {pop.hit && (
                           <motion.div
                             className="absolute rounded-full bg-white"
@@ -680,14 +1225,6 @@ function SnowballToss({ pool, hosts, name, onResult }: GameProps) {
                           />
                         )}
                       </motion.div>
-                      {pop.bonus && !pop.hit && (
-                        <div
-                          className="absolute left-1/2 top-0 -translate-x-1/2 rounded-full"
-                          style={{ ...comic, background: GOLD, color: INK, fontSize: Math.max(12, S * 0.14), padding: "0 6px", border: "2px solid #fff" }}
-                        >
-                          +3
-                        </div>
-                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -716,19 +1253,14 @@ function SnowballToss({ pool, hosts, name, onResult }: GameProps) {
         return (
           <motion.div
             key={b.id}
-            className="pointer-events-none absolute left-0 top-0 rounded-full"
-            style={{
-              width: size,
-              height: size,
-              marginLeft: -size / 2,
-              marginTop: -size / 2,
-              background: "radial-gradient(circle at 35% 30%, #fff 0%, #f3f7fb 50%, #c9d8e8 100%)",
-              boxShadow: "0 2px 6px rgba(40,40,80,0.35)",
-            }}
+            className="pointer-events-none absolute left-0 top-0"
+            style={{ marginLeft: -size / 2, marginTop: -size / 2 }}
             initial={{ x: b.x0, y: b.y0, scale: 1.7 }}
             animate={{ x: [b.x0, (b.x0 + b.x) / 2, b.x], y: [b.y0, midY, b.y], scale: [1.7, 1.1, 0.75] }}
             transition={{ duration: 0.27, ease: "easeOut" }}
-          />
+          >
+            <Snowball size={size} />
+          </motion.div>
         );
       })}
 
@@ -746,25 +1278,7 @@ function SnowballToss({ pool, hosts, name, onResult }: GameProps) {
               exit={{ scale: 1.3, opacity: 0, transition: { duration: 0.2 } }}
               transition={{ type: "spring", stiffness: 600, damping: 14 }}
             >
-              {p.hit ? (
-                <Burst text={p.text} size={size} color={p.bonus ? GOLD : "#ffe36e"} />
-              ) : (
-                <div className="relative" style={{ width: size, height: size }}>
-                  {Array.from({ length: 7 }, (_, i) => (
-                    <span
-                      key={i}
-                      className="absolute rounded-full bg-white"
-                      style={{
-                        width: size * 0.22,
-                        height: size * 0.22,
-                        left: size / 2 + Math.cos(i) * size * 0.32 - size * 0.11,
-                        top: size / 2 + Math.sin(i) * size * 0.32 - size * 0.11,
-                        boxShadow: "0 1px 3px rgba(60,60,100,0.4)",
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
+              {p.hit ? <Burst text={p.text} size={size} /> : <Puff size={size} />}
             </motion.div>
           );
         })}
@@ -774,607 +1288,32 @@ function SnowballToss({ pool, hosts, name, onResult }: GameProps) {
       <motion.div
         key={bump}
         className="pointer-events-none absolute z-20 flex items-center rounded-full"
-        style={{
-          left: u(1),
-          top: u(1),
-          ...comic,
-          background: "#ffe36e",
-          color: "#1a1a1a",
-          border: "2px solid #1a1a1a",
-          boxShadow: "3px 3px 0 #1a1a1a",
-          fontSize: `max(17px, ${u(2.1)})`,
-          padding: `${u(0.1)} ${u(1.2)}`,
-        }}
+        style={{ left: u(1), top: u(1), ...pill, fontSize: `max(17px, ${u(2.1)})`, padding: `${u(0.1)} ${u(1.2)}` }}
         initial={{ scale: bump ? 1.45 : 1 }}
         animate={{ scale: 1 }}
         transition={{ type: "spring", stiffness: 500, damping: 14 }}
-        data-testid="snow-score"
+        data-testid="target-score"
       >
         ❄ {score}
       </motion.div>
-
-      <AnimatePresence>
-        {hint && (
-          <motion.div exit={{ opacity: 0 }} className="pointer-events-none absolute inset-0">
-            <Caption className="!top-auto bottom-[6%]">Tap {name ? `${name}'s` : "your"} stickers to throw snowballs!</Caption>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
 
-// ---------------------------------------------------------------- 2. Figure-8 Skate
+// ---------------------------------------------------------------- 3. Memory Match
 
-const N_PTS = 360;
-const BINS = 36;
-
-function FigureEight({ pool, hero, name, onComplete, onResult }: GameProps) {
-  const [ref, { w, h }] = useBox<HTMLDivElement>();
-  const skater = pool.length > 1 ? pool[1] : hero;
-
-  const geo = useMemo(() => {
-    if (!w || !h) return null;
-    const land = w >= h;
-    const cx = w / 2;
-    const cy = h / 2 + (land ? h * 0.03 : h * 0.02);
-    const A = land ? Math.min(w * 0.37, h * 1.05) : w * 0.34;
-    const B = land ? h * 0.33 : Math.min(h * 0.36, w * 1.05);
-    const pts = Array.from({ length: N_PTS }, (_, i) => {
-      const t = (i / N_PTS) * Math.PI * 2;
-      return land ? { x: cx + A * Math.sin(t), y: cy + B * Math.sin(2 * t) } : { x: cx + A * Math.sin(2 * t), y: cy + B * Math.sin(t) };
-    });
-    const d = "M" + pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("L") + "Z";
-    const per = N_PTS / BINS;
-    const bins = Array.from({ length: BINS }, (_, b) => {
-      const seg = pts.slice(b * per, b * per + per + 1);
-      if (b === BINS - 1) seg.push(pts[0]);
-      return "M" + seg.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("L");
-    });
-    const tol = Math.max(24, Math.min(w, h) * 0.085);
-    const start = pts[N_PTS / 4];
-    const ghost = pts.filter((_, i) => i % 6 === 0);
-    ghost.push(pts[0]);
-    // start the ghost at the start marker
-    const rot = ghost.slice(N_PTS / 4 / 6).concat(ghost.slice(1, N_PTS / 4 / 6 + 1));
-    return { pts, d, bins, tol, start, ghost: rot, S: Math.max(58, Math.min(w, h) * 0.22) };
-  }, [w, h]);
-
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  const [visited, setVisited] = useState<boolean[]>(() => Array(BINS).fill(false));
-  const [acc, setAcc] = useState<number | null>(null);
-  const [off, setOff] = useState(0);
-  const [touched, setTouched] = useState(false);
-  const [done, setDone] = useState(false);
-  const dragging = useRef(false);
-  const counts = useRef({ on: 0, total: 0 });
-  const lastSample = useRef<{ x: number; y: number } | null>(null);
-  const offTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastOffSound = useRef(0);
-
-  useEffect(() => {
-    onResult(acc === null ? "Keep skating!" : `Accuracy ${acc}%`);
-  }, [acc, onResult]);
-
-  useEffect(() => {
-    if (!done) return;
-    sounds.success();
-    const t = setTimeout(onComplete, 1700);
-    return () => clearTimeout(t);
-  }, [done, onComplete]);
-
-  useEffect(() => () => {
-    if (offTimer.current) clearTimeout(offTimer.current);
-  }, []);
-
-  const sample = (x: number, y: number) => {
-    if (!geo || done) return;
-    setPos({ x, y });
-    // sub-sample long moves so fast swipes are scored fairly
-    const prev = lastSample.current;
-    const steps = prev ? Math.max(1, Math.min(12, Math.ceil(Math.hypot(x - prev.x, y - prev.y) / (geo.tol * 0.5)))) : 1;
-    let next = visited;
-    let changed = false;
-    let anyOff = false;
-    for (let s = 1; s <= steps; s++) {
-      const qx = prev ? prev.x + ((x - prev.x) * s) / steps : x;
-      const qy = prev ? prev.y + ((y - prev.y) * s) / steps : y;
-      let bestD = Infinity;
-      let bestI = 0;
-      for (let i = 0; i < N_PTS; i++) {
-        const p = geo.pts[i];
-        const d = (p.x - qx) ** 2 + (p.y - qy) ** 2;
-        if (d < bestD) {
-          bestD = d;
-          bestI = i;
-        }
-      }
-      const on = Math.sqrt(bestD) <= geo.tol;
-      counts.current.total += 1;
-      if (on) {
-        counts.current.on += 1;
-        const b = Math.floor(bestI / (N_PTS / BINS));
-        if (!next[b]) {
-          if (!changed) next = next.slice();
-          next[b] = true;
-          changed = true;
-        }
-      } else anyOff = true;
-    }
-    lastSample.current = { x, y };
-    const pct = Math.round((counts.current.on / counts.current.total) * 100);
-    setAcc(pct);
-    if (changed) {
-      setVisited(next);
-      if (next.filter(Boolean).length >= BINS * 0.92) {
-        dragging.current = false;
-        setDone(true);
-      }
-    }
-    if (anyOff) {
-      setOff((o) => o + 1);
-      if (offTimer.current) clearTimeout(offTimer.current);
-      offTimer.current = setTimeout(() => setOff(0), 260);
-      if (Date.now() - lastOffSound.current > 400) {
-        lastOffSound.current = Date.now();
-        sounds.tap();
-      }
-    }
-  };
-
-  const local = (e: React.PointerEvent) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
-  };
-
-  const covered = visited.filter(Boolean).length;
-  const skaterAt = pos ?? geo?.start;
-  const S = geo?.S ?? 60;
-
-  return (
-    <div
-      ref={ref}
-      className="absolute inset-0 touch-none overflow-hidden"
-      style={{
-        background:
-          "radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.9) 0%, transparent 45%), radial-gradient(ellipse at 75% 85%, rgba(255,255,255,0.7) 0%, transparent 40%), linear-gradient(160deg, #e9f6fd 0%, #cfe9f7 55%, #b9dcf0 100%)",
-      }}
-      onPointerDown={(e) => {
-        sounds.unlock();
-        e.currentTarget.setPointerCapture(e.pointerId);
-        dragging.current = true;
-        lastSample.current = null;
-        setTouched(true);
-        const q = local(e);
-        sample(q.x, q.y);
-      }}
-      onPointerMove={(e) => {
-        if (!dragging.current) return;
-        const q = local(e);
-        sample(q.x, q.y);
-      }}
-      onPointerUp={() => {
-        dragging.current = false;
-        lastSample.current = null;
-      }}
-      onPointerCancel={() => {
-        dragging.current = false;
-        lastSample.current = null;
-      }}
-      data-testid="skate-area"
-    >
-      {/* rink markings */}
-      <div className="pointer-events-none absolute inset-0" style={{ border: "6px solid rgba(163,22,28,0.25)", borderRadius: "inherit" }} />
-      <div className="pointer-events-none absolute inset-y-0 left-1/2 w-[3px] -translate-x-1/2" style={{ background: "rgba(163,22,28,0.18)" }} />
-      <Snow count={14} />
-
-      {geo && (
-        <svg className="pointer-events-none absolute inset-0" width={w} height={h}>
-          {/* the lane */}
-          <path d={geo.d} fill="none" stroke="rgba(255,255,255,0.75)" strokeWidth={geo.tol * 2} strokeLinejoin="round" />
-          <path d={geo.d} fill="none" stroke="rgba(80,150,200,0.25)" strokeWidth={geo.tol * 2} strokeLinejoin="round" strokeDasharray="1 0" opacity={0.35} />
-          {/* traced so far */}
-          {geo.bins.map((bd, i) => (
-            <path key={i} d={bd} fill="none" stroke={visited[i] ? GOLD : "transparent"} strokeWidth={Math.max(8, geo.tol * 0.7)} strokeLinecap="round" />
-          ))}
-          {/* center line */}
-          <path d={geo.d} fill="none" stroke="#3d7fb0" strokeWidth={3} strokeDasharray="10 9" strokeLinecap="round" />
-          {/* start flag */}
-          <g transform={`translate(${geo.start.x},${geo.start.y})`}>
-            <circle r={geo.tol * 0.55} fill={RED} stroke="#fff" strokeWidth={3} />
-            <text y={4} textAnchor="middle" fontSize={Math.max(10, geo.tol * 0.42)} fill="#fff" fontWeight={800}>
-              GO
-            </text>
-          </g>
-        </svg>
-      )}
-
-      {/* ghost guide until they start */}
-      {geo && !touched && (
-        <motion.div
-          className="pointer-events-none absolute left-0 top-0 rounded-full"
-          style={{ width: 26, height: 26, marginLeft: -13, marginTop: -13, background: GOLD, boxShadow: `0 0 0 6px rgba(226,182,90,0.35), 0 0 16px ${GOLD}` }}
-          animate={{ x: geo.ghost.map((p) => p.x), y: geo.ghost.map((p) => p.y) }}
-          transition={{ duration: 4.2, ease: "linear", repeat: Infinity }}
-        />
-      )}
-
-      {/* off-track flash */}
-      <AnimatePresence>
-        {off > 0 && (
-          <motion.div
-            className="pointer-events-none absolute inset-0 z-10"
-            style={{ boxShadow: "inset 0 0 0 8px rgba(211,47,47,0.85), inset 0 0 40px rgba(211,47,47,0.55)", borderRadius: "inherit" }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.1 }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* the skater: bottom-center (skates) sits on the finger */}
-      {skaterAt && (
-        <motion.div
-          className="pointer-events-none absolute left-0 top-0 z-10"
-          style={{ width: S, height: S, x: skaterAt.x - S / 2, y: skaterAt.y - S * 0.95 }}
-          animate={off ? { rotate: [0, -14, 12, -6, 0] } : { rotate: pos ? [-6, 6] : [0, 0] }}
-          transition={off ? { duration: 0.3 } : { duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
-        >
-          <Sticker src={skater} className="h-full w-full" style={off ? { filter: `${STICKER_SHADOW} drop-shadow(0 0 6px #d32f2f)` } : undefined} />
-        </motion.div>
-      )}
-      {pos && (
-        <div
-          className="pointer-events-none absolute z-10 rounded-full"
-          style={{ left: pos.x - 7, top: pos.y - 7, width: 14, height: 14, background: off ? "#d32f2f" : "#fff", border: `3px solid ${off ? "#fff" : "#3d7fb0"}` }}
-        />
-      )}
-
-      {/* HUD */}
-      <div className="pointer-events-none absolute z-20 flex flex-col items-start" style={{ left: u(1), top: u(1), gap: u(0.4) }}>
-        <motion.div
-          className="rounded-full"
-          style={{ ...comic, background: "#ffe36e", color: "#1a1a1a", border: "2px solid #1a1a1a", boxShadow: "3px 3px 0 #1a1a1a", fontSize: `max(16px, ${u(2)})`, padding: `${u(0.1)} ${u(1.2)}` }}
-          animate={off ? { x: [0, -5, 5, 0] } : { x: 0 }}
-          transition={{ duration: 0.2 }}
-          data-testid="skate-acc"
-        >
-          {acc === null ? "Accuracy –" : `Accuracy ${acc}%`}
-        </motion.div>
-        <div
-          className="rounded-full font-bold"
-          style={{ background: "rgba(255,255,255,0.85)", color: "#3d7fb0", fontSize: `max(11px, ${u(1.2)})`, padding: `${u(0.1)} ${u(1)}` }}
-        >
-          Loop {Math.round((covered / BINS) * 100)}%
-        </div>
-      </div>
-
-      {!touched && <Caption className="!top-auto bottom-[5%]">Drag {name ? `${name}` : "your skater"} along the figure-8!</Caption>}
-
-      <AnimatePresence>
-        {done && (
-          <motion.div
-            className="absolute inset-0 z-30 flex items-center justify-center"
-            style={{ background: "rgba(255,250,240,0.55)" }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
-            <motion.div
-              initial={{ scale: 0.3, rotate: -12 }}
-              animate={{ scale: 1, rotate: -4 }}
-              transition={{ type: "spring", stiffness: 480, damping: 12 }}
-              className="rounded-[20px] text-center"
-              style={{ ...script, background: RED, color: CREAM, border: `3px solid ${GOLD}`, fontSize: `max(28px, ${u(4.4)})`, padding: `${u(1)} ${u(3)}`, boxShadow: "0 8px 20px rgba(60,8,10,0.4)" }}
-              data-testid="skate-done"
-            >
-              Accuracy {acc ?? 0}%!
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- 3. Present Shuffle
-
-type ShufflePhase = "show" | "hide" | "shuffle" | "pick" | "reveal";
-
-function PresentBox({ P, lit }: { P: number; lit?: boolean }) {
-  const bodyH = P * 0.74;
-  const lidH = P * 0.2;
-  return (
-    <div className="relative" style={{ width: P, height: P * 1.14 }}>
-      {/* bow */}
-      <div className="absolute left-1/2" style={{ top: 0, width: P * 0.5, height: P * 0.22, marginLeft: -P * 0.25 }}>
-        <div className="absolute rounded-[50%]" style={{ left: 0, top: P * 0.02, width: P * 0.26, height: P * 0.18, border: `${P * 0.045}px solid ${GOLD}`, transform: "rotate(-18deg)" }} />
-        <div className="absolute rounded-[50%]" style={{ right: 0, top: P * 0.02, width: P * 0.26, height: P * 0.18, border: `${P * 0.045}px solid ${GOLD}`, transform: "rotate(18deg)" }} />
-        <div className="absolute left-1/2 rounded-full" style={{ bottom: -P * 0.02, width: P * 0.12, height: P * 0.1, marginLeft: -P * 0.06, background: "#c99a3d" }} />
-      </div>
-      {/* lid */}
-      <div
-        className="absolute left-1/2"
-        style={{
-          top: P * 0.2,
-          width: P * 1.06,
-          marginLeft: -P * 0.53,
-          height: lidH,
-          borderRadius: P * 0.05,
-          background: `linear-gradient(180deg, #c0262c, ${RED_DARK})`,
-          boxShadow: "0 3px 0 rgba(0,0,0,0.18)",
-        }}
-      >
-        <div className="absolute inset-y-0 left-1/2" style={{ width: P * 0.16, marginLeft: -P * 0.08, background: `linear-gradient(90deg, #c99a3d, ${GOLD}, #f3d58c, ${GOLD})` }} />
-      </div>
-      {/* body */}
-      <div
-        className="absolute bottom-0 left-0 overflow-hidden"
-        style={{
-          width: P,
-          height: bodyH,
-          borderRadius: `${P * 0.03}px ${P * 0.03}px ${P * 0.07}px ${P * 0.07}px`,
-          background: `radial-gradient(circle at 30% 30%, rgba(255,255,255,0.18) 0 ${P * 0.05}px, transparent ${P * 0.06}px) 0 0 / ${P * 0.25}px ${P * 0.25}px, linear-gradient(180deg, ${RED}, #7d0f14)`,
-          boxShadow: lit ? `0 0 0 4px ${GOLD}, 0 0 24px ${GOLD}` : "inset 0 -6px 0 rgba(0,0,0,0.18)",
-        }}
-      >
-        <div className="absolute inset-y-0 left-1/2" style={{ width: P * 0.16, marginLeft: -P * 0.08, background: `linear-gradient(90deg, #c99a3d, ${GOLD}, #f3d58c, ${GOLD})` }} />
-      </div>
-    </div>
-  );
-}
-
-function PresentShuffle({ hero, name, durationMs, onComplete, onResult }: GameProps) {
-  const [ref, { w, h }] = useBox<HTMLDivElement>();
-  const startedAt = useRef(0);
-  const [round, setRound] = useState(0);
-  const [phase, setPhase] = useState<ShufflePhase>("show");
-  const [slotOf, setSlotOf] = useState([0, 1, 2]);
-  const slotRef = useRef([0, 1, 2]);
-  const [heroIn, setHeroIn] = useState(1);
-  const [swap, setSwap] = useState<{ n: number; a: number; b: number; dur: number }>({ n: 0, a: -1, b: -1, dur: 0.4 });
-  const [picked, setPicked] = useState<number | null>(null);
-  const [wins, setWins] = useState(0);
-  const [played, setPlayed] = useState(0);
-
-  useEffect(() => {
-    startedAt.current = Date.now();
-    setRound(1);
-  }, []);
-
-  useEffect(() => {
-    onResult(played ? `Found ${wins} of ${played}` : "Keep watching!");
-  }, [wins, played, onResult]);
-
-  // one round: show → hide → shuffle (5–7 swaps, speeding up) → pick
-  useEffect(() => {
-    if (!round) return;
-    let alive = true;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    const at = (ms: number, fn: () => void) => timers.push(setTimeout(() => alive && fn(), ms));
-    setPicked(null);
-    setHeroIn(Math.floor(Math.random() * 3));
-    setPhase("show");
-    at(1300, () => setPhase("hide"));
-    const swaps = round === 1 ? 5 + Math.floor(Math.random() * 2) : 7;
-    let t = 1300 + 650;
-    at(t - 100, () => setPhase("shuffle"));
-    for (let i = 0; i < swaps; i++) {
-      const k = i / Math.max(1, swaps - 1);
-      const dur = (round === 1 ? 0.5 : 0.4) - k * (round === 1 ? 0.24 : 0.2);
-      at(t, () => {
-        const sa = Math.floor(Math.random() * 3);
-        const sb = (sa + 1 + Math.floor(Math.random() * 2)) % 3;
-        const cur = slotRef.current;
-        const a = cur.indexOf(sa);
-        const b = cur.indexOf(sb);
-        const next = cur.slice();
-        next[a] = sb;
-        next[b] = sa;
-        slotRef.current = next;
-        setSlotOf(next);
-        setSwap((s) => ({ n: s.n + 1, a, b, dur }));
-        sounds.tap();
-      });
-      t += dur * 1000 + 70;
-    }
-    at(t + 200, () => setPhase("pick"));
-    return () => {
-      alive = false;
-      timers.forEach(clearTimeout);
-    };
-  }, [round]);
-
-  // after the reveal: another round if there's time, else done
-  useEffect(() => {
-    if (phase !== "reveal") return;
-    const t = setTimeout(() => {
-      const left = startedAt.current + durationMs - Date.now();
-      if (round < 2 && left > 7500) setRound((r) => r + 1);
-      else onComplete();
-    }, 1900);
-    return () => clearTimeout(t);
-  }, [phase, round, durationMs, onComplete]);
-
-  const choose = (id: number) => {
-    if (phase !== "pick") return;
-    sounds.unlock();
-    setPicked(id);
-    setPhase("reveal");
-    setPlayed((p) => p + 1);
-    if (id === heroIn) {
-      setWins((x) => x + 1);
-      sounds.success();
-    } else sounds.tick();
-  };
-
-  const P = Math.min(w * 0.3, h * 0.4);
-  const spacing = Math.min(w * 0.335, P * 1.45);
-  const baseY = Math.min(h - Math.max(P * 0.3, 18), h * 0.5 + P * 1.1); // bottom of the presents
-  // lift far enough to show the hero, but keep the lifted present inside the box
-  const lift = Math.max(P * 0.85, Math.min(P * 1.02, baseY - P * 2.16 + P * 1.02 - 4));
-  const slotX = (s: number) => w / 2 + (s - 1) * spacing;
-  const heroS = P * 0.92;
-  const found = picked !== null && picked === heroIn;
-
-  const caption =
-    phase === "show" || phase === "hide"
-      ? `Watch ${name ?? "yourself"} hide…`
-      : phase === "shuffle"
-        ? "Keep your eye on the present!"
-        : phase === "pick"
-          ? `Where's ${name ?? "your sticker"}? Tap a present!`
-          : found
-            ? "Found you!"
-            : "Nope!";
-
-  return (
-    <div
-      ref={ref}
-      className="absolute inset-0 overflow-hidden"
-      style={{ background: `radial-gradient(ellipse at 50% 30%, #fff8ea 0%, ${CREAM} 45%, #f0d9ae 100%)` }}
-      data-testid="shuffle-area"
-      data-phase={phase}
-      data-hero={heroIn}
-    >
-      {/* string lights */}
-      <svg className="pointer-events-none absolute left-0 top-0" width={w} height={Math.max(30, h * 0.12)} aria-hidden>
-        <path d={`M0,8 Q${w / 4},${h * 0.09} ${w / 2},10 T${w},8`} stroke="#5a3a2a" strokeWidth={2} fill="none" />
-        {Array.from({ length: 11 }, (_, i) => {
-          const x = (w / 10) * i;
-          const y = 8 + Math.abs(Math.sin((i / 10) * Math.PI * 2)) * h * 0.04 + 6;
-          return (
-            <circle
-              key={i}
-              cx={x}
-              cy={y}
-              r={5}
-              fill={[GOLD, "#d32f2f", "#3f8f4f"][i % 3]}
-              style={{ animation: `cg-twinkle ${1 + (i % 3) * 0.4}s ease-in-out ${i * 0.15}s infinite`, transformOrigin: `${x}px ${y}px` }}
-            />
-          );
-        })}
-      </svg>
-      {/* table cloth */}
-      <div
-        className="pointer-events-none absolute inset-x-0 bottom-0"
-        style={{ top: baseY - P * 0.12, background: `linear-gradient(180deg, #8c1218, ${RED_DARK})`, boxShadow: "inset 0 6px 0 rgba(255,255,255,0.12)" }}
-      >
-        <div className="absolute inset-x-0 top-0 h-[6px]" style={{ background: `repeating-linear-gradient(90deg, ${GOLD} 0 14px, transparent 14px 22px)` }} />
-      </div>
-      <Snow count={14} />
-
-      {w > 0 &&
-        [0, 1, 2].map((id) => {
-          const lifted = (phase === "show" && id === heroIn) || (phase === "reveal" && (id === picked || id === heroIn));
-          const moving = phase === "shuffle" && (id === swap.a || id === swap.b);
-          const goesUp = id === swap.a;
-          return (
-            <motion.div
-              key={id}
-              className="absolute left-0 top-0"
-              style={{ width: P, height: P * 1.14, y: baseY - P * 1.14, zIndex: moving && !goesUp ? 6 : 5 }}
-              initial={{ x: slotX(slotOf[id]) - P / 2 }}
-              animate={{ x: slotX(slotOf[id]) - P / 2 }}
-              transition={{ duration: swap.dur, ease: "easeInOut" }}
-            >
-              <motion.div
-                key={moving ? `m${swap.n}` : "still"}
-                className="relative h-full w-full"
-                initial={{ y: 0, scale: 1 }}
-                animate={moving ? { y: [0, goesUp ? -P * 0.32 : P * 0.12, 0], scale: [1, goesUp ? 0.9 : 1.08, 1] } : { y: 0, scale: 1 }}
-                transition={{ duration: swap.dur, ease: "easeInOut" }}
-              >
-                {/* floor shadow */}
-                <div className="absolute left-1/2 rounded-[50%]" style={{ bottom: -P * 0.06, width: P * 1.1, height: P * 0.16, marginLeft: -P * 0.55, background: "rgba(40,5,6,0.35)" }} />
-                {/* what's under it */}
-                {id === heroIn ? (
-                  <motion.div
-                    className="absolute bottom-0 left-1/2"
-                    style={{ width: heroS, height: heroS, marginLeft: -heroS / 2 }}
-                    initial={phase === "show" ? { y: -h * 0.4, opacity: 0 } : false}
-                    animate={{ y: 0, opacity: 1, scale: phase === "reveal" && found ? [1, 1.2, 1] : 1 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 16, scale: { duration: 0.5, delay: 0.2 } }}
-                  >
-                    <Sticker src={hero} className="h-full w-full" />
-                  </motion.div>
-                ) : (
-                  <div className="absolute bottom-[4%] left-1/2 flex -translate-x-1/2 items-end" style={{ gap: 2 }}>
-                    {[0.2, 0.26, 0.18].map((s, i) => (
-                      <span key={i} className="rounded-[45%]" style={{ width: P * s, height: P * s * 0.8, background: "radial-gradient(circle at 35% 30%, #555 0%, #1d1d1d 70%)" }} />
-                    ))}
-                  </div>
-                )}
-                {/* the present (lifts to reveal) */}
-                <motion.button
-                  type="button"
-                  aria-label={`Present ${id + 1}`}
-                  className="absolute inset-0"
-                  style={{ cursor: phase === "pick" ? "pointer" : "default" }}
-                  animate={{
-                    y: lifted ? -lift : 0,
-                    rotate: lifted ? (id % 2 ? 5 : -5) : phase === "pick" ? [0, -2, 2, 0] : 0,
-                  }}
-                  transition={
-                    lifted
-                      ? { type: "spring", stiffness: 260, damping: 15 }
-                      : phase === "pick"
-                        ? { duration: 0.8, repeat: Infinity, delay: id * 0.15 }
-                        : { type: "spring", stiffness: 380, damping: 24 }
-                  }
-                  whileTap={phase === "pick" ? { scale: 0.92 } : undefined}
-                  onPointerDown={() => choose(id)}
-                  data-testid={`present-${id}`}
-                >
-                  <PresentBox P={P} lit={phase === "reveal" && id === heroIn} />
-                </motion.button>
-              </motion.div>
-            </motion.div>
-          );
-        })}
-
-      <Caption>{caption}</Caption>
-
-      <AnimatePresence>
-        {phase === "reveal" && (
-          <motion.div
-            key={`r${round}`}
-            className="pointer-events-none absolute z-20"
-            style={{ left: (picked !== null ? slotX(slotOf[picked]) : w / 2) - Math.max(80, P * 0.85) / 2, top: Math.max(4, baseY - P * 2.55) }}
-            initial={{ scale: 0, rotate: -25 }}
-            animate={{ scale: 1, rotate: found ? -6 : 6 }}
-            exit={{ scale: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 520, damping: 13, delay: 0.15 }}
-          >
-            <Burst text={found ? "YES!" : "NOPE!"} size={Math.max(80, P * 0.85)} color={found ? "#ffe36e" : "#cfe3f3"} />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div
-        className="pointer-events-none absolute z-20 rounded-full"
-        style={{ left: u(1), bottom: u(1), ...comic, background: "#ffe36e", color: "#1a1a1a", border: "2px solid #1a1a1a", boxShadow: "3px 3px 0 #1a1a1a", fontSize: `max(15px, ${u(1.9)})`, padding: `${u(0.1)} ${u(1.1)}` }}
-      >
-        Round {Math.max(1, round)} · Found {wins}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- 4. Memory Match
-
-function CardBack() {
+function CardBack({ small }: { small?: boolean }) {
   return (
     <div
       className="absolute inset-0 overflow-hidden"
       style={{
-        borderRadius: "12%/10%",
+        borderRadius: small ? 6 : "12%/10%",
         background: `radial-gradient(circle, rgba(255,255,255,0.12) 1.5px, transparent 2px) 0 0 / 14px 14px, linear-gradient(150deg, #c0262c 0%, ${RED} 50%, ${RED_DARK} 100%)`,
-        border: `3px solid ${CREAM}`,
+        border: `${small ? 2 : 3}px solid ${CREAM}`,
         boxShadow: "0 4px 8px rgba(60,8,10,0.3)",
       }}
     >
-      <div className="absolute inset-[7%]" style={{ border: `2px solid ${GOLD}`, borderRadius: "10%/8%" }} />
+      <div className="absolute inset-[7%]" style={{ border: `${small ? 1 : 2}px solid ${GOLD}`, borderRadius: "10%/8%" }} />
       <svg viewBox="0 0 100 100" className="absolute left-1/2 top-1/2 w-[56%] -translate-x-1/2 -translate-y-1/2" aria-hidden>
         <g stroke={GOLD} strokeWidth={5} strokeLinecap="round" fill="none">
           {[0, 60, 120].map((a) => (
@@ -1387,48 +1326,63 @@ function CardBack() {
         </g>
         <circle cx="50" cy="50" r="7" fill={CREAM} />
       </svg>
-      <div className="absolute inset-x-0 bottom-[9%] text-center" style={{ ...script, color: CREAM, fontSize: "min(18px, 4.5vmin)" }}>
-        387
-      </div>
+      {!small && (
+        <div className="absolute inset-x-0 bottom-[9%] text-center" style={{ ...script, color: CREAM, fontSize: "min(18px, 4.5vmin)" }}>
+          387
+        </div>
+      )}
     </div>
   );
 }
 
-type Card = { id: number; key: number; src: string };
+type Card = { id: number; src: string };
 
-function MemoryMatch({ pool, hero, hosts, onComplete, onResult }: GameProps) {
+function MemoryMatch({ pool, hosts, active, onComplete, onResult }: GameProps) {
   const [ref, { w, h }] = useBox<HTMLDivElement>();
-  const faces = useMemo(() => Array.from(new Set([...pool, hero, ...hosts.map((x) => x.img)].filter(Boolean))).slice(0, 6), [pool, hero, hosts]);
-  const [deck] = useState<Card[]>(() =>
-    shuffled(faces.flatMap((src, key) => [{ id: key * 2, key, src }, { id: key * 2 + 1, key, src }]))
-  );
-  const [up, setUp] = useState<number[]>([]);
-  const [matched, setMatched] = useState<number[]>([]);
-  const [moves, setMoves] = useState(0);
-  const [peek, setPeek] = useState(true);
-  const [wrong, setWrong] = useState<number[]>([]);
-  const [lastMatch, setLastMatch] = useState(-1);
-  const pairs = faces.length;
-  const done = matched.length === pairs && pairs > 0;
-
+  // 6 pairs, each a different character; pad to at least 3 with hosts if the pool is tiny
+  const faces = useMemo(() => {
+    const f = pool.slice(0, 6);
+    const pad = [...hosts.map((x) => x.img).filter(Boolean), ...pool];
+    for (let i = 0; f.length < 3 && pad.length; i++) f.push(pad[i % pad.length]);
+    return f;
+  }, [pool, hosts]);
+  const [deck, setDeck] = useState<Card[]>(() => faces.flatMap((src, k) => [{ id: k * 2, src }, { id: k * 2 + 1, src }]));
   useEffect(() => {
-    const t = setTimeout(() => setPeek(false), 1500);
-    return () => clearTimeout(t);
+    setDeck((d) => shuffled(d)); // client-only shuffle (no hydration mismatch)
   }, []);
+  const [up, setUp] = useState<number[]>([]);
+  const [matched, setMatched] = useState<number[]>([]); // card ids
+  const [moves, setMoves] = useState(0);
+  const [peekStage, setPeekStage] = useState<"before" | "on" | "off">("before");
+  const peek = peekStage === "on";
+  const [wrong, setWrong] = useState<number[]>([]);
+  const [lastMatch, setLastMatch] = useState<number[]>([]);
+  const pairs = deck.length / 2;
+  const found = matched.length / 2;
+  const done = matched.length === deck.length && deck.length > 0;
+
+  // the 1.5 s peek starts when play starts
+  useEffect(() => {
+    if (active && peekStage === "before") setPeekStage("on");
+  }, [active, peekStage]);
+  useEffect(() => {
+    if (peekStage !== "on") return;
+    const t = setTimeout(() => setPeekStage("off"), 1500);
+    return () => clearTimeout(t);
+  }, [peekStage]);
 
   useEffect(() => {
-    onResult(`${matched.length} of ${pairs} pairs · ${moves} moves`);
-  }, [matched.length, pairs, moves, onResult]);
+    onResult(found === pairs ? `All ${pairs} pairs in ${moves} moves!` : `${found} of ${pairs} pairs!`);
+  }, [found, pairs, moves, onResult]);
 
   useEffect(() => {
     if (!done) return;
-    sounds.success();
-    const t = setTimeout(onComplete, 1600);
+    const t = setTimeout(onComplete, 700);
     return () => clearTimeout(t);
   }, [done, onComplete]);
 
   const flip = (c: Card) => {
-    if (peek || done || up.length >= 2 || up.includes(c.id) || matched.includes(c.key)) return;
+    if (!active || peek || done || up.length >= 2 || up.includes(c.id) || matched.includes(c.id)) return;
     sounds.unlock();
     sounds.tap();
     const nextUp = [...up, c.id];
@@ -1436,10 +1390,10 @@ function MemoryMatch({ pool, hero, hosts, onComplete, onResult }: GameProps) {
     if (nextUp.length < 2) return;
     setMoves((m) => m + 1);
     const [a, b] = nextUp.map((id) => deck.find((d) => d.id === id)!);
-    if (a.key === b.key) {
+    if (a.src === b.src) {
       setTimeout(() => {
-        setMatched((m) => [...m, a.key]);
-        setLastMatch(a.key);
+        setMatched((m) => [...m, a.id, b.id]);
+        setLastMatch([a.id, b.id]);
         setUp([]);
         sounds.tick();
       }, 280);
@@ -1448,7 +1402,7 @@ function MemoryMatch({ pool, hero, hosts, onComplete, onResult }: GameProps) {
       setTimeout(() => {
         setUp([]);
         setWrong([]);
-      }, 900);
+      }, 950);
     }
   };
 
@@ -1472,23 +1426,14 @@ function MemoryMatch({ pool, hero, hosts, onComplete, onResult }: GameProps) {
   const gridH = best.rows * best.ch + gap * (best.rows - 1);
 
   return (
-    <div
-      ref={ref}
-      className="absolute inset-0 overflow-hidden"
-      style={{ background: `radial-gradient(ellipse at 50% 0%, #fff8ea 0%, ${CREAM} 55%, #f0d9ae 100%)` }}
-      data-testid="memory-area"
-    >
+    <div ref={ref} className="absolute inset-0 overflow-hidden" style={{ background: `radial-gradient(ellipse at 50% 0%, #fff8ea 0%, ${CREAM} 55%, #f0d9ae 100%)` }} data-testid="memory-area">
       <Snow count={14} />
       <div className="pointer-events-none absolute z-20 flex items-center" style={{ left: u(1), top: u(0.9), gap: u(0.8) }}>
-        <div
-          className="rounded-full"
-          style={{ ...comic, background: "#ffe36e", color: "#1a1a1a", border: "2px solid #1a1a1a", boxShadow: "3px 3px 0 #1a1a1a", fontSize: `max(15px, ${u(1.9)})`, padding: `${u(0.1)} ${u(1.1)}` }}
-          data-testid="memory-moves"
-        >
+        <div className="rounded-full" style={{ ...pill, fontSize: `max(15px, ${u(1.9)})`, padding: `${u(0.1)} ${u(1.1)}` }} data-testid="memory-moves">
           Moves {moves}
         </div>
         <div className="rounded-full font-bold" style={{ background: RED, color: CREAM, fontSize: `max(11px, ${u(1.2)})`, padding: `${u(0.2)} ${u(1)}` }}>
-          {matched.length}/{pairs} pairs
+          {found}/{pairs} pairs
         </div>
         {peek && (
           <motion.div
@@ -1514,7 +1459,7 @@ function MemoryMatch({ pool, hero, hosts, onComplete, onResult }: GameProps) {
           }}
         >
           {deck.map((c, i) => {
-            const isMatched = matched.includes(c.key);
+            const isMatched = matched.includes(c.id);
             const faceUp = peek || isMatched || up.includes(c.id);
             return (
               <motion.button
@@ -1527,23 +1472,18 @@ function MemoryMatch({ pool, hero, hosts, onComplete, onResult }: GameProps) {
                 animate={
                   wrong.includes(c.id)
                     ? { scale: 1, rotate: 0, x: [0, -6, 6, -4, 0] }
-                    : isMatched && lastMatch === c.key
+                    : isMatched && lastMatch.includes(c.id)
                       ? { scale: [1, 1.15, 1], rotate: 0, x: 0 }
                       : { scale: 1, rotate: 0, x: 0 }
                 }
                 transition={{ delay: moves === 0 && !isMatched ? i * 0.03 : 0, duration: 0.35 }}
-                whileTap={!faceUp ? { scale: 0.93 } : undefined}
+                whileTap={!faceUp && active ? { scale: 0.93 } : undefined}
                 onPointerDown={() => flip(c)}
                 data-testid="card"
-                data-key={c.key}
+                data-src={c.src}
                 data-up={faceUp ? "1" : "0"}
               >
-                <motion.div
-                  className="absolute inset-0"
-                  style={{ transformStyle: "preserve-3d" }}
-                  animate={{ rotateY: faceUp ? 180 : 0 }}
-                  transition={{ duration: 0.35 }}
-                >
+                <motion.div className="absolute inset-0" style={{ transformStyle: "preserve-3d" }} animate={{ rotateY: faceUp ? 180 : 0 }} transition={{ duration: 0.35 }}>
                   <div className="absolute inset-0" style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}>
                     <CardBack />
                   </div>
@@ -1568,23 +1508,6 @@ function MemoryMatch({ pool, hero, hosts, onComplete, onResult }: GameProps) {
           })}
         </div>
       )}
-
-      <AnimatePresence>
-        {done && (
-          <motion.div className="absolute inset-0 z-30 flex items-center justify-center" style={{ background: "rgba(255,250,240,0.5)" }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <Sparkles />
-            <motion.div
-              initial={{ scale: 0.3, rotate: -12 }}
-              animate={{ scale: 1, rotate: -3 }}
-              transition={{ type: "spring", stiffness: 480, damping: 12 }}
-              className="rounded-[20px] text-center"
-              style={{ ...script, background: RED, color: CREAM, border: `3px solid ${GOLD}`, fontSize: `max(26px, ${u(4)})`, padding: `${u(1)} ${u(3)}`, boxShadow: "0 8px 20px rgba(60,8,10,0.4)" }}
-            >
-              All pairs in {moves} moves!
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
