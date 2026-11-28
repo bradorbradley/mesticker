@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const fromQueue = o ? Array.from(new Set(o.items.filter((it) => !it.brand).map((it) => it.url))) : [];
     const stickers = c?.ready && c.stickers.length ? c.stickers : fromQueue;
     const sheet = (c?.ready && c.sheets[0]) || null;
-    return NextResponse.json({ ready: stickers.length > 0, sheet, stickers, hero: (c?.ready && c.stickerUrl) || null }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ ready: stickers.length > 0, sheet, stickers, hero: (c?.ready && c.stickerUrl) || null, event: c?.event ?? null }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     console.error("[booth/order-files]", e);
     return NextResponse.json({ error: "Unavailable" }, { status: 500 });
