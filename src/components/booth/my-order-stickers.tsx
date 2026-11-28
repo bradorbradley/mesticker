@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
-type Files = { ready: boolean; sheet: string | null; hero: string | null; stickers: string[] };
+type Files = { ready: boolean; sheet: string | null; hero: string | null; stickers: string[]; event?: string | null };
 
 /** One image as a transparent PNG file (Photos takes PNGs everywhere; WebP sometimes lands in Files). */
 async function asPng(src: string, i: number): Promise<File> {
@@ -86,6 +86,11 @@ export default function MyOrderStickers({ id }: { id: string }) {
             📲 Save all {all.length} to Photos
           </button>
           {status && <p className="t-body">{status}</p>}
+          {files.event && (
+            <a className="btn btn-soft" href={`/booth/album/${files.event}?o=${encodeURIComponent(id)}`}>
+              🎓 Class photo &amp; gallery
+            </a>
+          )}
           {files.sheet && (
             <button className="btn btn-soft" onClick={async () => setStatus(await saveImages([files.sheet!]).catch(() => "Press and hold the sheet to save it."))}>
               Save the whole sheet too
