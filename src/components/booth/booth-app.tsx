@@ -23,7 +23,7 @@ import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import type { PartyEvent } from "@/lib/party-events";
 import GuestSignup, { loadSavedGuest, saveGuest, type SavedGuest } from "@/components/booth/guest-signup";
-import { EventAttract, EventDone, EventGenerating, EventReveal, HostsMascot, WelcomeVideo, primeMusic } from "@/components/booth/event-booth";
+import { EventAttract, EventDone, EventGenerating, EventReveal, EventWait, HostsMascot, primeMusic, type WaitInfo } from "@/components/booth/event-booth";
 import Mascot from "./mascot";
 import BoothCamera from "./booth-camera";
 import OperatorPanel, { IMAGE_MODELS, providersFor, type BoothSettings, type GenStats } from "./operator-panel";
@@ -813,7 +813,25 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                 kit={kit}
                 order={printOrder}
                 onDone={() => setStep("done")}
-                waitWith={event?.look ? (status) => <EventWait video={<WelcomeVideo event={event} look={event.look!} sticker={sticker} poses={variants.pose} name={guest?.name ?? null} />} status={status} /> : undefined}
+                waitWith={
+                  event?.look
+                    ? (_status, info) => (
+                        <EventWait
+                          event={event}
+                          look={event.look!}
+                          sticker={sticker}
+                          poses={variants.pose}
+                          name={guest?.name ?? null}
+                          info={info}
+                          orderId={printOrder?.id ?? null}
+                          handset={handset}
+                          sheet={printOrder?.sheetUrls?.[0] ?? null}
+                          stickers={[sticker, ...variants.pose].filter((x): x is string => typeof x === "string")}
+                          onDone={() => setStep("done")}
+                        />
+                      )
+                    : undefined
+                }
               />
             )}
             {step === "done" && event?.look && (
@@ -1227,16 +1245,6 @@ function useIsHandset() {
     return () => mq.removeEventListener("change", f);
   }, []);
   return on;
-}
-
-/** Event looks: the welcome video with the print status under it. */
-function EventWait({ video, status }: { video: React.ReactNode; status: React.ReactNode }) {
-  return (
-    <div className="flex h-full w-full items-center justify-center landscape:flex-row portrait:flex-col" style={{ gap: u(2.4), padding: `${u(1)} ${u(3)} ${u(2)}` }}>
-      <div className="landscape:w-[62%] portrait:w-full">{video}</div>
-      <div className="landscape:w-[32%] portrait:w-full">{status}</div>
-    </div>
-  );
 }
 
 function useIsPhone() {
@@ -1737,7 +1745,7 @@ function printPhase(sent: "sending" | "queued" | "error", p: OrderProgress | nul
   };
 }
 
-function PrintKit({ guides, kit, order, onDone, waitWith }: { guides: string[] | null; kit: KitItem[] | null; order: PrintOrder | null; onDone: () => void; waitWith?: (status: React.ReactNode) => React.ReactNode }) {
+function PrintKit({ guides, kit, order, onDone, waitWith }: { guides: string[] | null; kit: KitItem[] | null; order: PrintOrder | null; onDone: () => void; waitWith?: (status: React.ReactNode, info: WaitInfo) => React.ReactNode }) {
   const [sent, setSent] = useState<"sending" | "queued" | "error">("sending");
   const [progress, setProgress] = useState<OrderProgress | null>(null);
   const [skew, setSkew] = useState(0);
@@ -1823,7 +1831,16 @@ function PrintKit({ guides, kit, order, onDone, waitWith }: { guides: string[] |
     </div>
   );
 
-  return waitWith ? <>{waitWith(status)}</> : <PlayWhileYouWait status={status} />;
+  // seconds until the sheet is in hand (for the event video's pacing)
+  const etaSec = (() => {
+    if (done) return 0;
+    const per = SHEET_SECONDS * n;
+    if (!progress || progress.status === "queued") return (progress?.ahead ?? 0) * SHEET_SECONDS + per + 15;
+    if (progress.stage !== "printing") return per + 20;
+    const t = progress.stageAt ? Math.max(0, (Date.now() + skew - Date.parse(progress.stageAt)) / 1000) : 0;
+    return Math.max(5, per - t);
+  })();
+  return waitWith ? <>{waitWith(status, { pct: phase.pct, label: phase.detail ? `${phase.label} · ${phase.detail}` : phase.label, done, etaSec })}</> : <PlayWhileYouWait status={status} />;
 }
 
 // ================================================================ done

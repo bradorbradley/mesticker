@@ -18,13 +18,14 @@ export function guestEmail(guest: Guest, c: Creation) {
   const gallery = `${SITE}/my/${guest.token}`;
   const unsub = `${SITE}/api/events/unsubscribe?t=${guest.token}`;
   const hi = guest.name ? `${esc(guest.name.split(" ")[0])}, here` : "Here";
-  const extras = c.stickers.filter((u) => u !== c.stickerUrl).slice(0, 6);
+  const extras = c.stickers.filter((u) => u !== c.stickerUrl).slice(0, 15);
   const subject = event ? `Your ${event.name} stickers are here ✨` : "Your MeSticker stickers are here ✨";
   const html = `<div style="font-family:Helvetica,Arial,sans-serif;max-width:560px;margin:auto;text-align:center;color:#1a1a2e;padding:8px">
   <h1 style="font-size:26px;margin:20px 0 6px">${hi} are your stickers! ✨</h1>
   <p style="color:#5d5b72;margin:0 0 18px">Thanks for stopping by the MeSticker booth${event ? ` at the ${esc(event.name)}` : ""}.</p>
   ${c.stickerUrl ? `<img src="${c.stickerUrl}" alt="Your sticker" width="320" style="max-width:100%;height:auto" />` : ""}
-  ${extras.length ? `<div style="margin:12px 0">${extras.map((u) => `<img src="${u}" alt="" width="84" style="width:84px;height:auto;margin:4px" />`).join("")}</div>` : ""}
+  ${extras.length ? `<div style="margin:12px 0">${extras.map((u) => `<a href="${u}"><img src="${u}" alt="Sticker" width="120" style="width:120px;height:auto;margin:6px" /></a>`).join("")}</div>` : ""}
+  ${c.sheets[0] ? `<p style="margin:18px 0 6px;color:#5d5b72">Your sticker sheet:</p><img src="${c.sheets[0]}" alt="Your sticker sheet" width="260" style="max-width:70%;height:auto;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.15)" />` : ""}
   <p style="margin:22px 0"><a href="${gallery}" style="background:#7c5cfc;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:bold">See and save all your stickers</a></p>
   <p style="color:#5d5b72;font-size:14px">Your sticker character can go on mugs, shirts and more. Make more anytime at <a href="${SITE}" style="color:#7c5cfc">mesticker.fun</a>.</p>
   <p style="color:#9c99a6;font-size:11px;margin-top:28px;line-height:1.5">You're getting this because you signed up at the MeSticker booth.
@@ -46,6 +47,8 @@ export async function sendGuestEmail(guest: Guest, c: Creation): Promise<{ sent:
       subject,
       html,
       headers: { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+      // the hero and the sheet as real attachments too, so they save straight to Photos
+      attachments: [c.stickerUrl, c.sheets[0]].filter(Boolean).map((path, i) => ({ path, filename: i === 0 ? "my-sticker.webp" : "my-sticker-sheet.webp" })),
     }),
   });
   if (!res.ok) return { sent: false, error: `Resend ${res.status}: ${(await res.text()).slice(0, 200)}` };
