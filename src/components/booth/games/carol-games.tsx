@@ -184,7 +184,7 @@ function Burst({ text, size, color = "#ffe36e" }: { text: string; size: number; 
   const pts = Array.from({ length: 24 }, (_, i) => {
     const r = i % 2 ? 0.62 : 1;
     const a = (i / 24) * Math.PI * 2;
-    return `${50 + Math.cos(a) * 50 * r},${50 + Math.sin(a) * 50 * r}`;
+    return `${(50 + Math.cos(a) * 50 * r).toFixed(2)},${(50 + Math.sin(a) * 50 * r).toFixed(2)}`; // fixed so SSR and client agree
   }).join(" ");
   return (
     <div className="relative" style={{ width: size, height: size }}>
@@ -754,13 +754,13 @@ type Outcome = { id: number; hit: boolean; x: number; y: number };
 
 function SnowballToss({ pool, active, onComplete, onResult }: GameProps) {
   const [ref, { w, h }] = useBox<HTMLDivElement>();
-  const S = Math.max(60, Math.min(w * 0.3, h * 0.3)); // target character size
+  const S = Math.max(60, Math.min(w * 0.34, h * 0.3)); // target character size
   const ty = Math.max(S * 0.55, h * 0.24); // character centre
   const ledgeTop = ty + S * 0.38;
   const ball = Math.max(40, Math.min(w, h) * 0.13);
   const bx = w / 2;
   const by = h - ball * 0.5 - Math.max(16, h * 0.05);
-  const amp = Math.max(0, Math.min(w * 0.3, w / 2 - S * 0.6));
+  const amp = Math.max(0, Math.min(w * 0.22, w / 2 - S * 0.6));
 
   const targets = useMemo(() => Array.from({ length: TOSS_THROWS }, (_, k) => pool[k % pool.length]), [pool]);
   const [throwIdx, setThrowIdx] = useState(0);
@@ -784,7 +784,7 @@ function SnowballToss({ pool, active, onComplete, onResult }: GameProps) {
     throwRef.current = throwIdx;
   }, [throwIdx]);
   useAnimationFrame((_, delta) => {
-    const period = [7000, 6200, 5600, 5000][Math.min(3, throwRef.current)];
+    const period = [8000, 7000, 6200, 5600][Math.min(3, throwRef.current)];
     phase.current += (Math.min(delta, 50) / period) * Math.PI * 2;
     tx.set(Math.sin(phase.current) * amp);
   });
@@ -804,12 +804,12 @@ function SnowballToss({ pool, active, onComplete, onResult }: GameProps) {
     const up = -dy;
     const slope = up > 12 ? Math.max(-1.6, Math.min(1.6, dx / up)) : 0;
     const x1 = Math.max(ball / 2, Math.min(w - ball / 2, bx + slope * (by - ty)));
-    const ms = 620;
+    const ms = 560;
     const f: Flight = { id: nextId.current++, x0: bx, y0: by, x1, y1: ty, ms };
     setFlight(f);
     later(ms, () => {
       const centre = w / 2 + tx.get();
-      const hit = Math.abs(x1 - centre) < S * 0.42;
+      const hit = Math.abs(x1 - centre) < S * 0.48; // generous: aiming at the character mostly works
       setFlight(null);
       setOutcome({ id: f.id, hit, x: hit ? centre : x1, y: hit ? ty : ledgeTop + S * 0.05 });
       setMarks((m) => [...m, hit ? "hit" : "miss"]);
@@ -877,10 +877,22 @@ function SnowballToss({ pool, active, onComplete, onResult }: GameProps) {
             className="pointer-events-none absolute inset-x-0"
             style={{
               top: ledgeTop,
-              height: Math.max(26, S * 0.5),
-              background: "linear-gradient(180deg, #ffffff 0%, #eef3f9 60%, #d6e3f0 100%)",
+              height: Math.max(40, S * 0.75),
+              background: "linear-gradient(180deg, #ffffff 0%, #eef3f9 45%, rgba(214,227,240,0) 100%)",
               borderRadius: "50% 50% 0 0 / 40% 40% 0 0",
-              boxShadow: "0 6px 0 rgba(120,150,190,0.25)",
+            }}
+          />
+          {/* snowy ground the ball rests on */}
+          <div
+            className="pointer-events-none absolute"
+            style={{
+              left: "-10%",
+              right: "-10%",
+              bottom: 0,
+              height: h - by + ball * 0.25,
+              background: "radial-gradient(ellipse at 50% 0%, #ffffff 0%, #f1f5fa 55%, #dde7f2 100%)",
+              borderRadius: "50% 50% 0 0 / 30% 30% 0 0",
+              boxShadow: "0 -3px 0 rgba(255,255,255,0.6)",
             }}
           />
 
@@ -1069,6 +1081,10 @@ function TargetPractice({ pool, active, onResult }: GameProps) {
   const [bump, setBump] = useState(0);
   const nextId = useRef(1);
   const turn = useRef(TOSS_THROWS); // rotation through the pool, picking up where the toss left off
+  const popsRef = useRef<Pop[]>([]);
+  useEffect(() => {
+    popsRef.current = pops;
+  }, [pops]);
 
   useEffect(() => {
     onResult(`${score} ${score === 1 ? "hit" : "hits"}!`);
@@ -1083,17 +1099,17 @@ function TargetPractice({ pool, active, onResult }: GameProps) {
     const spawn = () => {
       if (!alive) return;
       const now = Date.now();
-      setPops((cur) => {
-        const live = cur.filter((p) => p.until > now);
-        const max = now - began < 7000 ? 1 : 2;
-        if (live.filter((p) => !p.hit).length >= max) return live;
-        const free = Array.from({ length: holes }, (_, i) => i).filter((i) => !live.some((p) => p.hole === i));
-        if (!free.length) return live;
+      // decided outside the state updater (dev StrictMode runs updaters twice)
+      const live = popsRef.current.filter((p) => p.until > now);
+      const max = now - began < 7000 ? 1 : 2;
+      const free = Array.from({ length: holes }, (_, i) => i).filter((i) => !live.some((p) => p.hole === i));
+      if (live.filter((p) => !p.hit).length < max && free.length) {
         // next character in rotation that isn't already on screen
         let src = pool[turn.current++ % pool.length];
         for (let k = 0; k < pool.length && live.some((p) => p.src === src); k++) src = pool[turn.current++ % pool.length];
-        return [...live, { id: nextId.current++, hole: pick(free), src, until: now + rnd(1600, 2200), hit: false }];
-      });
+        const pop: Pop = { id: nextId.current++, hole: pick(free), src, until: now + rnd(1600, 2200), hit: false };
+        setPops((cur) => [...cur.filter((p) => p.until > now), pop]);
+      }
       timer = setTimeout(spawn, rnd(850, 1300));
     };
     timer = setTimeout(spawn, 300);
@@ -1337,8 +1353,8 @@ function MemoryMatch({ pool, hosts, active, onComplete, onResult }: GameProps) {
   const [up, setUp] = useState<number[]>([]);
   const [matched, setMatched] = useState<number[]>([]); // card ids
   const [moves, setMoves] = useState(0);
-  const [peek, setPeek] = useState(false);
-  const [peeked, setPeeked] = useState(false);
+  const [peekStage, setPeekStage] = useState<"before" | "on" | "off">("before");
+  const peek = peekStage === "on";
   const [wrong, setWrong] = useState<number[]>([]);
   const [lastMatch, setLastMatch] = useState<number[]>([]);
   const pairs = deck.length / 2;
@@ -1347,15 +1363,13 @@ function MemoryMatch({ pool, hosts, active, onComplete, onResult }: GameProps) {
 
   // the 1.5 s peek starts when play starts
   useEffect(() => {
-    if (!active || peeked) return;
-    setPeek(true);
-    setPeeked(true);
-    const t = setTimeout(() => setPeek(false), 1500);
-    return () => clearTimeout(t);
-  }, [active, peeked]);
+    if (active && peekStage === "before") setPeekStage("on");
+  }, [active, peekStage]);
   useEffect(() => {
-    if (peeked && !active) setPeek(false);
-  }, [active, peeked]);
+    if (peekStage !== "on") return;
+    const t = setTimeout(() => setPeekStage("off"), 1500);
+    return () => clearTimeout(t);
+  }, [peekStage]);
 
   useEffect(() => {
     onResult(found === pairs ? `All ${pairs} pairs in ${moves} moves!` : `${found} of ${pairs} pairs!`);

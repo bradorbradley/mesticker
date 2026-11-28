@@ -186,7 +186,7 @@ type Beat = {
   sfx?: string;
   /** punch in on whoever has this key */
   zoom?: string;
-  /** an interactive chapter: play CarolGames game N (0 snowballs, 1 skate, 2 presents, 3 memory) */
+  /** an interactive chapter: play CarolGames game N (0 snowball toss, 1 target practice, 2 memory) */
   game?: number;
 };
 const SLOT_X: Record<Slot, number> = { L: 4, LC: 20, C: 36, RC: 52, R: 68 }; // left edge, % of stage width
@@ -196,8 +196,10 @@ const ACTOR_BIG = 34;
 export function storyBeats(event: PartyEvent, look: Look, me: string, pose: (k: number) => string, name: string | null): Beat[] {
   const who = name || "friend";
   const hosts = look.hosts;
-  const H = (i: number, at: Slot, extra: Partial<Actor> = {}): Actor => ({ key: `h${i}`, src: hosts[Math.min(i, hosts.length - 1)].img, at, anim: "bob", ...extra });
-  const santa = look.cameo?.img ?? hosts[0].img;
+  const host = (i: number) => hosts[Math.min(i, hosts.length - 1)];
+  // die-cut versions (white sticker edge) so the hosts match the guest's stickers
+  const H = (i: number, at: Slot, extra: Partial<Actor> = {}): Actor => ({ key: `h${i}`, src: host(i).cut ?? host(i).img, at, anim: "bob", ...extra });
+  const santa = look.cameo?.cut ?? look.cameo?.img ?? hosts[0].img;
   const S = (at: Slot, extra: Partial<Actor> = {}): Actor => ({ key: "santa", src: santa, at, anim: "bob", ...extra });
   const G = (at: Slot, extra: Partial<Actor> = {}): Actor => ({ key: "guest", src: me, at, anim: "bob", big: true, ...extra });
   const P = (k: number, at: Slot, extra: Partial<Actor> = {}): Actor => ({ key: `p${k}`, src: pose(k), at, anim: "bob", big: true, ...extra });
@@ -207,12 +209,12 @@ export function storyBeats(event: PartyEvent, look: Look, me: string, pose: (k: 
   // ~29s: one clear idea per frame, long enough to read, always something moving
   return [
     { scene: "home", ms: 2300, cast: trio({ anim: "jump" }), caption: `WELCOME TO ${event.name.toUpperCase()}!`, sfx: "♪♫♪", fx: ["flash"] },
-    { scene: "home", ms: 2300, cast: trio(), bubble: { who: "h1", text: `We're ${n(0)}, ${n(1)} & ${n(2)}!` }, zoom: "h1" },
+    { scene: "home", ms: 2300, cast: trio(), bubble: { who: "h1", text: `We're ${n(0)}, ${n(1)} & ${n(2)}!` } },
     { scene: "home", ms: 1700, cast: trio(), caption: "KNOCK KNOCK!", door: "knock", fx: ["shake"], sfx: "KNOCK!" },
     { scene: "home", ms: 2100, cast: [H(0, "L"), G("RC", { anim: "jump" })], door: "open", ribbon: `It's ${who}!`, fx: ["impact", "flash"], sfx: "TA-DA!" },
-    { scene: "home", ms: 1900, cast: [G("L"), S("R", { anim: "fly" })], caption: "SUDDENLY…", fx: ["shake", "impact"], sfx: "CRASH!" },
-    { scene: "home", ms: 2300, cast: [G("L"), S("R")], bubble: { who: "santa", text: "My reindeer escaped! Help!" }, zoom: "santa" },
-    { scene: "home", ms: 1700, cast: [G("L", { anim: "jump" }), S("R")], bubble: { who: "guest", text: "On it! 💪" }, zoom: "guest", fx: ["speed"] },
+    { scene: "home", ms: 1900, cast: [G("L"), S("R", { anim: "jump" })], caption: "SUDDENLY…", fx: ["shake", "impact"], sfx: "CRASH!" },
+    { scene: "home", ms: 2300, cast: [G("L"), S("R")], bubble: { who: "santa", text: "My reindeer escaped! Help!" } },
+    { scene: "home", ms: 1700, cast: [G("L", { anim: "jump" }), S("R")], bubble: { who: "guest", text: "On it! 💪" }, fx: ["speed"] },
     { scene: "street", ms: 2000, cast: [P(3, "LC", { anim: "zoom" })], caption: "DOWN THE HILL…", fx: ["speed"], sfx: "WHOOSH!" },
     { scene: "street", ms: 2000, cast: [P(4, "L", { anim: "jump" }), H(1, "R", { anim: "jump" })], bubble: { who: "h1", text: "Hey! 😂" }, fx: ["impact"], sfx: "SPLAT!" },
     { scene: "street", ms: 2100, cast: [P(0, "LC", { anim: "fly", lift: 18 })], caption: "FOUND THE REINDEER!", fx: ["speed", "flash"], sfx: "GIDDY UP!" },
@@ -238,6 +240,15 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
       if (forced > 0) pace.current = forced;
     } catch {}
   }
+  // load every backdrop and sticker up front so no scene starts blank
+  useEffect(() => {
+    const urls = [look.scene, look.scenes?.street, look.scenes?.roof, ...beats.flatMap((b) => b.cast.map((c) => c.src))].filter((x): x is string => !!x);
+    new Set(urls).forEach((u) => {
+      const im = new Image();
+      im.src = u;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [i, setI] = useState(0);
   const next = () => (i + 1 < beats.length ? setI(i + 1) : onEnd?.());
   useEffect(() => {
@@ -342,7 +353,12 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
                   src={a.src}
                   alt=""
                   className="absolute object-contain drop-shadow-[0_8px_12px_rgba(0,0,0,0.3)]"
-                  style={{ width: w, height: heightOf(a), bottom: y, zIndex: a.key === "guest" || a.key.startsWith("p") ? 20 : 10 }}
+                  style={{
+                    width: w,
+                    height: heightOf(a),
+                    bottom: y,
+                    zIndex: a.key === "guest" || a.key.startsWith("p") ? 20 : 10,
+                  }}
                   initial={{ opacity: 0, scale: 0.4, left: x - (a.anim === "zoom" ? stageW * 0.15 : 0) }}
                   animate={{
                     opacity: 1,
@@ -405,7 +421,7 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
       )}
       {beat.game != null && (
         <div className="absolute inset-0 z-[52] bg-[#2a0d0b]">
-          <CarolGames key={i} only={beat.game} durationMs={beat.ms} stickers={gameStickers} hero={me} hosts={look.hosts.map((h) => ({ name: h.name, img: h.img }))} name={name} onDone={next} />
+          <CarolGames key={i} only={beat.game} durationMs={beat.ms} stickers={gameStickers} hero={me} hosts={look.hosts.map((h) => ({ name: h.name, img: h.cut ?? h.img }))} name={name} onDone={next} />
         </div>
       )}
       {look.music && beat.game == null && (
@@ -698,7 +714,7 @@ export function EventWait({
       {phase === "video" ? (
         <WelcomeVideo key={run} event={event} look={look} sticker={sticker} poses={poses} name={name} etaSec={run ? undefined : firstEta.current} onEnd={() => setPhase(run ? "save" : "games")} />
       ) : phase === "games" ? (
-        <CarolGames stickers={gameStickers} hero={sticker ?? look.hosts[0].img} hosts={look.hosts.map((h) => ({ name: h.name, img: h.img }))} name={name} durationMs={75000} onDone={() => setPhase("save")} />
+        <CarolGames stickers={gameStickers} hero={sticker ?? look.hosts[0].img} hosts={look.hosts.map((h) => ({ name: h.name, img: h.cut ?? h.img }))} name={name} durationMs={60000} onDone={() => setPhase("save")} />
       ) : (
         <div className="relative flex h-full w-full items-center text-center landscape:flex-row portrait:flex-col" style={{ gap: u(1.6), padding: "16px 16px 84px" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
