@@ -14,6 +14,8 @@ export const SHEET_H = Math.round(6.7 * DPI); // 2010
 /** Paper the cutter needs between two stickers' cut lines (~2.5 mm). */
 export const MIN_GAP_PX = 30;
 export const SLOT_SHRINK = 0.92;
+/** the event sheet is untilted with 30px+ between slots (and the print station insets each sticker), so its stickers can fill their slots */
+export const shrinkOf = (layout: string) => (layout === "event15" ? 0.97 : SLOT_SHRINK);
 
 export type Slot = [number, number, number, number, number];
 
@@ -65,18 +67,20 @@ export const LAYOUTS = {
     [185, 1800, 800, 190, 0],
   ] as Slot[],
   /**
-   * A booked event's sheet inside its trim border (the frame keeps ~50px clear): the event logo,
+   * A booked event's sheet inside its trim border: the event logo between two little decorations,
    * the guest's hero and the guest singing with the hosts (big), 3 name stickers, a wide group
-   * sticker (stockings) and a round one (Santa's sleigh), 4 solo poses, the handle pill.
-   * Every pair keeps 30px+ of paper for the cutter.
+   * sticker (stockings) and a round one (Santa's sleigh), 4 solo poses, then the handle pill between
+   * two more decorations. Order: logo, hero, carols, names ×3, stockings, sleigh, poses ×4,
+   * decor ×5 (top-left, top-right, bottom-left, bottom-right, between the stockings and the sleigh), pill. 30px+ of paper between all.
    */
   event15: [
-    [260, 50, 650, 210, 0],
-    [60, 285, 480, 500, 0], [570, 285, 540, 500, 0],
-    [60, 815, 330, 320, 0], [420, 815, 330, 320, 0], [780, 815, 330, 320, 0],
-    [60, 1165, 620, 330, 0], [710, 1165, 400, 330, 0],
-    [60, 1525, 237, 270, 0], [327, 1525, 237, 270, 0], [594, 1525, 237, 270, 0], [861, 1525, 249, 270, 0],
-    [285, 1825, 600, 130, 0],
+    [320, 50, 530, 185, 0],
+    [55, 260, 440, 530, 0], [525, 260, 590, 530, 0],
+    [55, 820, 330, 340, 0], [415, 820, 330, 340, 0], [775, 820, 340, 340, 0],
+    [55, 1190, 470, 350, 0], [735, 1190, 380, 350, 0],
+    [55, 1570, 235, 255, 0], [320, 1570, 235, 255, 0], [585, 1570, 235, 255, 0], [850, 1570, 235, 255, 0],
+    [140, 55, 150, 180, 0], [880, 55, 150, 180, 0], [150, 1855, 190, 110, 0], [830, 1855, 160, 110, 0], [555, 1235, 150, 260, 0],
+    [370, 1855, 430, 110, 0],
   ] as Slot[],
   /**
    * A booked event's sheet: the event's logo sticker across the top (slot 1), the guest's hero
@@ -100,7 +104,7 @@ export const LAYOUT_INFO: Record<LayoutId, string> = {
   pack12: "12 slots, no tilt: a ~2.2\" hero top-left, two ~1.1\" beside it, then three rows of three (~1.1–1.3\"). Best for 12 stickers: you + 7 poses + repeats.",
   big1: "1 slot: a single ~3.6\" sticker.",
   pack13: "13 slots, no tilt: pack12 slightly tighter, plus a wide slot along the bottom for the @mesticker.fun handle pill.",
-  event15: "13 slots inside an event's trim border: logo, hero, carols with the hosts, 3 name stickers, stockings with the hosts, Santa's sleigh, 4 solo poses, the handle pill.",
+  event15: "18 slots inside an event's trim border: logo, hero, carols with the hosts, 3 name stickers, stockings with the hosts, Santa's sleigh, 4 solo poses, 5 little decorations, the handle pill.",
   event11: "11 slots, no tilt: an event logo across the top, a ~2.1\" hero, 8 poses, and the handle pill along the bottom.",
 };
 

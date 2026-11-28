@@ -96,7 +96,7 @@ const IDEAS_TIMEOUT_MS = 3500;
  * then 3 rows of 3). "main" = their sticker; [kind, i] = extra i of that set.
  * Big slots get the strongest stickers; the small last row repeats favourites.
  */
-type Src = "main" | "logo" | "pill" | [VariantKind, number];
+type Src = "main" | "logo" | "pill" | [VariantKind, number] | ["decor", number];
 const SHEET_RECIPES: Record<SheetKind, Src[]> = {
   pose: ["main", ["pose", 0], ["pose", 1], ["pose", 2], ["pose", 3], ["pose", 4], ["pose", 5], ["pose", 6], "main", ["pose", 0], ["pose", 3], ["pose", 5], "pill"],
   face: ["main", ["face", 0], ["face", 1], ["face", 2], ["face", 3], ["face", 4], ["face", 5], ["face", 6], "main", ["face", 0], ["face", 2], ["face", 4], "pill"],
@@ -108,7 +108,8 @@ const eventRecipe = (): Src[] => {
   const ev = ACTIVE_EVENT;
   const n = (ev?.poses?.length ?? 0) + (ev?.groups?.length ?? 0);
   const order = ev?.sheet ?? Array.from({ length: n }, (_, k) => k);
-  return ["logo", "main", ...order.map((k) => ["pose", k] as Src), "pill"];
+  const decor = (ev?.look?.decor ?? []).map((_, k) => ["decor", k] as Src);
+  return ["logo", "main", ...order.map((k) => ["pose", k] as Src), ...decor, "pill"];
 };
 
 /** Raw sticker per slot: null while an extra is still being made (preview only); failed extras fall back to the main sticker. */
@@ -118,6 +119,7 @@ function sheetSources(kind: SheetKind, main: string, variants: Variants, preview
     if (s === "main") return main;
     if (s === "logo") return look?.logo ?? main;
     if (s === "pill") return look?.pill ?? PILL;
+    if (s[0] === "decor") return decorPick(s[1]) ?? main;
     const v = variants[s[0]][s[1]];
     return v ? v : v === null && preview ? null : main;
   });
@@ -141,7 +143,7 @@ const ribbonCache = new Map<string, Promise<string>>();
 function prepSlot(raw: string, i: number): Promise<string> {
   const look = ACTIVE_EVENT?.look;
   const r = look ? eventRecipe()[i] : null;
-  if (!look || !ACTIVE_NAME || !Array.isArray(r) || !ACTIVE_EVENT?.namePoses?.includes(r[1])) return Promise.resolve(raw);
+  if (!look || !ACTIVE_NAME || !Array.isArray(r) || r[0] !== "pose" || !ACTIVE_EVENT?.namePoses?.includes(r[1])) return Promise.resolve(raw);
   const key = `${raw.length}:${raw.slice(-64)}:${ACTIVE_NAME}`;
   if (!ribbonCache.has(key)) {
     const host = document.querySelector(".theme-carol") ?? document.body;
@@ -159,7 +161,23 @@ function prepSlot(raw: string, i: number): Promise<string> {
 }
 const isBrandSlot = (i: number) => {
   const r = ACTIVE_EVENT?.look ? eventRecipe()[i] : SHEET_RECIPES.pose[i];
-  return r === "logo" || r === "pill";
+  return r === "logo" || r === "pill" || (Array.isArray(r) && r[0] === "decor");
+};
+/** the sheet's little decorations: one per corner slot, picked once per guest (so every sheet differs a bit) */
+let DECOR_PICKS: string[] | null = null;
+const decorPick = (k: number) => {
+  const pools = ACTIVE_EVENT?.look?.decor;
+  if (!pools?.length) return null;
+  if (!DECOR_PICKS) {
+    const used = new Set<string>();
+    DECOR_PICKS = pools.map((pool) => {
+      const free = pool.filter((p) => !used.has(p));
+      const pick = (free.length ? free : pool)[Math.floor(Math.random() * (free.length || pool.length))];
+      used.add(pick);
+      return pick;
+    });
+  }
+  return DECOR_PICKS[k] ?? null;
 };
 
 /** Bordered copies are slow to make; reuse them between the live preview and printing. */
@@ -317,7 +335,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
     const recipe = eventRecipe();
     sheetSources("pose", sticker, variants, true).forEach((raw, i) => {
       const r = recipe[i];
-      const named = Array.isArray(r) && event.namePoses?.includes(r[1]);
+      const named = Array.isArray(r) && r[0] === "pose" && event.namePoses?.includes(r[1]);
       if (raw && !named) bordered(raw).catch(() => {});
     });
   }, [step, event, sticker, variants]);
@@ -525,6 +543,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
     peopleRef.current = 1;
     setPeople(1);
     setPicked(["pose"]);
+    DECOR_PICKS = null;
     peopleJob.current = ACTIVE_EVENT?.look
       ? fetch("/api/booth/pose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ photo: image, count: true }) })
           .then((r) => (r.ok ? r.json() : { people: 1 }))
@@ -979,7 +998,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
             {step === "done" && event?.look && (
               <EventDone
                 stickers={guestStickers}
-                sheet={{ logo: kit?.find((k) => k.brand && k.n === 1)?.src ?? event.look.logo, pill: kit?.filter((k) => k.brand && k.sheet === 0).at(-1)?.src ?? event.look.pill ?? PILL, frame: event.look.frame }}
+                sheet={{ logo: kit?.find((k) => k.brand && k.n === 1)?.src ?? event.look.logo, pill: kit?.filter((k) => k.brand && k.sheet === 0).at(-1)?.src ?? event.look.pill ?? PILL, frame: event.look.frame, decor: (event.look.decor ?? []).map((_, k) => decorPick(k)).filter((x): x is string => !!x) }}
                 orderId={printOrder?.id ?? null}
                 handset={handset}
                 albumUrl={guest?.token ? `/booth/album/${event.slug}?t=${encodeURIComponent(guest.token)}` : null}

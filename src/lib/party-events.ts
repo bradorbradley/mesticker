@@ -33,6 +33,8 @@ export interface PartyEvent {
     /** welcome video backdrops: the party (home) and the adventure */
     scene?: string;
     scenes?: { street?: string; roof?: string };
+    /** little decorations for the sheet's corner slots: one pool per slot, one picked per guest */
+    decor?: string[][];
     /** welcome video music (loops) */
     music?: string;
     /** the invite, shown on the start screen */
@@ -74,6 +76,13 @@ export const PARTY_EVENTS: Record<string, PartyEvent> = {
       scene: "/events/carol/scene.webp",
       scenes: { street: "/events/carol/scene-street.webp", roof: "/events/carol/scene-roof.webp" },
       music: "/events/carol/music.mp3",
+      decor: [
+        ["/events/carol/decor/tree.webp", "/events/carol/decor/gifts.webp", "/events/carol/decor/ornaments.webp"],
+        ["/events/carol/decor/wreath.webp", "/events/carol/decor/cookie.webp", "/events/carol/decor/ornaments.webp"],
+        ["/events/carol/decor/merry.webp"],
+        ["/events/carol/decor/canes.webp", "/events/carol/decor/holly.webp", "/events/carol/decor/gifts.webp"],
+        ["/events/carol/decor/ornaments.webp", "/events/carol/decor/cookie.webp", "/events/carol/decor/tree.webp", "/events/carol/decor/gifts.webp"],
+      ],
       invite: "/events/carol/invite.jpg",
     },
     // the order matters: the sheet and the story use these by index (0–6 solo, then 7–9 groups)

@@ -89,7 +89,7 @@ export async function buildSheet(sheet, { light = false, needGuide = true, frame
   const pls = [...sheet.placements].sort((a, b) => a.n - b.n);
 
   // booth sheets are 12 stickers + the handle pill; event sheets 11 (logo, hero, 8 poses, pill)
-  if (pls.length < 6 || pls.length > 16) issues.push(`sheet ${sheet.sheet} has ${pls.length} stickers, expected 11–13`);
+  if (pls.length < 6 || pls.length > 20) issues.push(`sheet ${sheet.sheet} has ${pls.length} stickers, expected 6–20`);
   const eps = 0.01;
   for (const pl of pls) {
     if (pl.x == null || pl.y == null || !(pl.w > 0) || !(pl.h > 0)) issues.push(`sticker ${pl.n} has no position/size`);
