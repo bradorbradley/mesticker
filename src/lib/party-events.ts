@@ -58,7 +58,7 @@ export const PARTY_EVENTS: Record<string, PartyEvent> = {
     collectGuest: true,
     when: "December 4",
     theme: "cozy Christmas: festive winter outfit in warm red and cream, a touch of holly",
-    maxOrdersPerGuest: 3,
+    maxOrdersPerGuest: 5,
     look: {
       themeClass: "theme-carol",
       logo: "/events/carol/logo.png",
