@@ -228,3 +228,41 @@
   line-height: 1.15;
   box-shadow: 0 6px 14px rgba(60, 8, 10, 0.3);
 }
+/* welcome video: comic captions (yellow box, Bangers) and speech bubbles with a tail */
+.booth .comic-caption {
+  padding: calc(var(--u) * 0.5) calc(var(--u) * 1.2);
+  background: #ffe36e;
+  border: 3px solid #1a1a1a;
+  box-shadow: 4px 4px 0 #1a1a1a;
+  font-family: var(--font-comic, "Bangers"), "Fredoka", sans-serif;
+  font-size: max(16px, calc(var(--u) * 2.2));
+  letter-spacing: 0.04em;
+  color: #1a1a1a;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.booth .comic-bubble {
+  max-width: 38%;
+  padding: calc(var(--u) * 0.7) calc(var(--u) * 1.2);
+  background: #fff;
+  border: 3px solid #1a1a1a;
+  border-radius: 1.2em;
+  box-shadow: 3px 3px 0 #1a1a1a;
+  font-family: "Fredoka", sans-serif;
+  font-weight: 700;
+  font-size: max(14px, calc(var(--u) * 1.75));
+  line-height: 1.15;
+  color: #1a1a1a;
+}
+.booth .comic-bubble::after {
+  content: "";
+  position: absolute;
+  left: 1.4em;
+  bottom: -14px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-right: 3px solid #1a1a1a;
+  border-bottom: 3px solid #1a1a1a;
+  transform: skewX(-25deg) rotate(45deg);
+}

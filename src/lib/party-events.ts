@@ -28,8 +28,11 @@ export interface PartyEvent {
     hosts: { name: string; img: string }[];
     /** a cameo in the welcome video (e.g. Santa) */
     cameo?: { name: string; img: string };
-    /** welcome video backdrop */
+    /** welcome video backdrops: the party (home) and the adventure */
     scene?: string;
+    scenes?: { street?: string; roof?: string };
+    /** welcome video music (loops) */
+    music?: string;
     /** the invite, shown on the start screen */
     invite?: string;
   };
@@ -40,7 +43,7 @@ export interface PartyEvent {
 export const PARTY_EVENTS: Record<string, PartyEvent> = {
   christmascarol: {
     slug: "christmascarol",
-    name: "Christmas Carol Party",
+    name: "387 Christmas Carols",
     free: true,
     collectGuest: true,
     when: "December 4",
@@ -57,6 +60,8 @@ export const PARTY_EVENTS: Record<string, PartyEvent> = {
       ],
       cameo: { name: "Santa", img: "/events/carol/host-santa.webp" },
       scene: "/events/carol/scene.webp",
+      scenes: { street: "/events/carol/scene-street.webp", roof: "/events/carol/scene-roof.webp" },
+      music: "/events/carol/music.mp3",
       invite: "/events/carol/invite.jpg",
     },
     poses: [
