@@ -344,6 +344,9 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
     ? kit.filter((k) => !k.brand && k.sheet === 0).sort((a, b) => a.n - b.n).map((k) => k.src)
     : [sticker, ...variants.pose].filter((x): x is string => typeof x === "string");
   const genId = useRef(0);
+  // event opener scene (plays while the cartoon is drawn): the reveal waits for it to finish
+  const openerGate = useRef<Promise<void>>(Promise.resolve());
+  const openerDone = useRef<(() => void) | null>(null);
   const setVariant = (kind: VariantKind, i: number, v: string | false, id: number) => {
     if (id !== genId.current) return; // a newer photo/style replaced this one
     const next = { ...variantsRef.current, [kind]: variantsRef.current[kind].map((x, j) => (j === i ? v : x)) };
@@ -527,6 +530,8 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
   const generate = useCallback(async (image: string) => {
     printCopy.current = null;
     resetVariants();
+    const myGen = genId.current;
+    openerGate.current = ACTIVE_EVENT?.look ? new Promise<void>((r) => (openerDone.current = r)) : Promise.resolve();
     setStickerReady(false);
     setStep("generating");
     setError(null);
@@ -570,6 +575,9 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
         localStorage.setItem("mesticker-booth-gen-ms", String(data.ms));
       } catch {}
       setStickerReady(true);
+      // events: let the opener scene finish first (it's timed to end just after the drawing)
+      await Promise.race([openerGate.current, new Promise((r) => setTimeout(r, 45000))]);
+      if (genId.current !== myGen) return;
       setStep("sheets");
       sounds.success();
       uploadDigital(data.generatedImage);
@@ -889,7 +897,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                 mascot={event?.look ? <HostsMascot look={event.look} style={{ height: u(20) }} className="self-start short:hidden portrait:hidden" /> : undefined}
               />
             )}
-            {step === "generating" && (event?.look ? <EventGenerating look={event.look} photo={photo} ready={stickerReady} /> : <Generating photo={photo} ready={stickerReady} />)}
+            {step === "generating" && (event?.look ? <EventGenerating event={event} look={event.look} photo={photo} ready={stickerReady} onDone={() => openerDone.current?.()} /> : <Generating photo={photo} ready={stickerReady} />)}
             {step === "reveal" && (
               <Reveal
                 canRetry={tries < MAX_TRIES}

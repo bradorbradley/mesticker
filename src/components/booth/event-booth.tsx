@@ -226,11 +226,11 @@ export function storyBeats(event: PartyEvent, look: Look, me: string, pose: (k: 
   ];
 }
 
-export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, onEnd, games = false }: { event: PartyEvent; look: Look; sticker: string | null; poses?: (string | null | false)[]; name: string | null; etaSec?: number; onEnd?: () => void; games?: boolean }) {
+export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, onEnd, games = false, script, quiet = false }: { event: PartyEvent; look: Look; sticker: string | null; poses?: (string | null | false)[]; name: string | null; etaSec?: number; onEnd?: () => void; games?: boolean; /** play these beats instead of the story (the opener while the cartoon is drawn) */ script?: Beat[]; /** no music */ quiet?: boolean }) {
   const me = sticker ?? look.hosts[0].img;
   const pose = (k: number) => (typeof poses[k] === "string" ? (poses[k] as string) : me);
   // the games are chapters of the story (left out when watching it again)
-  const beats = storyBeats(event, look, me, pose, name).filter((b) => games || b.game == null);
+  const beats = script ?? storyBeats(event, look, me, pose, name).filter((b) => games || b.game == null);
   const gameStickers = Array.from(new Set([...poses.filter((p): p is string => typeof p === "string"), me]));
   // pace the whole story to the estimated wait (fixed once it starts)
   const pace = useRef<number | null>(null);
@@ -285,7 +285,7 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
   const [muted, setMuted] = useState(false);
   const [blocked, setBlocked] = useState(false);
   useEffect(() => {
-    if (!look.music) return;
+    if (!look.music || quiet) return;
     if (!music || !music.src.endsWith(look.music)) primeMusic(look.music);
     const a = music!;
     a.volume = 0.55;
@@ -296,7 +296,7 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
       a.pause();
       audioRef.current = null;
     };
-  }, [look.music]);
+  }, [look.music, quiet]);
   useEffect(() => {
     if (audioRef.current) audioRef.current.muted = muted;
   }, [muted]);
@@ -437,7 +437,7 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
           />
         </div>
       )}
-      {look.music && beat.game == null && (
+      {look.music && !quiet && beat.game == null && (
         <button
           className="absolute right-3 top-3 z-50 rounded-full bg-black/45 px-3 py-1.5 text-sm font-bold text-white"
           onClick={() => {
@@ -517,56 +517,49 @@ function Snow() {
   );
 }
 
-/** Making the cartoon (~20 s): the hosts dance around the guest's photo, with snow and a countdown. */
-export function EventGenerating({ look, photo, ready }: { look: Look; photo: string | null; ready: boolean }) {
-  const lines = ["Warming up the choir…", "Drawing you in chibi style…", "Hanging the tinsel…", "Adding a sprinkle of snow…", "Tying it with a bow…", "Almost ready to sing…"];
-  const [n, setN] = useState(30);
-  const [k, setK] = useState(0);
-  useEffect(() => {
-    const a = setInterval(() => setN((x) => Math.max(0, x - 1)), 1000);
-    const b = setInterval(() => setK((x) => (x + 1) % lines.length), 3200);
-    return () => {
-      clearInterval(a);
-      clearInterval(b);
-    };
-  }, [lines.length]);
-  const dancers = [...look.hosts, ...(look.cameo ? [look.cameo] : [])];
+/**
+ * While the cartoon is drawn: an opener in the apartment. The hosts get ready for the party (can't
+ * wait, who's coming, look at the presents), timed a little longer than a usual drawing so that when
+ * it ends the cartoon is ready. `onDone` fires when the scene has played through.
+ */
+export function EventGenerating({ event, look, photo, ready, onDone }: { event: PartyEvent; look: Look; photo: string | null; ready: boolean; onDone?: () => void }) {
+  const [ended, setEnded] = useState(false);
+  // a bit longer than the last drawing took (20–40 s), so the scene always finishes after the cartoon
+  const total = useRef(26000);
+  const script = useRef<Beat[] | null>(null);
+  if (!script.current) {
+    try {
+      const last = Number(localStorage.getItem("mesticker-booth-gen-ms"));
+      if (last > 5000) total.current = Math.max(20000, Math.min(40000, last + 5000));
+    } catch {}
+    const h = (i: number) => look.hosts[Math.min(i, look.hosts.length - 1)];
+    const H = (i: number, at: Slot, extra: Partial<Actor> = {}): Actor => ({ key: `h${i}`, src: h(i).cut ?? h(i).img, at, anim: "bob", ...extra });
+    const trio = (extra: Partial<Actor> = {}) => [H(0, "L", extra), H(1, "C", extra), H(2, "R", extra)];
+    const gifts: Actor = { key: "gifts", src: look.decor?.flat().find((d) => d.includes("gifts")) ?? h(0).img, at: "L", anim: "bob" };
+    const parts: [number, Omit<Beat, "ms" | "scene">][] = [
+      [1, { cast: trio({ anim: "jump" }), caption: "GETTING READY…", fx: ["flash"], sfx: "♪♫♪" }],
+      [1.3, { cast: trio(), bubble: { who: "h0", text: "I can't wait for the party tonight!" } }],
+      [1.3, { cast: trio(), bubble: { who: "h1", text: "I wonder who's coming…" } }],
+      [1.4, { cast: [gifts, H(2, "C", { anim: "jump" }), H(0, "R")], bubble: { who: "h2", text: "Hey, look at all these presents under the tree!" }, fx: ["speed"] }],
+      [1.2, { cast: trio(), bubble: { who: "h1", text: "The tree looks amazing. Candles are lit!" } }],
+      [1.2, { cast: trio({ anim: "jump" }), bubble: { who: "h0", text: "Shh… I think someone's coming!" }, sfx: "!" }],
+    ];
+    const sum = parts.reduce((t, [w]) => t + w, 0);
+    script.current = parts.map(([w, b]) => ({ scene: "home" as const, ms: Math.round((total.current * w) / sum), ...b }));
+  }
   return (
-    <div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden" style={{ gap: u(2) }}>
-      <Snow />
-      <div className="relative flex items-center justify-center" style={{ width: "min(78vw, 58vh)", aspectRatio: "1" }}>
-        {/* the hosts circling the photo */}
-        <motion.div className="absolute inset-0" animate={{ rotate: 360 }} transition={{ duration: 14, repeat: Infinity, ease: "linear" }}>
-          {dancers.map((d, i) => {
-            const ang = (i / dancers.length) * Math.PI * 2;
-            return (
-              <motion.img
-                key={d.name}
-                src={d.img}
-                alt={d.name}
-                className="absolute w-[30%] drop-shadow-[0_6px_10px_rgba(80,10,10,0.3)]"
-                style={{ left: `${50 + Math.cos(ang) * 44 - 15}%`, top: `${50 + Math.sin(ang) * 44 - 15}%` }}
-                animate={{ rotate: -360, y: [0, -12, 0] }}
-                transition={{ rotate: { duration: 14, repeat: Infinity, ease: "linear" }, y: { duration: 0.7 + i * 0.1, repeat: Infinity } }}
-              />
-            );
-          })}
-        </motion.div>
-        <motion.div className="absolute rounded-full" style={{ width: "54%", aspectRatio: "1", background: "conic-gradient(#a3161c, #e2b65a, #a3161c, #e2b65a, #a3161c)", padding: 6 }} animate={{ rotate: 360 }} transition={{ duration: 3, repeat: Infinity, ease: "linear" }}>
-          <div className="h-full w-full rounded-full bg-[#fbf2e1]" />
-        </motion.div>
-        {photo && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={photo} alt="Your photo" className="absolute rounded-full object-cover" style={{ width: "50%", aspectRatio: "1" }} />
-        )}
-      </div>
-      <div className="z-10 text-center">
-        <div className="t-hero" style={{ lineHeight: 1 }}>{ready ? "Ta-da!" : n}</div>
-        <AnimatePresence mode="wait">
-          <motion.p key={k} className="t-lead" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
-            {lines[k]}
-          </motion.p>
-        </AnimatePresence>
+    <div className="fixed inset-0 z-[60] overflow-hidden bg-[#2a0d0b]">
+      <WelcomeVideo event={event} look={look} sticker={null} name={null} script={script.current} quiet onEnd={() => { setEnded(true); onDone?.(); }} />
+      {/* the guest's photo, being drawn */}
+      <div className="absolute left-3 top-3 z-[62] flex items-center rounded-full bg-black/55 py-1.5 pl-1.5 pr-4 text-white backdrop-blur" style={{ gap: 10 }}>
+        <div className="relative" style={{ width: 52, height: 52 }}>
+          <motion.div className="absolute inset-0 rounded-full" style={{ background: "conic-gradient(#e2b65a, #a3161c, #e2b65a)" }} animate={{ rotate: 360 }} transition={{ duration: 2.4, repeat: Infinity, ease: "linear" }} />
+          {photo && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photo} alt="Your photo" className="absolute rounded-full object-cover" style={{ inset: 3, width: 46, height: 46 }} />
+          )}
+        </div>
+        <div className="text-sm font-bold leading-tight">{ready ? "Your cartoon is ready! ✨" : ended ? "Adding the last sparkles…" : "Drawing your cartoon…"}</div>
       </div>
     </div>
   );
