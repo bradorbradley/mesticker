@@ -40,6 +40,8 @@ export type CarolGamesProps = {
   durationMs?: number;
   /** all games finished (or skipped / time ran out) */
   onDone: () => void;
+  /** play just this one game (0–3), e.g. as a chapter of the story; durationMs is then its budget */
+  only?: number;
 };
 
 type GameProps = {
@@ -194,13 +196,15 @@ const KEYFRAMES = `
 
 // ---------------------------------------------------------------- shell
 
-export function CarolGames({ stickers, hero, hosts, name, durationMs = 80000, onDone }: CarolGamesProps) {
+export function CarolGames({ stickers, hero, hosts, name, durationMs = 80000, onDone, only }: CarolGamesProps) {
+  const off = only == null ? 0 : Math.max(0, Math.min(GAMES.length - 1, only));
+  const games = only == null ? GAMES : [GAMES[off]];
   const pool = useMemo(() => {
     const s = Array.from(new Set(stickers.filter(Boolean)));
     return s.length ? s : [hero];
   }, [stickers, hero]);
-  const per = Math.max(3000, (durationMs - GAMES.length * UNLOCK_MS) / GAMES.length);
-  const last = GAMES.length - 1;
+  const per = Math.max(3000, (durationMs - games.length * UNLOCK_MS) / games.length);
+  const last = games.length - 1;
 
   const [stage, setStage] = useState<{ idx: number; phase: "play" | "unlock" }>({ idx: 0, phase: "play" });
   const [result, setResult] = useState("");
@@ -263,7 +267,8 @@ export function CarolGames({ stickers, hero, hosts, name, durationMs = 80000, on
     }
   };
 
-  const game = GAMES[stage.idx];
+  const game = games[stage.idx];
+  const at = off + stage.idx; // position among all four games
   const Game = game.Comp;
   const secsLeft = now && stage.phase === "play" ? Math.max(0, Math.ceil((startedAt.current + per - now) / 1000)) : null;
   const hurry = secsLeft !== null && secsLeft <= 3;
@@ -271,8 +276,8 @@ export function CarolGames({ stickers, hero, hosts, name, durationMs = 80000, on
   // 1–3 of the guest's stickers to "unlock" after each game
   const unlocked = useMemo(() => {
     const n = Math.min(3, pool.length);
-    return Array.from({ length: n }, (_, k) => pool[(stage.idx * 3 + k) % pool.length]);
-  }, [pool, stage.idx]);
+    return Array.from({ length: n }, (_, k) => pool[(at * 3 + k) % pool.length]);
+  }, [pool, at]);
 
   return (
     <div className="absolute inset-0 flex flex-col overflow-hidden" style={{ color: INK }}>
@@ -293,7 +298,7 @@ export function CarolGames({ stickers, hero, hosts, name, durationMs = 80000, on
             }}
             data-testid="game-label"
           >
-            Game {stage.idx + 1} of {GAMES.length}
+            Game {at + 1} of {GAMES.length}
           </span>
           <AnimatePresence mode="wait">
             <motion.h2
@@ -359,9 +364,9 @@ export function CarolGames({ stickers, hero, hosts, name, durationMs = 80000, on
               className="relative flex-1 overflow-hidden rounded-full"
               style={{ height: `max(4px, ${u(0.45)})`, background: "rgba(163,22,28,0.14)" }}
             >
-              {i < stage.idx || (i === stage.idx && stage.phase === "unlock") ? (
+              {i < at || (i === at && stage.phase === "unlock") ? (
                 <div className="absolute inset-0" style={{ background: RED }} />
-              ) : i === stage.idx ? (
+              ) : i === at ? (
                 <motion.div
                   key={stage.idx}
                   data-testid="overall-bar"

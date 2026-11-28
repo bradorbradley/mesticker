@@ -183,6 +183,8 @@ type Beat = {
   sfx?: string;
   /** punch in on whoever has this key */
   zoom?: string;
+  /** an interactive chapter: play CarolGames game N (0 snowballs, 1 skate, 2 presents, 3 memory) */
+  game?: number;
 };
 const SLOT_X: Record<Slot, number> = { L: 4, LC: 20, C: 36, RC: 52, R: 68 }; // left edge, % of stage width
 const ACTOR_W = 28; // % of stage width
@@ -213,21 +215,31 @@ export function storyBeats(event: PartyEvent, look: Look, me: string, pose: (k: 
     { scene: "home", ms: 900, cast: [G("L", { anim: "jump" }), S("R")], bubble: { who: "guest", text: "On it! 💪" }, zoom: "guest", fx: ["speed"] },
     { scene: "street", ms: 1200, cast: [P(3, "L", { anim: "zoom" })], caption: "MEANWHILE, OUTSIDE…", fx: ["speed"], sfx: "WHOOSH!" },
     { scene: "street", ms: 1050, cast: [P(4, "L", { anim: "jump" }), H(1, "R", { anim: "jump" })], bubble: { who: "h1", text: "Hey! 😂" }, fx: ["impact", "shake"], sfx: "SPLAT!" },
+    { scene: "street", ms: 1000, cast: [G("L", { anim: "jump" }), H(1, "R", { anim: "jump" })], caption: "SNOWBALL FIGHT!", fx: ["speed", "flash"], sfx: "GAME ON!", zoom: "guest" },
+    { scene: "street", ms: 19000, cast: [], game: 0 },
     { scene: "street", ms: 1050, cast: [P(6, "C", { anim: "zoom" })], caption: `SMOOTH MOVES, ${WHO}!`, fx: ["speed"] },
+    { scene: "street", ms: 1000, cast: [P(6, "C", { anim: "jump" })], caption: "TRACE THE FIGURE 8!", fx: ["flash"], sfx: "SWOOSH!" },
+    { scene: "street", ms: 19000, cast: [], game: 1 },
     { scene: "street", ms: 1100, cast: [P(0, "LC", { anim: "fly", lift: 18 })], caption: "FOUND HIM!", fx: ["speed", "flash"], sfx: "GIDDY UP!" },
     { scene: "roof", ms: 1100, cast: [P(0, "L", { anim: "fly", lift: 30 })], caption: "OVER THE ROOFTOPS…", fx: ["speed"] },
-    { scene: "roof", ms: 1050, cast: [P(10, "L", { anim: "jump" }), S("RC", { anim: "jump" })], bubble: { who: "santa", text: "Presents saved!" }, sfx: "HO HO HO!", fx: ["impact"] },
+    { scene: "roof", ms: 1050, cast: [P(10, "L", { anim: "jump" }), S("RC", { anim: "jump" })], bubble: { who: "santa", text: `Oh no, I mixed up the presents! Find ${who}!` }, sfx: "HO HO HO!", fx: ["impact"] },
+    { scene: "roof", ms: 19000, cast: [], game: 2 },
+    { scene: "roof", ms: 1000, cast: [P(10, "L", { anim: "jump" }), S("RC", { anim: "jump" })], bubble: { who: "santa", text: "Presents saved! 🎁" }, fx: ["flash"] },
     { scene: "home", ms: 1000, cast: [P(5, "C")], caption: "BACK AT 387…", bubble: { who: "p5", text: "Last star! ⭐" }, fx: ["flash"] },
     { scene: "home", ms: 900, cast: [P(8, "L", { anim: "jump" }), H(1, "R")], bubble: { who: "h1", text: "Is that… a gingerbread you?!" }, sfx: "CRUNCH!", fx: ["shake"] },
     { scene: "home", ms: 900, cast: [P(9, "C")], bubble: { who: "p9", text: "Cocoa break ☕" }, zoom: "p9" },
-    { scene: "home", ms: 2000, cast: [P(11, "C", { anim: "jump", big: true })], caption: "AND EVERYONE SANG!", notes: true, fx: ["flash", "speed"], ribbon: "Next: Christmas games! 🎮" },
+    { scene: "home", ms: 1000, cast: trio({ anim: "jump" }), caption: "MATCH THE MEMORIES!", fx: ["speed"], sfx: "FLIP!" },
+    { scene: "home", ms: 19000, cast: [], game: 3 },
+    { scene: "home", ms: 2000, cast: [P(11, "C", { anim: "jump", big: true })], caption: "AND EVERYONE SANG!", notes: true, fx: ["flash", "speed"], ribbon: "Merry Christmas! 🎄" },
   ];
 }
 
-export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, onEnd }: { event: PartyEvent; look: Look; sticker: string | null; poses?: (string | null | false)[]; name: string | null; etaSec?: number; onEnd?: () => void }) {
+export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, onEnd, games = false }: { event: PartyEvent; look: Look; sticker: string | null; poses?: (string | null | false)[]; name: string | null; etaSec?: number; onEnd?: () => void; games?: boolean }) {
   const me = sticker ?? look.hosts[0].img;
   const pose = (k: number) => (typeof poses[k] === "string" ? (poses[k] as string) : me);
-  const beats = storyBeats(event, look, me, pose, name);
+  // the games are chapters of the story (left out when watching it again)
+  const beats = storyBeats(event, look, me, pose, name).filter((b) => games || b.game == null);
+  const gameStickers = Array.from(new Set([...poses.filter((p): p is string => typeof p === "string"), me]));
   // pace the whole story to the estimated wait (fixed once it starts)
   const pace = useRef<number | null>(null);
   if (pace.current === null) {
@@ -239,8 +251,10 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
     } catch {}
   }
   const [i, setI] = useState(0);
+  const next = () => (i + 1 < beats.length ? setI(i + 1) : onEnd?.());
   useEffect(() => {
-    const t = setTimeout(() => (i + 1 < beats.length ? setI(i + 1) : onEnd?.()), beats[i].ms * pace.current!);
+    if (beats[i].game != null) return; // a game chapter moves on when it's played
+    const t = setTimeout(next, beats[i].ms * pace.current!);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [i]);
@@ -401,7 +415,12 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
           </AnimatePresence>
         </div>
       )}
-      {look.music && (
+      {beat.game != null && (
+        <div className="absolute inset-0 z-[52] bg-[#2a0d0b]">
+          <CarolGames key={i} only={beat.game} durationMs={beat.ms} stickers={gameStickers} hero={me} hosts={look.hosts.map((h) => ({ name: h.name, img: h.img }))} name={name} onDone={next} />
+        </div>
+      )}
+      {look.music && beat.game == null && (
         <button
           className="absolute right-3 top-3 z-50 rounded-full bg-black/45 px-3 py-1.5 text-sm font-bold text-white"
           onClick={() => {
@@ -619,7 +638,7 @@ export function EventWait({
   stickers: string[];
   onDone: () => void;
 }) {
-  const [phase, setPhase] = useState<"video" | "games" | "save">("video");
+  const [phase, setPhase] = useState<"video" | "save">("video");
   const [run, setRun] = useState(0);
   const [qr, setQr] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -630,7 +649,6 @@ export function EventWait({
   }, [handset, orderId]);
 
   const unique = Array.from(new Set(stickers));
-  const gameStickers = Array.from(new Set([...poses.filter((p): p is string => typeof p === "string"), ...(sticker ? [sticker] : [])]));
 
   const save = async () => {
     setSaved("Getting them ready…");
@@ -641,16 +659,7 @@ export function EventWait({
   return (
     <div className="fixed inset-0 z-[60] overflow-hidden bg-[#2a0d0b]">
       {phase === "video" ? (
-        <WelcomeVideo key={run} event={event} look={look} sticker={sticker} poses={poses} name={name} etaSec={run ? undefined : firstEta.current} onEnd={() => setPhase(run ? "save" : "games")} />
-      ) : phase === "games" ? (
-        <CarolGames
-          stickers={gameStickers}
-          hero={sticker ?? look.hosts[0].img}
-          hosts={look.hosts.map((h) => ({ name: h.name, img: h.img }))}
-          name={name}
-          durationMs={80000}
-          onDone={() => setPhase("save")}
-        />
+        <WelcomeVideo key={run} event={event} look={look} sticker={sticker} poses={poses} name={name} etaSec={run ? undefined : firstEta.current} games={!run} onEnd={() => setPhase("save")} />
       ) : (
         <div className="relative flex h-full w-full items-center justify-center overflow-y-auto text-center landscape:flex-row portrait:flex-col" style={{ gap: u(2.4), padding: "16px 16px 84px" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -704,7 +713,7 @@ export function EventWait({
 
       {/* QR in the corner during the story too (booth screens) */}
       {phase === "video" && qr && (
-        <div className="absolute bottom-20 left-3 z-[55] flex items-center rounded-2xl bg-white/90 p-2 shadow-lg" style={{ gap: 8 }}>
+        <div className="absolute bottom-20 left-3 z-[51] flex items-center rounded-2xl bg-white/90 p-2 shadow-lg" style={{ gap: 8 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={qr} alt="Scan to get your stickers" style={{ width: `max(72px, ${u(8)})` }} />
           <div className="text-left text-xs font-bold text-[#3b1210]" style={{ maxWidth: "7em" }}>
@@ -714,7 +723,7 @@ export function EventWait({
       )}
 
       {/* status + done, floating (the games have their own bars) */}
-      <div className={cn("inset-x-0 bottom-0 z-50 flex justify-center p-3", phase === "games" ? "hidden" : "absolute")} style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+      <div className={"absolute inset-x-0 bottom-0 z-50 flex justify-center p-3"} style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
         <div className="flex w-full max-w-xl items-center rounded-full bg-black/55 py-2 pl-5 pr-2 text-white backdrop-blur" style={{ gap: 12 }}>
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-bold">{info.label}</div>
