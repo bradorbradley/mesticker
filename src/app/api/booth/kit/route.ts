@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { getPartyEvent } from "@/lib/party-events";
-import { claimCreation, countOrders, fillCreation, getCreation, guestByIdToken, markEmailed } from "@/lib/guests";
-import { guestEmailReady, sendGuestEmail } from "@/lib/guest-email";
+import { claimCreation, countOrders, fillCreation, getCreation, guestByIdToken } from "@/lib/guests";
+import { deliverCreation } from "@/lib/guest-email";
 import { isFreeEvent } from "@/lib/booth-event";
 import { uploadJson } from "@/lib/storage";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
@@ -51,34 +51,33 @@ type OrderIn = {
   sheetUrls?: unknown;
 };
 
-/** A booked event's order: free if the event is, saved to the guest's record, emailed once. */
+/**
+ * A booked event's order: free if the event is, and saved (photo, stickers, sheets) so the guest
+ * can claim it by scanning the booth's QR (/booth/get, /booth/snap → /api/events/claim). An order
+ * sent with a signed-up guest belongs to them at once (limited per guest).
+ */
 async function eventOrder(order: OrderIn, id: string, items: QueueItem[]): Promise<boolean> {
   const event = getPartyEvent(order.event);
   if (!event) return false;
-  const guest = await guestByIdToken(order.guest?.id, order.guest?.token);
-  if (!guest) return false;
-  // the limit counts orders already held; a resend of the same order is always fine
+  const guest = order.guest ? await guestByIdToken(order.guest.id, order.guest.token) : null;
+  if (order.guest && !guest) return false;
   const known = await getCreation(id);
-  if (known && known.guestId !== guest.id) return false;
+  if (known && guest && known.guestId && known.guestId !== guest.id) return false;
   if (!known) {
-    if ((await countOrders(guest.id, event.slug)) >= event.maxOrdersPerGuest) return false;
-    if (!(await claimCreation(id, guest.id, event.slug))) return event.free; // a resend raced us
+    if (guest && (await countOrders(guest.id, event.slug)) >= event.maxOrdersPerGuest) return false;
+    if (!(await claimCreation(id, guest?.id ?? null, event.slug))) return event.free; // a resend raced us
     const url = (v: unknown) => (okUrl(v) ? v : null);
     after(async () => {
       try {
-        const creation = await fillCreation(id, {
+        await fillCreation(id, {
           photoUrl: url(order.photoUrl),
           stickerUrl: url(order.stickerUrl),
           stickers: items.map((it) => it.url),
           sheets: Array.isArray(order.sheetUrls) ? order.sheetUrls.filter(okUrl) : [],
         });
-        if (guestEmailReady()) {
-          const r = await sendGuestEmail(guest, creation);
-          if (r.sent) await markEmailed(id);
-          else console.error("[booth/kit] guest email failed:", r.error);
-        }
+        await deliverCreation(id);
       } catch (e) {
-        console.error("[booth/kit] saving the guest's creation failed:", e);
+        console.error("[booth/kit] saving the creation failed:", e);
       }
     });
   }

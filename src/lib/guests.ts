@@ -31,7 +31,8 @@ export interface Guest {
 
 export interface Creation {
   orderId: string;
-  guestId: string;
+  /** null until a guest claims it (made on the booth screen, claimed by scanning its QR) */
+  guestId: string | null;
   event: string;
   photoUrl: string | null;
   stickerUrl: string | null;
@@ -70,6 +71,7 @@ function ensureTables() {
         order_id TEXT PRIMARY KEY, guest_id TEXT NOT NULL, event TEXT NOT NULL, photo_url TEXT, sticker_url TEXT,
         stickers JSONB NOT NULL DEFAULT '[]', sheets JSONB NOT NULL DEFAULT '[]', emailed_at TIMESTAMPTZ,
         ready BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`)
+      .then(() => sql`ALTER TABLE guest_creations ALTER COLUMN guest_id DROP NOT NULL`)
       .then(() => sql`CREATE INDEX IF NOT EXISTS idx_guest_creations_guest ON guest_creations(guest_id)`)
       .catch((e) => {
         ready = null;
@@ -95,7 +97,7 @@ const guestFrom = (r: Row): Guest => ({
 });
 const creationFrom = (r: Row): Creation => ({
   orderId: String(r.order_id),
-  guestId: String(r.guest_id),
+  guestId: (r.guest_id as string) ?? null,
   event: String(r.event),
   photoUrl: (r.photo_url as string) ?? null,
   stickerUrl: (r.sticker_url as string) ?? null,
@@ -200,7 +202,7 @@ async function keepCopy(url: string): Promise<string> {
  * Hold a spot for this order right away (so the per-guest limit counts it even while its images
  * are still being copied). Returns false if it was already there (the booth can resend a kit).
  */
-export async function claimCreation(orderId: string, guestId: string, event: string): Promise<boolean> {
+export async function claimCreation(orderId: string, guestId: string | null, event: string): Promise<boolean> {
   if (inMemory()) {
     const m = mem();
     if (m.creations.has(orderId)) return false;
@@ -233,6 +235,29 @@ export async function fillCreation(orderId: string, input: { photoUrl: string | 
   return creationFrom(rows[0] as Row);
 }
 
+/**
+ * A guest claims a creation (they scanned the booth's QR for this order). Only an unclaimed one,
+ * or their own. Returns it, or null.
+ */
+export async function attachGuest(orderId: string, guestId: string): Promise<Creation | null> {
+  if (inMemory()) {
+    const c = mem().creations.get(orderId);
+    if (!c || (c.guestId && c.guestId !== guestId)) return null;
+    c.guestId = guestId;
+    return c;
+  }
+  await ensureTables();
+  const rows = await getDb()`UPDATE guest_creations SET guest_id = ${guestId} WHERE order_id = ${orderId} AND (guest_id IS NULL OR guest_id = ${guestId}) RETURNING *`;
+  return rows.length ? creationFrom(rows[0] as Row) : null;
+}
+
+export async function getGuest(id: string): Promise<Guest | null> {
+  if (inMemory()) return mem().guests.get(id) ?? null;
+  await ensureTables();
+  const rows = await getDb()`SELECT * FROM event_guests WHERE id = ${id}`;
+  return rows.length ? guestFrom(rows[0] as Row) : null;
+}
+
 export async function markEmailed(orderId: string) {
   if (inMemory()) {
     const c = mem().creations.get(orderId);
@@ -245,7 +270,7 @@ export async function markEmailed(orderId: string) {
 export async function pendingEmails(limit = 50): Promise<{ guest: Guest; creation: Creation }[]> {
   if (inMemory()) {
     const m = mem();
-    return [...m.creations.values()].filter((c) => !c.emailedAt && c.ready).slice(0, limit).map((c) => ({ creation: c, guest: m.guests.get(c.guestId)! })).filter((x) => x.guest);
+    return [...m.creations.values()].filter((c) => !c.emailedAt && c.ready && c.guestId).slice(0, limit).map((c) => ({ creation: c, guest: m.guests.get(c.guestId!)! })).filter((x) => x.guest);
   }
   await ensureTables();
   const rows = await getDb()`

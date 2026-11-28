@@ -22,7 +22,7 @@ import BoothReveal from "./booth-reveal";
 import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import type { PartyEvent } from "@/lib/party-events";
-import GuestSignup from "@/components/booth/guest-signup";
+import GuestSignup, { loadSavedGuest, saveGuest } from "@/components/booth/guest-signup";
 import Mascot from "./mascot";
 import BoothCamera from "./booth-camera";
 import OperatorPanel, { IMAGE_MODELS, providersFor, type BoothSettings, type GenStats } from "./operator-panel";
@@ -177,11 +177,17 @@ async function uploadUrl(image: string): Promise<string> {
   return d.url as string;
 }
 
-type Guest = { id: string; token: string; email: string };
-
 export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
-  // event links (/booth/<slug>): sign-up before the camera, free, event theme
-  const [guest, setGuest] = useState<Guest | null>(null);
+  // event links (/booth/<slug>): same booth, free, event theme. Guests sign up when they scan a QR on their
+  // phone: here when the booth's "use your phone" QR opened this page (?qr=1), or via /booth/snap and /booth/get.
+  const eventSlug = useRef(event?.slug ?? null);
+  const [fromQr, setFromQr] = useState(false);
+  useEffect(() => {
+    const qr = new URLSearchParams(location.search).get("qr") === "1";
+    setFromQr(qr);
+    if (qr && eventSlug.current) setGuest(loadSavedGuest(eventSlug.current));
+  }, []);
+  const [guest, setGuest] = useState<{ id: string; token: string; email: string } | null>(null);
   const [signupOpen, setSignupOpen] = useState(false);
   const photoUrl = useRef<Promise<string | null> | null>(null);
   const collectGuest = useRef(!!event?.collectGuest);
@@ -276,9 +282,8 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
     setStickerReady(false);
     setPicked(["pose"]);
     setAutoEmailedTo(null);
-    setGuest(null);
-    setSignupOpen(false);
     photoUrl.current = null;
+    setSignupOpen(false);
     resetVariants();
     setOperatorOpen(false);
     printCopy.current = null;
@@ -476,17 +481,28 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
       setStep("printing");
       try {
         const { main, guides: sheetGuides, kit: sheetKit } = await buildPrintFiles(sheets);
-        if (event && guest) {
-          // the guest's record: original photo, main sticker, clean sheet images (no numbers)
+        if (event?.collectGuest) {
+          // saved for the guest to claim from their phone: original photo, main sticker, clean sheets (no numbers)
           const v = variantsRef.current;
           const [photo, stickerUrl, sheetUrls] = await Promise.all([
             photoUrl.current ?? Promise.resolve(null),
             uploadUrl(await addStickerBorder(main)).catch(() => null),
             Promise.all(sheets.map(async (k) => uploadUrl(await buildSheet(k, main, v, false, false)).catch(() => null))),
           ]);
-          setPrintOrder({ id: orderId, sheets, checkoutId: checkoutId ?? null, event: event.slug, guest: { id: guest.id, token: guest.token }, photoUrl: photo, stickerUrl, sheetUrls: sheetUrls.filter((u): u is string => !!u) });
-          const [user, domain] = guest.email.split("@");
-          setAutoEmailedTo(`${user.slice(0, 2)}•••@${domain}`);
+          setPrintOrder({
+            id: orderId,
+            sheets,
+            checkoutId: checkoutId ?? null,
+            event: event.slug,
+            ...(guest ? { guest: { id: guest.id, token: guest.token } } : {}),
+            photoUrl: photo,
+            stickerUrl,
+            sheetUrls: sheetUrls.filter((u): u is string => !!u),
+          });
+          if (guest) {
+            const [user, domain] = guest.email.split("@");
+            setAutoEmailedTo(`${user.slice(0, 2)}•••@${domain}`);
+          }
         }
         setGuides(sheetGuides);
         setKit(sheetKit);
@@ -563,7 +579,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
     setPayShare(null);
     setPairQr(null);
     setPairOpen(true);
-    QRCode.toDataURL(`${location.origin}/booth/snap?p=${code}`, { width: 520, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } })
+    QRCode.toDataURL(`${location.origin}/booth/snap?p=${code}${eventSlug.current ? `&e=${eventSlug.current}` : ""}`, { width: 520, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } })
       .then(setPairQr)
       .catch(() => {});
   }, []);
@@ -621,12 +637,12 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
   const pairPayUrl = payShare && payShare.payFor === picked.join("+") ? payShare.url : null;
   useEffect(() => {
     if (!pairCode) return;
-    const state = { step, picked, sticker: digitalUrl, payUrl: pairPayUrl, payFor: pairPayUrl ? picked.join("+") : null, freeMode, paid };
+    const state = { step, picked, sticker: digitalUrl, payUrl: pairPayUrl, payFor: pairPayUrl ? picked.join("+") : null, freeMode, paid, event: event?.slug ?? null, orderId: printOrder?.id ?? null };
     const t = setTimeout(() => {
       fetch("/api/booth/pair", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ p: pairCode, role: "laptop", state }) }).catch(() => {});
     }, 150);
     return () => clearTimeout(t);
-  }, [pairCode, step, picked, digitalUrl, pairPayUrl, freeMode, paid]);
+  }, [pairCode, step, picked, digitalUrl, pairPayUrl, freeMode, paid, event?.slug, printOrder?.id]);
 
   // a new guest (reset / idle): end the pairing and tell the old phone
   const pairCodeRef = useRef(pairCode);
@@ -676,11 +692,12 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
               <Attract
                 outOfPaper={outOfPaper}
                 freeMode={freeMode}
+                qrPath={event ? `/booth/${event.slug}?qr=1` : undefined}
                 onStart={() => {
                   sounds.unlock();
                   sounds.tap();
                   document.documentElement.requestFullscreen?.().catch(() => {});
-                  if (event?.collectGuest && !guest) setSignupOpen(true);
+                  if (event?.collectGuest && fromQr && !guest) setSignupOpen(true);
                   else setStep("camera");
                 }}
               />
@@ -731,7 +748,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
               />
             )}
             {step === "printing" && <PrintKit guides={guides} kit={kit} order={printOrder} onDone={() => setStep("done")} />}
-            {step === "done" && <Done sticker={sticker} digitalUrl={digitalUrl} emailOn={emailOn} autoEmailedTo={autoEmailedTo} onFinish={reset} />}
+            {step === "done" && <Done sticker={sticker} digitalUrl={digitalUrl} emailOn={emailOn} autoEmailedTo={autoEmailedTo} onFinish={reset} claim={event?.collectGuest && printOrder ? { event: event.slug, orderId: printOrder.id } : null} />}
           </motion.div>
         </AnimatePresence>
         {signupOpen && event && (
@@ -740,6 +757,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
             onCancel={() => setSignupOpen(false)}
             onDone={(g) => {
               setGuest(g);
+              saveGuest(event.slug, g);
               setSignupOpen(false);
               setStep("camera");
             }}
@@ -917,16 +935,16 @@ const FLOATER_SPOTS: React.CSSProperties[] = [
   { right: "1%", bottom: "1%" },
 ];
 
-function Attract({ onStart, outOfPaper, freeMode }: { onStart: () => void; outOfPaper: boolean; freeMode: boolean }) {
+function Attract({ onStart, outOfPaper, freeMode, qrPath = "/booth" }: { onStart: () => void; outOfPaper: boolean; freeMode: boolean; qrPath?: string }) {
   // on the booth laptop: a QR so guests can do the whole thing on their own phone (orders still print here)
   const phone = useIsPhone();
   const [phoneQr, setPhoneQr] = useState<string | null>(null);
   useEffect(() => {
     if (phone) return;
-    QRCode.toDataURL(`${location.origin}/booth`, { width: 360, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } })
+    QRCode.toDataURL(`${location.origin}${qrPath}`, { width: 360, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } })
       .then(setPhoneQr)
       .catch(() => {});
-  }, [phone]);
+  }, [phone, qrPath]);
   // the bottom-right example makes room for the phone QR
   const examples = BOOTH_STYLES.filter((s) => s.id !== "random").slice(0, phone ? 4 : 3);
   const spots = [
@@ -1713,12 +1731,15 @@ function Done({
   emailOn,
   autoEmailedTo,
   onFinish,
+  claim,
 }: {
   sticker: string | null;
   digitalUrl: string | null;
   emailOn: boolean;
   autoEmailedTo: string | null;
   onFinish: () => void;
+  /** event links: the QR also signs the guest up and claims this order */
+  claim?: { event: string; orderId: string } | null;
 }) {
   const [qr, setQr] = useState<string | null>(null);
   const [email, setEmail] = useState("");
@@ -1727,9 +1748,9 @@ function Done({
 
   useEffect(() => {
     if (!digitalUrl) return;
-    const page = `${location.origin}/booth/get?u=${encodeURIComponent(digitalUrl)}`;
+    const page = `${location.origin}/booth/get?u=${encodeURIComponent(digitalUrl)}${claim ? `&e=${claim.event}&o=${claim.orderId}` : ""}`;
     QRCode.toDataURL(page, { width: 420, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" } }).then(setQr).catch(() => {});
-  }, [digitalUrl]);
+  }, [digitalUrl, claim]);
 
   const send = async () => {
     if (!digitalUrl || !email) return;
@@ -1786,8 +1807,8 @@ function Done({
                 )}
               </div>
               <div style={{ maxWidth: "15em" }}>
-                <div className="t-h3">📲 Save to your phone</div>
-                <div className="t-body">Scan with your camera, then tap Save or text it to friends.</div>
+                <div className="t-h3">{claim && !autoEmailedTo ? "📲 Get all your stickers" : "📲 Save to your phone"}</div>
+                <div className="t-body">{claim && !autoEmailedTo ? "Scan, add your email, and we'll send you every sticker." : "Scan with your camera, then tap Save or text it to friends."}</div>
               </div>
             </div>
 

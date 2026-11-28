@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getPartyEvent } from "@/lib/party-events";
+import GuestSignup, { claimOrder, loadSavedGuest, saveGuest, type SavedGuest } from "./guest-signup";
 import { motion } from "framer-motion";
 
 /** Only show images we host, so this page can't be used to frame anything else. */
@@ -17,7 +19,22 @@ function safe(url: string) {
  * The guest's phone: their sticker, one tap to save it to Photos or send it
  * to a friend (iOS/Android share sheet → Messages, AirDrop, Instagram…).
  */
-export default function GetSticker({ url }: { url: string }) {
+export default function GetSticker({ url, eventSlug, orderId }: { url: string; eventSlug?: string; orderId?: string }) {
+  // event booths: sign up (email, name, consents) to get every sticker by email; this order becomes theirs
+  const event = getPartyEvent(eventSlug);
+  const wantsGuest = !!event?.collectGuest && !!orderId && /^[a-zA-Z0-9-]{8,64}$/.test(orderId);
+  const [guest, setGuest] = useState<SavedGuest | null>(null);
+  const [checked, setChecked] = useState(false);
+  const [claim, setClaim] = useState<"idle" | "claiming" | "done" | "error">("idle");
+  useEffect(() => {
+    if (event) setGuest(loadSavedGuest(event.slug));
+    setChecked(true);
+  }, [event]);
+  useEffect(() => {
+    if (!wantsGuest || !guest || claim !== "idle") return;
+    setClaim("claiming");
+    claimOrder(orderId!, guest).then((ok) => setClaim(ok ? "done" : "error"));
+  }, [wantsGuest, guest, claim, orderId]);
   const [status, setStatus] = useState<string | null>(null);
   const ok = safe(url);
 
@@ -60,8 +77,20 @@ export default function GetSticker({ url }: { url: string }) {
       <div className="font-fun text-2xl font-bold">
         Me<span className="pop">Sticker</span>
       </div>
+      {wantsGuest && event && checked && !guest && (
+        <GuestSignup
+          event={event}
+          onCancel={() => setChecked(false)}
+          onDone={(g) => {
+            saveGuest(event.slug, g);
+            setGuest(g);
+          }}
+        />
+      )}
       {ok ? (
         <>
+          {guest && claim === "done" && <p className="t-body">✓ We&apos;ll email all your stickers and sheets to {guest.email}.</p>}
+          {guest && claim === "error" && <p className="t-body">Couldn&apos;t link these stickers to your email. Ask the host.</p>}
           <h1 className="t-h2 !text-[34px]">
             Here&apos;s your <span className="pop">sticker!</span>
           </h1>

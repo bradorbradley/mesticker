@@ -22,6 +22,9 @@ export type LaptopState = {
   payFor: string | null;
   freeMode: boolean;
   paid: boolean;
+  /** event link slug (the phone shows that event's sign-up) and the order once it's sent */
+  event?: string | null;
+  orderId?: string | null;
 };
 
 export type PhoneState = {

@@ -119,3 +119,32 @@ export default function GuestSignup({
     </div>
   );
 }
+
+export type SavedGuest = { id: string; token: string; email: string };
+
+/** The guest signed up on this phone before (their own phone, after a QR scan). */
+export function loadSavedGuest(slug: string): SavedGuest | null {
+  try {
+    const g = JSON.parse(localStorage.getItem(`mesticker-guest-${slug}`) || "null");
+    return g?.id && g?.token ? g : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveGuest(slug: string, g: SavedGuest) {
+  try {
+    localStorage.setItem(`mesticker-guest-${slug}`, JSON.stringify(g));
+  } catch {}
+}
+
+/** Claim an order for a signed-up guest (retries while the booth is still saving it). */
+export async function claimOrder(orderId: string, g: SavedGuest): Promise<boolean> {
+  for (let i = 0; i < 20; i++) {
+    const r = await fetch("/api/events/claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, guestId: g.id, token: g.token }) }).catch(() => null);
+    if (r?.ok) return true;
+    if (r && r.status !== 404) return false;
+    await new Promise((res) => setTimeout(res, 3000));
+  }
+  return false;
+}

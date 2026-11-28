@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { SHEET_DESIGNS, STICKERS_PER_SHEET, bundlePrice, priceLabel, type SheetKind } from "@/lib/booth-config";
 import type { LaptopState, Pair } from "@/lib/booth-pair";
+import { getPartyEvent } from "@/lib/party-events";
+import GuestSignup, { claimOrder, loadSavedGuest, saveGuest, type SavedGuest } from "./guest-signup";
 
 /**
  * The guest's phone, paired with the booth laptop through the QR on its camera
@@ -11,7 +13,16 @@ import type { LaptopState, Pair } from "@/lib/booth-pair";
  * the stickers. 2) the phone follows along: pick sheets here or on the laptop
  * (both stay in step) and pay here. Printing happens at the booth.
  */
-export default function PhoneSnap({ code }: { code: string }) {
+export default function PhoneSnap({ code, eventSlug }: { code: string; eventSlug?: string }) {
+  // event booths: the guest signs up here first (email, name, consents), and the order they make is theirs
+  const event = getPartyEvent(eventSlug);
+  const needsGuest = !!event?.collectGuest;
+  const [guest, setGuest] = useState<SavedGuest | null>(null);
+  const [guestChecked, setGuestChecked] = useState(false);
+  useEffect(() => {
+    if (event) setGuest(loadSavedGuest(event.slug));
+    setGuestChecked(true);
+  }, [event]);
   const valid = /^[a-z0-9]{8,24}$/.test(code);
   const [shot, setShot] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -54,6 +65,14 @@ export default function PhoneSnap({ code }: { code: string }) {
       clearInterval(id);
     };
   }, [valid, sent, code]);
+
+  const claimed = useRef<string | null>(null);
+  useEffect(() => {
+    const id = laptop?.orderId;
+    if (!guest || !id || claimed.current === id) return;
+    claimed.current = id;
+    claimOrder(id, guest).catch(() => {});
+  }, [guest, laptop?.orderId]);
 
   /** Square-crop to 1024² JPEG, like the booth camera. */
   const load = (file: File) => {
@@ -120,6 +139,16 @@ export default function PhoneSnap({ code }: { code: string }) {
         Me<span className="pop">Sticker</span>
       </div>
 
+      {needsGuest && event && guestChecked && !guest && (
+        <GuestSignup
+          event={event}
+          onCancel={() => history.back()}
+          onDone={(g) => {
+            saveGuest(event.slug, g);
+            setGuest(g);
+          }}
+        />
+      )}
       {!valid ? (
         <p className="t-lead">This link has expired. Scan the QR code on the booth screen again.</p>
       ) : !sent ? (
@@ -178,6 +207,7 @@ export default function PhoneSnap({ code }: { code: string }) {
             {laptop?.freeMode ? "Printing" : "Paid!"} <span className="pop">Printing now</span>
           </h1>
           <p className="t-lead max-w-sm">Your sheets are printing at the booth. It takes about 2 minutes a sheet: head over to collect them.</p>
+          {guest && <p className="t-body max-w-sm">We&apos;ll also email all your stickers to {guest.email}.</p>}
           {laptop?.sticker && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={laptop.sticker} alt="Your sticker" className="die-cut w-[min(60vw,280px)]" />
