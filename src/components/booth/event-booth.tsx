@@ -42,14 +42,14 @@ export function primeMusic(url?: string) {
 /** The hosts side by side, gently bobbing: the event's mascots. */
 export function HostsMascot({ look, className, style }: { look: Look; className?: string; style?: React.CSSProperties }) {
   return (
-    <div className={`flex items-end justify-center ${className ?? ""}`} style={style}>
+    <div className={`flex items-end justify-center overflow-visible ${className ?? ""}`} style={style}>
       {look.hosts.map((h, i) => (
         <motion.img
           key={h.name}
           src={h.img}
           alt={h.name}
-          className="h-full w-auto object-contain drop-shadow-[0_8px_14px_rgba(80,10,10,0.25)]"
-          style={{ marginLeft: i ? "-6%" : 0, zIndex: i === 1 ? 2 : 1 }}
+          className="h-full min-w-0 object-contain drop-shadow-[0_8px_14px_rgba(80,10,10,0.25)]"
+          style={{ width: `${100 / look.hosts.length + 4}%`, marginLeft: i ? "-4%" : 0, zIndex: i === 1 ? 2 : 1 }}
           animate={{ y: [0, i === 1 ? -10 : -6, 0], rotate: [0, i % 2 ? 2 : -2, 0] }}
           transition={{ duration: 1.6 + i * 0.25, repeat: Infinity, ease: "easeInOut" }}
         />
@@ -71,11 +71,11 @@ export function EventAttract({ event, look, onStart, outOfPaper, qrPath, phone }
   return (
     <button className="relative flex h-full w-full items-center justify-center text-left" onClick={onStart} disabled={outOfPaper}>
       <div className="flex h-full w-full items-center justify-center landscape:flex-row portrait:flex-col" style={{ gap: u(3), padding: `${u(1)} ${u(4)} ${u(2.5)}` }}>
-        <div className="flex flex-col items-center text-center landscape:w-[50%]" style={{ gap: u(1.6) }}>
+        <div className="flex flex-col items-center text-center landscape:w-[50%] short:gap-2" style={{ gap: u(1.6) }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={look.logo} alt={event.name} className="w-[min(92%,640px)] drop-shadow-[0_10px_20px_rgba(80,10,10,0.25)]" />
-          {event.when && <div className="carol-ribbon">{event.when}</div>}
-          <p className="t-lead max-w-[28ch]">Become a cartoon and peel off your own sticker sheet, printed right here. Free tonight!</p>
+          <img src={look.logo} alt={event.name} className="w-[min(92%,640px)] drop-shadow-[0_10px_20px_rgba(80,10,10,0.25)] short:max-h-[36vh] short:w-auto" />
+          {event.when && <div className="carol-ribbon short:!text-[18px]">{event.when}</div>}
+          <p className="t-lead max-w-[28ch] short:hidden">Become a cartoon and peel off your own sticker sheet, printed right here. Free tonight!</p>
           {outOfPaper ? (
             <div className="t-h3 card w-fit" style={{ padding: `${u(1.2)} ${u(2.4)}` }}>
               Out of stickers. Back in a minute!
@@ -95,7 +95,7 @@ export function EventAttract({ event, look, onStart, outOfPaper, qrPath, phone }
           </ol>
         </div>
         <div className="relative flex items-center justify-center landscape:h-full landscape:flex-1 portrait:w-full portrait:min-h-0 portrait:flex-1">
-          <HostsMascot look={look} className="h-[62%] max-h-full w-full portrait:h-full" />
+          <HostsMascot look={look} className="h-[62%] max-h-full w-full portrait:h-full short:h-[78%]" />
           {qr && !phone && !outOfPaper && (
             <div className="card absolute bottom-[3%] right-[2%] z-20 flex items-center short:hidden" style={{ gap: u(1), padding: u(1) }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -500,14 +500,14 @@ export function EventDone({ sticker, sheet, stickers, onFinish, emailedTo }: { s
     }
   };
   return (
-    <div className="flex h-full w-full items-center justify-center overflow-y-auto landscape:flex-row portrait:flex-col" style={{ gap: u(2.4), padding: `${u(1)} ${u(3)} ${u(2)}` }}>
+    <div className="flex h-full w-full items-center justify-center overflow-y-auto landscape:flex-row portrait:flex-col portrait:justify-start portrait:pt-8" style={{ gap: u(2.4), paddingLeft: u(3), paddingRight: u(3), paddingBottom: u(2) }}>
       <Snow />
-      <div className="relative flex items-center justify-center landscape:h-full landscape:w-[44%] portrait:w-full portrait:min-h-0 portrait:flex-1" style={{ gap: u(1.6) }}>
+      <div className="relative flex items-center justify-center landscape:h-full landscape:w-[44%] portrait:h-[40vh] portrait:w-full portrait:shrink-0" style={{ gap: u(1.6) }}>
         {sheet && (
           <motion.img
             src={sheet}
             alt="Your sticker sheet"
-            className="max-h-full w-auto rounded-[12px] bg-white shadow-[0_18px_40px_rgba(80,10,10,0.3)]"
+            className="h-full max-h-full w-auto rounded-[12px] bg-white shadow-[0_18px_40px_rgba(80,10,10,0.3)] landscape:max-h-[86%] landscape:h-auto"
             style={{ aspectRatio: "3.9 / 6.7", maxWidth: "60%", padding: 6 }}
             initial={{ rotate: -8, y: 40, opacity: 0 }}
             animate={{ rotate: -3, y: 0, opacity: 1 }}
@@ -595,15 +595,16 @@ export function EventWait({
       {phase === "video" ? (
         <WelcomeVideo key={run} event={event} look={look} sticker={sticker} poses={poses} name={name} etaSec={run ? undefined : firstEta.current} onEnd={() => setPhase("save")} />
       ) : (
-        <div className="flex h-full w-full flex-col items-center justify-center overflow-y-auto text-center" style={{ gap: u(1.6), padding: `${u(3)} ${u(3)} ${u(14)}` }}>
+        <div className="relative flex h-full w-full items-center justify-center overflow-y-auto text-center landscape:flex-row portrait:flex-col" style={{ gap: u(2.4), padding: "16px 16px 84px" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={look.scene} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-2xl" />
-          <h2 className="t-h2 relative !text-[#fbefd5]">While it prints…</h2>
-          <p className="t-lead relative !text-[#f3dcb0]">Save all your stickers to your phone, ready to send to friends.</p>
+          <img src={look.scene} alt="" className="fixed inset-0 h-full w-full scale-110 object-cover opacity-60 blur-2xl" />
           {sheet && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={sheet} alt="Your sticker sheet" className="relative max-h-[40vh] w-auto rounded-xl bg-white p-1.5 shadow-2xl" style={{ aspectRatio: "3.9 / 6.7" }} />
+            <img src={sheet} alt="Your sticker sheet" className="relative w-auto shrink-0 rounded-xl bg-white p-1.5 shadow-2xl landscape:max-h-[78%] portrait:max-h-[42vh]" style={{ aspectRatio: "3.9 / 6.7" }} />
           )}
+          <div className="relative flex flex-col items-center" style={{ gap: u(1.2), maxWidth: 420 }}>
+          <h2 className="t-h2 !text-[#fbefd5]">While it prints…</h2>
+          <p className="t-lead !text-[#f3dcb0]">Save all your stickers to your phone, ready to send to friends.</p>
           {handset ? (
             <button className="btn btn-lg btn-main relative" onClick={save}>
               📲 Save my stickers to Photos
@@ -629,6 +630,7 @@ export function EventWait({
           >
             ▶ Watch the story again
           </button>
+          </div>
         </div>
       )}
 
