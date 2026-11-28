@@ -49,6 +49,11 @@ async function prepareImageFile(imageBase64: string) {
   return toFile(buffer, `photo.${ext}`, { type: mime });
 }
 
+/** one photo, or several (the model sees them all: e.g. the guest plus reference characters) */
+async function prepareImages(images: string | string[]) {
+  return Array.isArray(images) ? Promise.all(images.map(prepareImageFile)) : prepareImageFile(images);
+}
+
 interface EditOpts {
   quality: "low" | "medium" | "high";
 }
@@ -63,14 +68,14 @@ function isModelUnavailable(err: unknown): boolean {
 
 async function editWithModel(
   model: string,
-  imageBase64: string,
+  imageBase64: string | string[],
   prompt: string,
   opts: EditOpts
 ) {
   try {
     return await openai.images.edit({
       model,
-      image: await prepareImageFile(imageBase64),
+      image: await prepareImages(imageBase64),
       prompt,
       quality: opts.quality,
       size: "1024x1024",
@@ -84,7 +89,7 @@ async function editWithModel(
     if (/background|param|unsupported|unknown/i.test(msg)) {
       return await openai.images.edit({
         model,
-        image: await prepareImageFile(imageBase64),
+        image: await prepareImages(imageBase64),
         prompt,
         quality: opts.quality,
         size: "1024x1024",
@@ -95,7 +100,7 @@ async function editWithModel(
 }
 
 async function editImage(
-  imageBase64: string,
+  imageBase64: string | string[],
   prompt: string,
   opts: EditOpts
 ): Promise<string> {
@@ -154,6 +159,11 @@ export async function generateVariationPreview(
   stylePrompt: string
 ): Promise<string> {
   return editImage(imageBase64, stylePrompt, { quality: "low" });
+}
+
+/** Several input images (the first is the subject), e.g. the guest with reference characters. */
+export async function generateFromImages(images: string[], prompt: string, quality: "low" | "medium" | "high" = "medium"): Promise<string> {
+  return editImage(images, prompt, { quality });
 }
 
 /** Explicit quality, for callers (the booth) that pick their own speed/quality trade-off. */
