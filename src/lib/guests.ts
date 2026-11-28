@@ -308,3 +308,34 @@ export async function listGuests(): Promise<(Guest & { orders: number; events: s
     GROUP BY g.id ORDER BY g.created_at DESC`;
   return rows.map((r) => ({ ...guestFrom(r as Row), orders: Number(r.orders), events: (r.events as string[]) ?? [] }));
 }
+
+/** One guest's entry in an event's album: their name, the photo they took and their cartoon. */
+export interface AlbumEntry {
+  orderId: string;
+  name: string | null;
+  photoUrl: string | null;
+  stickerUrl: string;
+  createdAt: string;
+}
+
+/**
+ * Everyone who made stickers at an event, oldest first (the class photo and the gallery).
+ * Only guests who agreed to be featured, unless `all` (the owner's own view).
+ */
+export async function eventAlbum(event: string, all = false): Promise<AlbumEntry[]> {
+  if (inMemory()) {
+    return [...mem().creations.values()]
+      .filter((c) => c.event === event && c.stickerUrl && c.guestId)
+      .map((c) => ({ c, g: mem().guests.get(c.guestId!) }))
+      .filter(({ g }) => g && (all || g.mediaConsent))
+      .sort((a, b) => a.c.createdAt.localeCompare(b.c.createdAt))
+      .map(({ c, g }) => ({ orderId: c.orderId, name: g!.name, photoUrl: c.photoUrl, stickerUrl: c.stickerUrl!, createdAt: c.createdAt }));
+  }
+  await ensureTables();
+  const rows = await getDb()`
+    SELECT c.order_id, c.photo_url, c.sticker_url, c.created_at, g.name
+    FROM guest_creations c JOIN event_guests g ON g.id = c.guest_id
+    WHERE c.event = ${event} AND c.sticker_url IS NOT NULL AND (${all} OR g.media_consent)
+    ORDER BY c.created_at ASC`;
+  return rows.map((r) => ({ orderId: String(r.order_id), name: (r.name as string) ?? null, photoUrl: (r.photo_url as string) ?? null, stickerUrl: String(r.sticker_url), createdAt: iso(r.created_at)! }));
+}
