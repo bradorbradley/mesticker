@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
         `${prompt} The first image is the guest${people > 1 ? `s (${people} people, include every one of them)` : ""}; the other images are characters who must appear exactly as drawn (same faces, hair and outfits). ${pose}. Draw them all together as ONE cute chibi sticker in the same art style, every face fully recognizable. No text, captions or letters anywhere.`
       );
       recordGeneration("preview");
-      return NextResponse.json({ image, ms: Date.now() - t0, provider: "gemini", model: "group" });
+      return NextResponse.json({ image, ms: Date.now() - t0, provider: "openai", model: "group" });
     }
     const result = await generateSticker(
       photo,

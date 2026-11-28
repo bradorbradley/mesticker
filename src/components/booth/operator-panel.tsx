@@ -10,16 +10,13 @@ import { eventStyleOptions } from "@/lib/presets";
  */
 export type ImageModel = "default" | "openai" | "nano" | "mixed";
 export const IMAGE_MODELS: { id: ImageModel; label: string; hint: string }[] = [
-  { id: "default", label: "Default", hint: "OpenAI main sticker; Nano Banana sheet stickers when the Google key is set" },
+  { id: "default", label: "Default", hint: "OpenAI for every sticker" },
   { id: "openai", label: "OpenAI", hint: "best match to the web app, ~12–15 s" },
-  { id: "mixed", label: "Mixed", hint: "OpenAI main sticker, Nano Banana sheet stickers" },
-  { id: "nano", label: "Nano Banana", hint: "Google, fastest" },
 ];
 /** What the booth sends as `provider` for the main sticker and the sheet stickers. */
 export function providersFor(m: ImageModel | undefined): { hero?: string; extras?: string } {
   if (m === "openai") return { hero: "openai", extras: "openai" };
-  if (m === "nano") return { hero: "gemini", extras: "gemini" };
-  if (m === "mixed") return { hero: "openai", extras: "gemini" };
+  // "nano" / "mixed" (older saved settings): Google is off, everything runs on OpenAI
   return {};
 }
 
