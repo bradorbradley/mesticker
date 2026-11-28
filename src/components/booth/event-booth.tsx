@@ -10,6 +10,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import QRCode from "qrcode";
 import type { PartyEvent } from "@/lib/party-events";
 import { u } from "./units";
+import { cn } from "@/lib/utils";
+import { CarolGames } from "./games/carol-games";
 
 type Look = NonNullable<PartyEvent["look"]>;
 
@@ -175,6 +177,12 @@ type Beat = {
   ribbon?: string;
   door?: "knock" | "open";
   notes?: boolean;
+  /** manga-style motion: speed lines, an impact flash, a camera shake */
+  fx?: ("speed" | "impact" | "shake" | "flash")[];
+  /** a big comic sound word, e.g. "WHOOSH!" */
+  sfx?: string;
+  /** punch in on whoever has this key */
+  zoom?: string;
 };
 const SLOT_X: Record<Slot, number> = { L: 4, LC: 20, C: 36, RC: 52, R: 68 }; // left edge, % of stage width
 const ACTOR_W = 28; // % of stage width
@@ -182,6 +190,7 @@ const ACTOR_BIG = 34;
 
 export function storyBeats(event: PartyEvent, look: Look, me: string, pose: (k: number) => string, name: string | null): Beat[] {
   const who = name || "friend";
+  const WHO = who.toUpperCase();
   const hosts = look.hosts;
   const H = (i: number, at: Slot, extra: Partial<Actor> = {}): Actor => ({ key: `h${i}`, src: hosts[Math.min(i, hosts.length - 1)].img, at, anim: "bob", ...extra });
   const santa = look.cameo?.img ?? hosts[0].img;
@@ -190,28 +199,28 @@ export function storyBeats(event: PartyEvent, look: Look, me: string, pose: (k: 
   const P = (k: number, at: Slot, extra: Partial<Actor> = {}): Actor => ({ key: `p${k}`, src: pose(k), at, anim: "bob", big: true, ...extra });
   const trio = (extra: Partial<Actor> = {}) => [H(0, "L", extra), H(1, "C", extra), H(2, "R", extra)];
   const n = (i: number) => hosts[Math.min(i, hosts.length - 1)].name;
+  // pose order: 0 reindeer, 1 stocking, 2 ornament, 3 sled, 4 snowball, 5 star, 6 skating, 7 snow globe, 8 gingerbread, 9 cocoa, 10 present, 11 with the hosts
   return [
-    { scene: "home", ms: 2400, cast: trio(), bubble: { who: "h0", text: `Hi, I'm ${n(0)}!` } },
-    { scene: "home", ms: 2200, cast: trio(), bubble: { who: "h1", text: `I'm ${n(1)}!` } },
-    { scene: "home", ms: 2400, cast: trio(), bubble: { who: "h2", text: `And I'm ${n(2)}!` } },
-    { scene: "home", ms: 2800, cast: trio({ anim: "jump" }), caption: `WELCOME TO ${event.name.toUpperCase()}!` },
-    { scene: "home", ms: 2200, cast: trio(), caption: "KNOCK KNOCK! 🚪", door: "knock" },
-    { scene: "home", ms: 2200, cast: trio(), bubble: { who: "h1", text: "Who could it be?" }, door: "knock" },
-    { scene: "home", ms: 3000, cast: [H(0, "L"), G("RC", { anim: "jump" })], door: "open", ribbon: `It's ${who}!` },
-    { scene: "home", ms: 2600, cast: [H(0, "L", { anim: "jump" }), H(2, "C", { anim: "jump" }), G("R")], door: "open", bubble: { who: "h2", text: `Welcome, ${who}! 🎄` } },
-    { scene: "home", ms: 2600, cast: [G("L"), S("R", { anim: "jump" })], caption: "SUDDENLY…", bubble: { who: "santa", text: "Ho ho… OH NO!" } },
-    { scene: "home", ms: 3000, cast: [G("L"), S("R")], bubble: { who: "santa", text: "My reindeer ran away!" } },
-    { scene: "home", ms: 2500, cast: [G("L", { anim: "jump" }), S("R")], bubble: { who: "guest", text: "I'll find them! 💪" } },
-    { scene: "street", ms: 3200, cast: [P(3, "L", { anim: "zoom" })], caption: "MEANWHILE, OUTSIDE…", bubble: { who: "p3", text: "Wheeeee!" } },
-    { scene: "street", ms: 2800, cast: [P(4, "L", { anim: "jump" }), H(1, "R")], bubble: { who: "h1", text: "Hey! No fair! ❄️" } },
-    { scene: "street", ms: 2800, cast: [P(6, "C", { anim: "zoom" })], caption: `SMOOTH MOVES, ${who.toUpperCase()}!` },
-    { scene: "street", ms: 3000, cast: [P(0, "LC", { anim: "fly", lift: 20 })], caption: "FOUND ONE!", bubble: { who: "p0", text: "Giddy up! 🦌" } },
-    { scene: "roof", ms: 3000, cast: [P(0, "L", { anim: "fly", lift: 30 })], caption: "UP ON THE ROOFTOP…" },
-    { scene: "roof", ms: 3000, cast: [P(5, "L"), S("RC", { anim: "jump" })], bubble: { who: "santa", text: "Presents saved!" } },
-    { scene: "roof", ms: 2600, cast: trio({ anim: "jump" }), caption: "HOORAY FOR " + who.toUpperCase() + "!" },
-    { scene: "home", ms: 2800, cast: [P(1, "C")], caption: "BACK AT 387…", bubble: { who: "p1", text: "Tree's done! ⭐" } },
-    { scene: "home", ms: 2600, cast: [P(7, "C")], bubble: { who: "p7", text: "Cocoa break ☕" } },
-    { scene: "home", ms: 4400, cast: [H(0, "L", { anim: "jump" }), P(2, "C", { anim: "jump" }), H(2, "R", { anim: "jump" })], caption: "AND EVERYONE SANG 🎶", notes: true, ribbon: "Your stickers are almost ready!" },
+    { scene: "home", ms: 1600, cast: trio(), bubble: { who: "h0", text: `Hi, I'm ${n(0)}!` }, zoom: "h0", fx: ["flash"] },
+    { scene: "home", ms: 1300, cast: trio(), bubble: { who: "h1", text: `I'm ${n(1)}!` }, zoom: "h1" },
+    { scene: "home", ms: 1300, cast: trio(), bubble: { who: "h2", text: `And I'm ${n(2)}!` }, zoom: "h2" },
+    { scene: "home", ms: 1800, cast: trio({ anim: "jump" }), caption: `WELCOME TO ${event.name.toUpperCase()}!`, fx: ["speed"], sfx: "♪♫♪" },
+    { scene: "home", ms: 1300, cast: trio(), caption: "KNOCK KNOCK!", door: "knock", fx: ["shake"], sfx: "KNOCK!" },
+    { scene: "home", ms: 1900, cast: [H(0, "L"), G("RC", { anim: "jump" })], door: "open", ribbon: `It's ${who}!`, fx: ["impact", "flash"], sfx: "TA-DA!", zoom: "guest" },
+    { scene: "home", ms: 1400, cast: [H(0, "L", { anim: "jump" }), H(2, "C", { anim: "jump" }), G("R")], door: "open", bubble: { who: "h2", text: `Welcome, ${who}!` } },
+    { scene: "home", ms: 1500, cast: [G("L"), S("R", { anim: "fly" })], caption: "SUDDENLY…", fx: ["shake", "impact"], sfx: "CRASH!" },
+    { scene: "home", ms: 1600, cast: [G("L"), S("R")], bubble: { who: "santa", text: "My reindeer escaped! HELP!" }, zoom: "santa" },
+    { scene: "home", ms: 1300, cast: [G("L", { anim: "jump" }), S("R")], bubble: { who: "guest", text: "On it! 💪" }, zoom: "guest", fx: ["speed"] },
+    { scene: "street", ms: 1700, cast: [P(3, "L", { anim: "zoom" })], caption: "MEANWHILE, OUTSIDE…", fx: ["speed"], sfx: "WHOOSH!" },
+    { scene: "street", ms: 1500, cast: [P(4, "L", { anim: "jump" }), H(1, "R", { anim: "jump" })], bubble: { who: "h1", text: "Hey! 😂" }, fx: ["impact", "shake"], sfx: "SPLAT!" },
+    { scene: "street", ms: 1500, cast: [P(6, "C", { anim: "zoom" })], caption: `SMOOTH MOVES, ${WHO}!`, fx: ["speed"] },
+    { scene: "street", ms: 1600, cast: [P(0, "LC", { anim: "fly", lift: 18 })], caption: "FOUND HIM!", fx: ["speed", "flash"], sfx: "GIDDY UP!" },
+    { scene: "roof", ms: 1600, cast: [P(0, "L", { anim: "fly", lift: 30 })], caption: "OVER THE ROOFTOPS…", fx: ["speed"] },
+    { scene: "roof", ms: 1500, cast: [P(10, "L", { anim: "jump" }), S("RC", { anim: "jump" })], bubble: { who: "santa", text: "Presents saved!" }, sfx: "HO HO HO!", fx: ["impact"] },
+    { scene: "home", ms: 1400, cast: [P(5, "C")], caption: "BACK AT 387…", bubble: { who: "p5", text: "Last star! ⭐" }, fx: ["flash"] },
+    { scene: "home", ms: 1300, cast: [P(8, "L", { anim: "jump" }), H(1, "R")], bubble: { who: "h1", text: "Is that… a gingerbread you?!" }, sfx: "CRUNCH!", fx: ["shake"] },
+    { scene: "home", ms: 1300, cast: [P(9, "C")], bubble: { who: "p9", text: "Cocoa break ☕" }, zoom: "p9" },
+    { scene: "home", ms: 2600, cast: [P(11, "C", { anim: "jump", big: true })], caption: "AND EVERYONE SANG!", notes: true, fx: ["flash", "speed"], ribbon: "Next: Christmas games! 🎮" },
   ];
 }
 
@@ -223,7 +232,7 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
   const pace = useRef<number | null>(null);
   if (pace.current === null) {
     const base = beats.reduce((t, b) => t + b.ms, 0);
-    pace.current = etaSec ? Math.min(2.2, Math.max(0.8, (etaSec * 1000 * 0.9) / base)) : 1;
+    pace.current = etaSec && base ? 1 : 1; // fixed: games fill the rest of the wait
     try {
       const forced = Number(localStorage.getItem("mesticker-story-pace")); // testing: e.g. 0.3
       if (forced > 0) pace.current = forced;
@@ -279,7 +288,13 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
 
   const backdrop = (beat.scene === "street" ? look.scenes?.street : beat.scene === "roof" ? look.scenes?.roof : look.scene) ?? look.scene;
   const speaker = beat.bubble ? beat.cast.find((a) => a.key === beat.bubble!.who) : undefined;
+  const rightSide = !!speaker && xOf(speaker) + widthOf(speaker) / 2 > stageW * 0.55; // bubble grows leftward, tail on the right
   const bubbleLeft = speaker ? Math.max(8, Math.min(stageW - stageW * 0.46, xOf(speaker) + widthOf(speaker) * 0.15)) : stageW * 0.3;
+  const bubbleRight = speaker ? Math.max(8, stageW - (xOf(speaker) + widthOf(speaker) * 0.85)) : 0;
+  const fx = new Set(beat.fx ?? []);
+  const zoomed = beat.zoom ? beat.cast.find((a) => a.key === beat.zoom) : undefined;
+  const zoomOn = !!zoomed && stageW > 0;
+  const zoomAt = zoomed ? `${((xOf(zoomed) + widthOf(zoomed) / 2) / (stageW || 1)) * 100}% ${100 - ((yOf(zoomed) + heightOf(zoomed) * 0.7) / (stageH || 1)) * 100}%` : "50% 50%";
   const bubbleBottom = speaker ? Math.min(stageH * 0.78, yOf(speaker) + heightOf(speaker) * 0.92) : stageH * 0.6;
 
   return (
@@ -289,6 +304,13 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
       <img src={backdrop} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl brightness-75" />
       {stageW > 0 && (
         <div className="relative overflow-hidden rounded-[18px] shadow-[0_18px_50px_rgba(0,0,0,0.45)]" style={{ width: stageW, height: stageH }}>
+          {/* the "camera": punches in on the speaker, shakes on impacts */}
+          <motion.div
+            className="absolute inset-0"
+            style={{ transformOrigin: zoomAt }}
+            animate={{ scale: zoomOn ? 1.2 : 1, x: fx.has("shake") ? [0, -10, 9, -7, 6, -3, (i % 2) * 0.01] : 0, y: fx.has("shake") ? [0, 5, -6, 4, -2, (i % 2) * 0.01] : 0 }}
+            transition={{ scale: { duration: 0.5, ease: "easeOut" }, x: { duration: 0.45 }, y: { duration: 0.45 } }}
+          >
           <AnimatePresence initial={false}>
             <motion.img key={beat.scene} src={backdrop} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: tall ? "40% 50%" : "50% 50%" }} initial={{ opacity: 0, scale: 1.06 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.7 }} />
           </AnimatePresence>
@@ -349,11 +371,26 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
           </AnimatePresence>
           <AnimatePresence mode="wait">
             {beat.bubble && (
-              <motion.div key={`b${i}`} className="comic-bubble absolute z-40" style={{ left: bubbleLeft, bottom: bubbleBottom, maxWidth: stageW * 0.46 }} initial={{ scale: 0.3, opacity: 0, y: 12 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.6, opacity: 0 }} transition={{ type: "spring", stiffness: 280, damping: 17 }}>
+              <motion.div key={`b${i}`} className={cn("comic-bubble absolute z-40", rightSide && "tail-right")} style={{ ...(rightSide ? { right: bubbleRight } : { left: bubbleLeft }), bottom: bubbleBottom, maxWidth: stageW * 0.46 }} initial={{ scale: 0.3, opacity: 0, y: 12 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.6, opacity: 0 }} transition={{ type: "spring", stiffness: 280, damping: 17 }}>
                 {beat.bubble.text}
               </motion.div>
             )}
           </AnimatePresence>
+          </motion.div>
+          {fx.has("speed") && <SpeedLines key={`s${i}`} />}
+          {fx.has("impact") && <ImpactBurst key={`i${i}`} />}
+          {fx.has("flash") && <motion.div key={`f${i}`} className="pointer-events-none absolute inset-0 z-[45] bg-white" initial={{ opacity: 0.85 }} animate={{ opacity: 0 }} transition={{ duration: 0.35 }} />}
+          <AnimatePresence>
+            {beat.sfx && (
+              <motion.div key={`x${i}`} className="manga-sfx pointer-events-none absolute right-[5%] top-[30%] z-[46]" initial={{ scale: 0.2, rotate: -25, opacity: 0 }} animate={{ scale: [0.2, 1.35, 1], rotate: 10, opacity: 1 }} exit={{ opacity: 0, scale: 1.6 }} transition={{ duration: 0.4 }}>
+                {beat.sfx}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {/* story progress */}
+          <div className="absolute inset-x-0 bottom-0 z-50 h-1.5 bg-black/30">
+            <div className="h-full bg-[#ffd36b] transition-[width] duration-300" style={{ width: `${((i + 1) / beats.length) * 100}%` }} />
+          </div>
           {beat.notes && <Notes />}
           <AnimatePresence>
             {beat.ribbon && (
@@ -376,6 +413,34 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
         </button>
       )}
     </div>
+  );
+}
+
+/** manga speed lines radiating from the centre */
+function SpeedLines() {
+  const lines = Array.from({ length: 28 }, (_, k) => k);
+  return (
+    <motion.svg className="pointer-events-none absolute inset-0 z-[44] h-full w-full" viewBox="-50 -50 100 100" preserveAspectRatio="none" initial={{ opacity: 0 }} animate={{ opacity: [0, 0.9, 0.6, 0.9], rotate: [0, 3] }} transition={{ duration: 0.6, repeat: Infinity, repeatType: "mirror" }}>
+      {lines.map((k) => {
+        const a = (k / lines.length) * Math.PI * 2 + (k % 3) * 0.05;
+        const r0 = 30 + (k % 4) * 5;
+        return <line key={k} x1={Math.cos(a) * r0} y1={Math.sin(a) * r0} x2={Math.cos(a) * 80} y2={Math.sin(a) * 80} stroke="white" strokeWidth={k % 2 ? 0.5 : 1.1} strokeLinecap="round" opacity={0.85} />;
+      })}
+    </motion.svg>
+  );
+}
+
+/** a jagged comic impact star that pops and fades */
+function ImpactBurst() {
+  const pts = Array.from({ length: 24 }, (_, k) => {
+    const a = (k / 24) * Math.PI * 2;
+    const r = k % 2 ? 22 : 46;
+    return `${50 + Math.cos(a) * r},${50 + Math.sin(a) * r}`;
+  }).join(" ");
+  return (
+    <motion.svg className="pointer-events-none absolute left-1/2 top-1/2 z-[44] h-[90%] w-[90%] -translate-x-1/2 -translate-y-1/2" viewBox="0 0 100 100" initial={{ scale: 0.2, opacity: 1, rotate: -20 }} animate={{ scale: 1.3, opacity: 0, rotate: 10 }} transition={{ duration: 0.55, ease: "easeOut" }}>
+      <polygon points={pts} fill="#ffd36b" stroke="#c0392b" strokeWidth={2} />
+    </motion.svg>
   );
 }
 
@@ -475,29 +540,9 @@ export function EventGenerating({ look, photo, ready }: { look: Look; photo: str
 export function EventDone({ sticker, sheet, stickers, onFinish, emailedTo }: { sticker: string | null; sheet: string | null; stickers: string[]; onFinish: () => void; emailedTo: string | null }) {
   const [status, setStatus] = useState<string | null>(null);
   const save = async () => {
-    try {
-      const all = Array.from(new Set([...(sheet ? [sheet] : []), ...stickers]));
-      const files = await Promise.all(
-        all.map(async (src, i) => {
-          const b = await (await fetch(src)).blob();
-          return new File([b], `mesticker-${i + 1}.${b.type.includes("png") ? "png" : b.type.includes("webp") ? "webp" : "jpg"}`, { type: b.type || "image/png" });
-        })
-      );
-      if (navigator.canShare?.({ files })) {
-        await navigator.share({ files }); // iOS: "Save N Images"
-        setStatus("Saved! 🎉");
-        return;
-      }
-      for (const f of files) {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(f);
-        a.download = f.name;
-        a.click();
-      }
-      setStatus("Saved to your downloads!");
-    } catch {
-      setStatus("Tip: press and hold any sticker to save it.");
-    }
+    setStatus("Getting them ready…");
+    const { saveImages } = await import("./my-order-stickers");
+    setStatus(await saveImages(Array.from(new Set(stickers))).catch(() => "Tip: press and hold any sticker to save it."));
   };
   return (
     <div className="flex h-full w-full items-center justify-center overflow-y-auto landscape:flex-row portrait:flex-col portrait:justify-start portrait:pt-8" style={{ gap: u(2.4), paddingLeft: u(3), paddingRight: u(3), paddingBottom: u(2) }}>
@@ -574,7 +619,7 @@ export function EventWait({
   stickers: string[];
   onDone: () => void;
 }) {
-  const [phase, setPhase] = useState<"video" | "save">("video");
+  const [phase, setPhase] = useState<"video" | "games" | "save">("video");
   const [run, setRun] = useState(0);
   const [qr, setQr] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -584,26 +629,49 @@ export function EventWait({
     QRCode.toDataURL(`${location.origin}/booth/mine/${orderId}`, { width: 320, margin: 1, color: { dark: "#3b1210", light: "#ffffff" } }).then(setQr).catch(() => {});
   }, [handset, orderId]);
 
+  const unique = Array.from(new Set(stickers));
+  const gameStickers = Array.from(new Set([...poses.filter((p): p is string => typeof p === "string"), ...(sticker ? [sticker] : [])]));
+
   const save = async () => {
     setSaved("Getting them ready…");
     const { saveImages } = await import("./my-order-stickers");
-    setSaved(await saveImages(Array.from(new Set([...(sheet ? [sheet] : []), ...stickers]))).catch(() => "Tip: press and hold a sticker to save it."));
+    setSaved(await saveImages(unique).catch(() => "Tip: press and hold a sticker to save it."));
   };
 
   return (
     <div className="fixed inset-0 z-[60] overflow-hidden bg-[#2a0d0b]">
       {phase === "video" ? (
-        <WelcomeVideo key={run} event={event} look={look} sticker={sticker} poses={poses} name={name} etaSec={run ? undefined : firstEta.current} onEnd={() => setPhase("save")} />
+        <WelcomeVideo key={run} event={event} look={look} sticker={sticker} poses={poses} name={name} etaSec={run ? undefined : firstEta.current} onEnd={() => setPhase(run ? "save" : "games")} />
+      ) : phase === "games" ? (
+        <CarolGames
+          stickers={gameStickers}
+          hero={sticker ?? look.hosts[0].img}
+          hosts={look.hosts.map((h) => ({ name: h.name, img: h.img }))}
+          name={name}
+          durationMs={80000}
+          onDone={() => setPhase("save")}
+        />
       ) : (
         <div className="relative flex h-full w-full items-center justify-center overflow-y-auto text-center landscape:flex-row portrait:flex-col" style={{ gap: u(2.4), padding: "16px 16px 84px" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={look.scene} alt="" className="fixed inset-0 h-full w-full scale-110 object-cover opacity-60 blur-2xl" />
-          {sheet && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={sheet} alt="Your sticker sheet" className="relative w-auto shrink-0 rounded-xl bg-white p-1.5 shadow-2xl landscape:max-h-[78%] portrait:max-h-[42vh]" style={{ aspectRatio: "3.9 / 6.7" }} />
+          {unique.length > 0 ? (
+            <div className="relative grid shrink-0 grid-cols-4 rounded-2xl bg-white/10 p-2 landscape:max-h-[80%] landscape:w-[46%] portrait:w-full portrait:max-w-md" style={{ gap: 6, overflowY: "auto" }}>
+              {unique.map((src, k) => (
+                <motion.div key={src} initial={{ scale: 0, rotate: -12 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 240, damping: 14, delay: k * 0.06 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt="" className="aspect-square w-full object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]" />
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            sheet && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={sheet} alt="Your sticker sheet" className="relative w-auto shrink-0 rounded-xl bg-white p-1.5 shadow-2xl landscape:max-h-[78%] portrait:max-h-[42vh]" style={{ aspectRatio: "3.9 / 6.7" }} />
+            )
           )}
           <div className="relative flex flex-col items-center" style={{ gap: u(1.2), maxWidth: 420 }}>
-          <h2 className="t-h2 !text-[#fbefd5]">While it prints…</h2>
+          <h2 className="t-h2 !text-[#fbefd5]">Your stickers! 🎉</h2>
           <p className="t-lead !text-[#f3dcb0]">Save all your stickers to your phone, ready to send to friends.</p>
           {handset ? (
             <button className="btn btn-lg btn-main relative" onClick={save}>
@@ -636,7 +704,7 @@ export function EventWait({
 
       {/* QR in the corner during the story too (booth screens) */}
       {phase === "video" && qr && (
-        <div className="absolute left-3 top-3 z-40 flex items-center rounded-2xl bg-white/90 p-2 shadow-lg" style={{ gap: 8 }}>
+        <div className="absolute bottom-20 left-3 z-[55] flex items-center rounded-2xl bg-white/90 p-2 shadow-lg" style={{ gap: 8 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={qr} alt="Scan to get your stickers" style={{ width: `max(72px, ${u(8)})` }} />
           <div className="text-left text-xs font-bold text-[#3b1210]" style={{ maxWidth: "7em" }}>
@@ -645,8 +713,8 @@ export function EventWait({
         </div>
       )}
 
-      {/* status + done, floating */}
-      <div className="absolute inset-x-0 bottom-0 z-50 flex justify-center p-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+      {/* status + done, floating (the games have their own bars) */}
+      <div className={cn("inset-x-0 bottom-0 z-50 flex justify-center p-3", phase === "games" ? "hidden" : "absolute")} style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
         <div className="flex w-full max-w-xl items-center rounded-full bg-black/55 py-2 pl-5 pr-2 text-white backdrop-blur" style={{ gap: 12 }}>
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-bold">{info.label}</div>

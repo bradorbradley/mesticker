@@ -49,6 +49,7 @@ type OrderIn = {
   photoUrl?: unknown;
   stickerUrl?: unknown;
   sheetUrls?: unknown;
+  frame?: unknown;
 };
 
 /**
@@ -72,7 +73,7 @@ async function eventOrder(order: OrderIn, id: string, items: QueueItem[]): Promi
         await fillCreation(id, {
           photoUrl: url(order.photoUrl),
           stickerUrl: url(order.stickerUrl),
-          stickers: items.map((it) => it.url),
+          stickers: items.filter((it) => !it.brand).map((it) => it.url),
           sheets: Array.isArray(order.sheetUrls) ? order.sheetUrls.filter(okUrl) : [],
         });
         await deliverCreation(id);
@@ -95,7 +96,7 @@ async function queueOrder(order: OrderIn, kitUrl: string, guides: string[], item
   // no card payment: only a prepaid (free) event lets it print
   const verified = checkoutId ? await checkoutPaid(checkoutId, productId) : freeEventOrder || (await isFreeEvent());
   try {
-    await enqueue({ id, boothId: process.env.BOOTH_ID || "booth-1", productId, checkoutId, verified, kitUrl, guideUrl: guides[0] ?? null, guides, items });
+    await enqueue({ id, boothId: process.env.BOOTH_ID || "booth-1", productId, checkoutId, verified, kitUrl, guideUrl: guides[0] ?? null, guides, items, frame: okUrl(order.frame) ? order.frame : null });
     return true;
   } catch (e) {
     console.error("[booth/kit] enqueue failed:", e);
@@ -116,6 +117,7 @@ export async function POST(request: NextRequest) {
       if (it.sheet !== undefined) item.sheet = Math.max(0, Math.min(2, Number(it.sheet) || 0));
       if (it.x !== undefined) item.x = num(it.x);
       if (it.y !== undefined) item.y = num(it.y);
+      if (it.brand === true) item.brand = true;
       return item;
     });
     const guides = (Array.isArray(guideList) ? guideList : [guide]).filter(okUrl).slice(0, 3);

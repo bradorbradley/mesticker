@@ -31,8 +31,11 @@ const MM = DPI / 25.4; // px per mm
 const px = (inches) => Math.round(inches * DPI);
 
 /** Box of a placement on the 1200×2100 sheet, in px. */
+// layouts keep ~30px of paper between slots; insetting each sticker a little keeps neighbouring cut
+// lines (0.5 mm outside each sticker) at least CUT.minGapMm apart even when stickers fill their slots
+const INSET = 8;
 function boxOf(pl) {
-  return { x: px(PRINTABLE.x + pl.x), y: px(PRINTABLE.y + pl.y), w: px(pl.w), h: px(pl.h) };
+  return { x: px(PRINTABLE.x + pl.x) + INSET, y: px(PRINTABLE.y + pl.y) + INSET, w: px(pl.w) - 2 * INSET, h: px(pl.h) - 2 * INSET };
 }
 
 async function stickerStats(file, w, h) {
@@ -78,8 +81,10 @@ const bbox = (poly) => {
 /**
  * Build one sheet. `sheet` is an entry of order.json's `sheets`.
  * Returns { jpeg, plt, preview, qc: { ok, issues, warnings, stats } }.
+ * @param {any} sheet
+ * @param {{ light?: boolean, needGuide?: boolean, frame?: Buffer | null }} [opts]
  */
-export async function buildSheet(sheet, { light = false, needGuide = true } = {}) {
+export async function buildSheet(sheet, { light = false, needGuide = true, frame = null } = {}) {
   const issues = [], warnings = [];
   const pls = [...sheet.placements].sort((a, b) => a.n - b.n);
 
@@ -161,7 +166,13 @@ export async function buildSheet(sheet, { light = false, needGuide = true } = {}
   if (minGapMm != null && minGapMm < CUT.minGapMm) issues.push(`two cut lines are only ${minGapMm} mm apart (need ${CUT.minGapMm})`);
 
   // print JPEG: sheet on white, padded onto the printer's 1216×2128 raster
-  const flat = sharp(Buffer.from(data), { raw: { width: SHEET.w, height: SHEET.h, channels: 4 } })
+  // an event's printed trim (printable-area sized) goes under the stickers; the cut path ignores it
+  const stickersPng = await sharp(Buffer.from(data), { raw: { width: SHEET.w, height: SHEET.h, channels: 4 } }).png().toBuffer();
+  const under = frame
+    ? [{ input: await sharp(frame).resize(px(PRINTABLE.w), px(PRINTABLE.h), { fit: "fill" }).png().toBuffer(), left: px(PRINTABLE.x), top: px(PRINTABLE.y) }]
+    : [];
+  const flat = sharp({ create: { width: SHEET.w, height: SHEET.h, channels: 4, background: "#ffffff" } })
+    .composite([...under, { input: stickersPng, left: 0, top: 0 }])
     .flatten({ background: "#ffffff" })
     .extend({ left: SHEET.padX, right: SHEET.padX, top: SHEET.padY, bottom: SHEET.padY, background: "#ffffff" });
   const flatBuf = await flat.png().toBuffer();

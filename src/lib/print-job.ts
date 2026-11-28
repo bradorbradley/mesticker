@@ -38,7 +38,8 @@ export async function buildPrintJob(order: QueueOrder, index: number, light: boo
   );
   const placements = items.map((it) => ({ n: it.n, file: cleaned.get(it.url), x: it.x ?? null, y: it.y ?? null, w: it.w, h: it.h }));
   const design = order.productId.split("+")[index] ?? null;
-  const built = await buildSheet({ sheet: index + 1, design, placements }, { light, needGuide: false });
+  const frame = order.frame ? await loadImageBuffer(order.frame).catch(() => null) : null;
+  const built = await buildSheet({ sheet: index + 1, design, placements }, { light, needGuide: false, frame });
   const { qc } = built;
   if (!built.jpeg || !built.plt || !built.preview) return { ok: false, issues: qc.issues, warnings: qc.warnings };
   const preview = await sharp(built.preview).resize({ width: 480 }).jpeg({ quality: 78 }).toBuffer();

@@ -5,15 +5,26 @@ import { motion } from "framer-motion";
 
 type Files = { ready: boolean; sheet: string | null; hero: string | null; stickers: string[] };
 
-/** Save every image at once: iPhone shows "Save N Images", Android "Save to Photos/Files". */
+/** One image as a transparent PNG file (Photos takes PNGs everywhere; WebP sometimes lands in Files). */
+async function asPng(src: string, i: number): Promise<File> {
+  const blob = await (await fetch(src)).blob();
+  try {
+    const bmp = await createImageBitmap(blob);
+    const c = document.createElement("canvas");
+    c.width = bmp.width;
+    c.height = bmp.height;
+    c.getContext("2d")!.drawImage(bmp, 0, 0);
+    const png = await new Promise<Blob | null>((r) => c.toBlob(r, "image/png"));
+    if (png) return new File([png], `mesticker-${i + 1}.png`, { type: "image/png" });
+  } catch {
+    /* keep the original */
+  }
+  return new File([blob], `mesticker-${i + 1}.${blob.type.includes("png") ? "png" : "webp"}`, { type: blob.type || "image/png" });
+}
+
+/** Save every sticker as its own photo: iPhone shows "Save N Images", Android "Save to Photos". */
 export async function saveImages(srcs: string[]): Promise<string> {
-  const files = await Promise.all(
-    srcs.map(async (src, i) => {
-      const b = await (await fetch(src)).blob();
-      const ext = b.type.includes("png") ? "png" : b.type.includes("webp") ? "webp" : "jpg";
-      return new File([b], `mesticker-${i + 1}.${ext}`, { type: b.type || "image/png" });
-    })
-  );
+  const files = await Promise.all(srcs.map(asPng));
   if (navigator.canShare?.({ files })) {
     await navigator.share({ files });
     return "Saved! 🎉";
@@ -49,7 +60,7 @@ export default function MyOrderStickers({ id }: { id: string }) {
     };
   }, [id]);
 
-  const all = files ? Array.from(new Set([...(files.sheet ? [files.sheet] : []), ...files.stickers])) : [];
+  const all = files ? Array.from(new Set(files.stickers)) : [];
   return (
     <div className="booth theme-carol fixed inset-0 z-40 flex flex-col items-center overflow-auto px-5 pb-10 pt-8 text-center" style={{ gap: 16 }}>
       <div className="font-fun text-3xl">MeSticker</div>
@@ -75,6 +86,11 @@ export default function MyOrderStickers({ id }: { id: string }) {
             📲 Save all {all.length} to Photos
           </button>
           {status && <p className="t-body">{status}</p>}
+          {files.sheet && (
+            <button className="btn btn-soft" onClick={async () => setStatus(await saveImages([files.sheet!]).catch(() => "Press and hold the sheet to save it."))}>
+              Save the whole sheet too
+            </button>
+          )}
           {files.sheet && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={files.sheet} alt="Your sticker sheet" className="w-[min(80vw,360px)] rounded-xl bg-white p-2 shadow-lg" />
