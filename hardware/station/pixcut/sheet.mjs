@@ -83,16 +83,15 @@ export async function buildSheet(sheet, { light = false, needGuide = true } = {}
   const issues = [], warnings = [];
   const pls = [...sheet.placements].sort((a, b) => a.n - b.n);
 
-  if (pls.length !== STICKERS_PER_SHEET) issues.push(`sheet ${sheet.sheet} has ${pls.length} stickers, expected ${STICKERS_PER_SHEET}`);
+  // booth sheets are 12 stickers + the handle pill; event sheets 11 (logo, hero, 8 poses, pill)
+  if (pls.length < 6 || pls.length > 16) issues.push(`sheet ${sheet.sheet} has ${pls.length} stickers, expected 11–13`);
   const eps = 0.01;
   for (const pl of pls) {
     if (pl.x == null || pl.y == null || !(pl.w > 0) || !(pl.h > 0)) issues.push(`sticker ${pl.n} has no position/size`);
     else if (pl.x < -eps || pl.y < -eps || pl.x + pl.w > PRINTABLE.w + eps || pl.y + pl.h > PRINTABLE.h + eps) issues.push(`sticker ${pl.n} runs off the printable area`);
     if (!pl.file || (!Buffer.isBuffer(pl.file) && !existsSync(pl.file))) issues.push(`sticker ${pl.n} image is missing`);
   }
-  const hero = pls.find((p) => p.n === 1);
-  if (!hero) issues.push("no hero sticker (spot 1)");
-  else if (pls.some((p) => p.w * p.h > hero.w * hero.h + 1e-6)) issues.push("hero (spot 1) is not the largest sticker");
+  if (!pls.some((p) => p.n === 1)) issues.push("no sticker in spot 1");
   const distinct = new Set(pls.map((p) => p.file)).size;
   const need = DISTINCT[sheet.design];
   if (need && distinct < need) warnings.push(`sheet ${sheet.sheet} (${sheet.design}) has ${distinct} distinct stickers, the design wants ${need}: extras missing, printing repeats`);

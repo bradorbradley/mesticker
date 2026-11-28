@@ -14,11 +14,14 @@ export default function BoothCamera({
   onCapture,
   onBack,
   onMobile,
+  mascot,
 }: {
   onCapture: (photo: string) => void;
   onBack: () => void;
   /** booth laptop: show "Take from mobile" (QR → the guest's phone takes the photo) */
   onMobile?: () => void;
+  /** event booths: their own mascot instead of ours */
+  mascot?: React.ReactNode;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -161,7 +164,7 @@ export default function BoothCamera({
             <li>🤪 Big faces make the best stickers</li>
           </ul>
         )}
-        <Mascot className="self-start short:hidden portrait:hidden" flash={flash} mood={count !== null ? "working" : "idle"} style={{ height: u(20) }} />
+        {mascot ?? <Mascot className="self-start short:hidden portrait:hidden" flash={flash} mood={count !== null ? "working" : "idle"} style={{ height: u(20) }} />}
       </div>
 
       {/* viewfinder */}

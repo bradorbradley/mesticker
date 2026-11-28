@@ -135,3 +135,96 @@
 
 /* Older browsers (Chrome < 87) don't know `inset`; spell it out. */
 .booth .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+
+/* ---------------------------------------------------------------- event: 387 Christmas Carols
+ * Matches the invite: deep cranberry red, cream script lettering with a red outline, gold
+ * accents, warm string lights. Script = Lobster (loaded by the event page as --font-carol). */
+.booth.theme-carol {
+  --purple: #a3161c;
+  --purple-dark: #6d0d10;
+  --pink: #d32f2f;
+  --yellow: #e2b65a;
+  --lav: #f7ead1;
+  --ink: #3b1210;
+  --ink-2: #74443a;
+  background:
+    radial-gradient(circle at 10% 8%, rgba(255, 210, 120, 0.45) 0, transparent 22%),
+    radial-gradient(circle at 92% 12%, rgba(255, 210, 120, 0.35) 0, transparent 20%),
+    radial-gradient(circle at 50% 120%, rgba(163, 22, 28, 0.22) 0, transparent 55%),
+    radial-gradient(rgba(255, 215, 130, 0.5) 1.5px, transparent 2.5px) 0 0 / 46px 46px,
+    linear-gradient(170deg, #fbf2e1 0%, #f3e0bd 100%);
+}
+.booth.theme-carol .t-hero,
+.booth.theme-carol .t-h2,
+.booth.theme-carol .font-fun {
+  font-family: var(--font-carol, "Lobster"), "Fredoka", cursive;
+  font-weight: 400;
+  color: #a3161c;
+  letter-spacing: 0;
+  text-shadow: 0 2px 0 #fff6e3, 0 4px 10px rgba(110, 13, 16, 0.18);
+}
+.booth.theme-carol .pop {
+  background: linear-gradient(135deg, #a3161c 0%, #d32f2f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+.booth.theme-carol .btn-main {
+  background: linear-gradient(135deg, #b81d24 0%, #8c1218 100%);
+  border-color: #f7e6c4;
+  box-shadow: 0 calc(var(--u) * 0.55) 0 #5e0b0e, 0 calc(var(--u) * 1.2) calc(var(--u) * 2.4) rgba(140, 18, 24, 0.35);
+}
+.booth.theme-carol .btn-soft {
+  border-color: #ecd6ac;
+  box-shadow: 0 calc(var(--u) * 0.35) 0 #ecd6ac;
+}
+.booth.theme-carol .card {
+  background: #fffaf0;
+  border-color: #f7e6c4;
+  box-shadow: 0 calc(var(--u) * 0.9) calc(var(--u) * 2.6) rgba(110, 13, 16, 0.18);
+}
+/* the invite's ribbon banner: red band, cream script, notched tails */
+.booth .carol-ribbon {
+  position: relative;
+  display: inline-block;
+  padding: calc(var(--u) * 0.5) calc(var(--u) * 3.2);
+  font-family: var(--font-carol, "Lobster"), cursive;
+  font-size: max(20px, calc(var(--u) * 2.4));
+  line-height: 1.2;
+  color: #fbefd5;
+  background: linear-gradient(180deg, #c0262c 0%, #8f1218 100%);
+  border-top: 2px solid #e8c77d;
+  border-bottom: 2px solid #e8c77d;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 0.9em) 50%, 100% 100%, 0 100%, 0.9em 50%);
+  text-shadow: 0 2px 0 rgba(80, 8, 10, 0.5);
+  white-space: nowrap;
+}
+.booth .carol-ribbon-lg {
+  font-size: max(22px, calc(var(--u) * 3.2));
+  padding: calc(var(--u) * 0.6) calc(var(--u) * 4);
+}
+.booth .carol-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: max(24px, calc(var(--u) * 2.4));
+  height: max(24px, calc(var(--u) * 2.4));
+  border-radius: 999px;
+  background: #a3161c;
+  color: #fbefd5;
+  font-family: var(--font-carol, "Lobster"), cursive;
+  box-shadow: 0 0 0 2px #f7e6c4;
+}
+.booth .carol-bubble {
+  max-width: 34%;
+  padding: calc(var(--u) * 0.7) calc(var(--u) * 1.3);
+  border-radius: calc(var(--u) * 1.6);
+  background: #fffaf0;
+  border: 3px solid #a3161c;
+  color: #3b1210;
+  font-family: var(--font-carol, "Lobster"), cursive;
+  font-size: max(15px, calc(var(--u) * 1.9));
+  line-height: 1.15;
+  box-shadow: 0 6px 14px rgba(60, 8, 10, 0.3);
+}
