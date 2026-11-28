@@ -138,7 +138,7 @@ export function EventReveal({ sticker, onPrint, onRetake, onRetry, canRetry }: {
         <h2 className="t-h2">
           Look at <span className="pop">you!</span>
         </h2>
-        <p className="t-lead">Your sheet gets this cartoon plus 8 festive poses, and the 387 Christmas Carols sticker.</p>
+        <p className="t-lead">Your sheet: this cartoon, you with Fred, Augustine & Alex, name stickers and 8 festive poses.</p>
         <button className="btn btn-lg btn-main w-fit" onClick={onPrint}>
           🖨️ Print my stickers
         </button>
@@ -201,26 +201,26 @@ export function storyBeats(event: PartyEvent, look: Look, me: string, pose: (k: 
   const n = (i: number) => hosts[Math.min(i, hosts.length - 1)].name;
   // pose order: 0 reindeer, 1 stocking, 2 ornament, 3 sled, 4 snowball, 5 star, 6 skating, 7 snow globe, 8 gingerbread, 9 cocoa, 10 present, 11 with the hosts
   return [
-    { scene: "home", ms: 1600, cast: trio(), bubble: { who: "h0", text: `Hi, I'm ${n(0)}!` }, zoom: "h0", fx: ["flash"] },
-    { scene: "home", ms: 1300, cast: trio(), bubble: { who: "h1", text: `I'm ${n(1)}!` }, zoom: "h1" },
-    { scene: "home", ms: 1300, cast: trio(), bubble: { who: "h2", text: `And I'm ${n(2)}!` }, zoom: "h2" },
-    { scene: "home", ms: 1800, cast: trio({ anim: "jump" }), caption: `WELCOME TO ${event.name.toUpperCase()}!`, fx: ["speed"], sfx: "♪♫♪" },
-    { scene: "home", ms: 1300, cast: trio(), caption: "KNOCK KNOCK!", door: "knock", fx: ["shake"], sfx: "KNOCK!" },
-    { scene: "home", ms: 1900, cast: [H(0, "L"), G("RC", { anim: "jump" })], door: "open", ribbon: `It's ${who}!`, fx: ["impact", "flash"], sfx: "TA-DA!", zoom: "guest" },
-    { scene: "home", ms: 1400, cast: [H(0, "L", { anim: "jump" }), H(2, "C", { anim: "jump" }), G("R")], door: "open", bubble: { who: "h2", text: `Welcome, ${who}!` } },
-    { scene: "home", ms: 1500, cast: [G("L"), S("R", { anim: "fly" })], caption: "SUDDENLY…", fx: ["shake", "impact"], sfx: "CRASH!" },
-    { scene: "home", ms: 1600, cast: [G("L"), S("R")], bubble: { who: "santa", text: "My reindeer escaped! HELP!" }, zoom: "santa" },
-    { scene: "home", ms: 1300, cast: [G("L", { anim: "jump" }), S("R")], bubble: { who: "guest", text: "On it! 💪" }, zoom: "guest", fx: ["speed"] },
-    { scene: "street", ms: 1700, cast: [P(3, "L", { anim: "zoom" })], caption: "MEANWHILE, OUTSIDE…", fx: ["speed"], sfx: "WHOOSH!" },
-    { scene: "street", ms: 1500, cast: [P(4, "L", { anim: "jump" }), H(1, "R", { anim: "jump" })], bubble: { who: "h1", text: "Hey! 😂" }, fx: ["impact", "shake"], sfx: "SPLAT!" },
-    { scene: "street", ms: 1500, cast: [P(6, "C", { anim: "zoom" })], caption: `SMOOTH MOVES, ${WHO}!`, fx: ["speed"] },
-    { scene: "street", ms: 1600, cast: [P(0, "LC", { anim: "fly", lift: 18 })], caption: "FOUND HIM!", fx: ["speed", "flash"], sfx: "GIDDY UP!" },
-    { scene: "roof", ms: 1600, cast: [P(0, "L", { anim: "fly", lift: 30 })], caption: "OVER THE ROOFTOPS…", fx: ["speed"] },
-    { scene: "roof", ms: 1500, cast: [P(10, "L", { anim: "jump" }), S("RC", { anim: "jump" })], bubble: { who: "santa", text: "Presents saved!" }, sfx: "HO HO HO!", fx: ["impact"] },
-    { scene: "home", ms: 1400, cast: [P(5, "C")], caption: "BACK AT 387…", bubble: { who: "p5", text: "Last star! ⭐" }, fx: ["flash"] },
-    { scene: "home", ms: 1300, cast: [P(8, "L", { anim: "jump" }), H(1, "R")], bubble: { who: "h1", text: "Is that… a gingerbread you?!" }, sfx: "CRUNCH!", fx: ["shake"] },
-    { scene: "home", ms: 1300, cast: [P(9, "C")], bubble: { who: "p9", text: "Cocoa break ☕" }, zoom: "p9" },
-    { scene: "home", ms: 2600, cast: [P(11, "C", { anim: "jump", big: true })], caption: "AND EVERYONE SANG!", notes: true, fx: ["flash", "speed"], ribbon: "Next: Christmas games! 🎮" },
+    { scene: "home", ms: 1100, cast: trio(), bubble: { who: "h0", text: `Hi, I'm ${n(0)}!` }, zoom: "h0", fx: ["flash"] },
+    { scene: "home", ms: 900, cast: trio(), bubble: { who: "h1", text: `I'm ${n(1)}!` }, zoom: "h1" },
+    { scene: "home", ms: 900, cast: trio(), bubble: { who: "h2", text: `And I'm ${n(2)}!` }, zoom: "h2" },
+    { scene: "home", ms: 1250, cast: trio({ anim: "jump" }), caption: `WELCOME TO ${event.name.toUpperCase()}!`, fx: ["speed"], sfx: "♪♫♪" },
+    { scene: "home", ms: 900, cast: trio(), caption: "KNOCK KNOCK!", door: "knock", fx: ["shake"], sfx: "KNOCK!" },
+    { scene: "home", ms: 1350, cast: [H(0, "L"), G("RC", { anim: "jump" })], door: "open", ribbon: `It's ${who}!`, fx: ["impact", "flash"], sfx: "TA-DA!", zoom: "guest" },
+    { scene: "home", ms: 1000, cast: [H(0, "L", { anim: "jump" }), H(2, "C", { anim: "jump" }), G("R")], door: "open", bubble: { who: "h2", text: `Welcome, ${who}!` } },
+    { scene: "home", ms: 1050, cast: [G("L"), S("R", { anim: "fly" })], caption: "SUDDENLY…", fx: ["shake", "impact"], sfx: "CRASH!" },
+    { scene: "home", ms: 1100, cast: [G("L"), S("R")], bubble: { who: "santa", text: "My reindeer escaped! HELP!" }, zoom: "santa" },
+    { scene: "home", ms: 900, cast: [G("L", { anim: "jump" }), S("R")], bubble: { who: "guest", text: "On it! 💪" }, zoom: "guest", fx: ["speed"] },
+    { scene: "street", ms: 1200, cast: [P(3, "L", { anim: "zoom" })], caption: "MEANWHILE, OUTSIDE…", fx: ["speed"], sfx: "WHOOSH!" },
+    { scene: "street", ms: 1050, cast: [P(4, "L", { anim: "jump" }), H(1, "R", { anim: "jump" })], bubble: { who: "h1", text: "Hey! 😂" }, fx: ["impact", "shake"], sfx: "SPLAT!" },
+    { scene: "street", ms: 1050, cast: [P(6, "C", { anim: "zoom" })], caption: `SMOOTH MOVES, ${WHO}!`, fx: ["speed"] },
+    { scene: "street", ms: 1100, cast: [P(0, "LC", { anim: "fly", lift: 18 })], caption: "FOUND HIM!", fx: ["speed", "flash"], sfx: "GIDDY UP!" },
+    { scene: "roof", ms: 1100, cast: [P(0, "L", { anim: "fly", lift: 30 })], caption: "OVER THE ROOFTOPS…", fx: ["speed"] },
+    { scene: "roof", ms: 1050, cast: [P(10, "L", { anim: "jump" }), S("RC", { anim: "jump" })], bubble: { who: "santa", text: "Presents saved!" }, sfx: "HO HO HO!", fx: ["impact"] },
+    { scene: "home", ms: 1000, cast: [P(5, "C")], caption: "BACK AT 387…", bubble: { who: "p5", text: "Last star! ⭐" }, fx: ["flash"] },
+    { scene: "home", ms: 900, cast: [P(8, "L", { anim: "jump" }), H(1, "R")], bubble: { who: "h1", text: "Is that… a gingerbread you?!" }, sfx: "CRUNCH!", fx: ["shake"] },
+    { scene: "home", ms: 900, cast: [P(9, "C")], bubble: { who: "p9", text: "Cocoa break ☕" }, zoom: "p9" },
+    { scene: "home", ms: 2000, cast: [P(11, "C", { anim: "jump", big: true })], caption: "AND EVERYONE SANG!", notes: true, fx: ["flash", "speed"], ribbon: "Next: Christmas games! 🎮" },
   ];
 }
 
@@ -308,7 +308,7 @@ export function WelcomeVideo({ event, look, sticker, poses = [], name, etaSec, o
           <motion.div
             className="absolute inset-0"
             style={{ transformOrigin: zoomAt }}
-            animate={{ scale: zoomOn ? 1.2 : 1, x: fx.has("shake") ? [0, -10, 9, -7, 6, -3, (i % 2) * 0.01] : 0, y: fx.has("shake") ? [0, 5, -6, 4, -2, (i % 2) * 0.01] : 0 }}
+            animate={{ scale: zoomOn ? 1.22 : i % 2 ? 1.08 : 1.02, x: fx.has("shake") ? [0, -10, 9, -7, 6, -3, (i % 2) * 0.01] : 0, y: fx.has("shake") ? [0, 5, -6, 4, -2, (i % 2) * 0.01] : 0 }}
             transition={{ scale: { duration: 0.5, ease: "easeOut" }, x: { duration: 0.45 }, y: { duration: 0.45 } }}
           >
           <AnimatePresence initial={false}>
