@@ -65,8 +65,9 @@ async function eventOrder(order: OrderIn, id: string, items: QueueItem[]): Promi
   const known = await getCreation(id);
   if (known && guest && known.guestId && known.guestId !== guest.id) return false;
   if (!known) {
-    if (guest && (await countOrders(guest.id, event.slug)) >= event.maxOrdersPerGuest) return false;
-    if (!(await claimCreation(id, guest?.id ?? null, event.slug))) return event.free; // a resend raced us
+    // over the per-guest limit: still saved to the guest log (the owner sees everything), just not free
+    const overLimit = !!guest && (await countOrders(guest.id, event.slug)) >= event.maxOrdersPerGuest;
+    if (!(await claimCreation(id, guest?.id ?? null, event.slug))) return event.free && !overLimit; // a resend raced us
     const url = (v: unknown) => (okUrl(v) ? v : null);
     after(async () => {
       try {
@@ -81,6 +82,7 @@ async function eventOrder(order: OrderIn, id: string, items: QueueItem[]): Promi
         console.error("[booth/kit] saving the creation failed:", e);
       }
     });
+    return event.free && !overLimit;
   }
   return event.free;
 }
