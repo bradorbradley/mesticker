@@ -92,11 +92,6 @@ export default function MyOrderStickers({ id }: { id: string }) {
             </a>
           )}
           {files.sheet && (
-            <button className="btn btn-soft" onClick={async () => setStatus(await saveImages([files.sheet!]).catch(() => "Press and hold the sheet to save it."))}>
-              Save the whole sheet too
-            </button>
-          )}
-          {files.sheet && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={files.sheet} alt="Your sticker sheet" className="w-[min(80vw,360px)] rounded-xl bg-white p-2 shadow-lg" />
           )}
