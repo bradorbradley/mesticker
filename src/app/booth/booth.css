@@ -266,3 +266,20 @@
   border-bottom: 3px solid #1a1a1a;
   transform: skewX(-25deg) rotate(45deg);
 }
+.booth .comic-bubble.tail-right::after {
+  left: auto;
+  right: 1.4em;
+  transform: skewX(25deg) rotate(45deg);
+}
+/* welcome video: a big manga sound word (WHOOSH!, SPLAT!) */
+.booth .manga-sfx {
+  font-family: var(--font-comic, "Bangers"), "Fredoka", sans-serif;
+  font-size: max(34px, calc(var(--u) * 5.5));
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: #ffd36b;
+  -webkit-text-stroke: 3px #1a1a1a;
+  paint-order: stroke fill;
+  text-shadow: 5px 5px 0 #c0392b;
+  white-space: nowrap;
+}

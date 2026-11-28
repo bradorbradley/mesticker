@@ -142,14 +142,17 @@ export async function addStickerBorder(src: string, borderFraction = 0.035): Pro
  * null draws a soft placeholder (used by the on-screen preview while a
  * pose is still being made); missing entries reuse srcs[0].
  */
-export async function composePrintSheet(srcs: (string | null)[], layout: LayoutId, opts: { numbers?: boolean } = {}): Promise<string> {
+export async function composePrintSheet(srcs: (string | null)[], layout: LayoutId, opts: { numbers?: boolean; frame?: string } = {}): Promise<string> {
   const slots = LAYOUTS[layout];
   const uniq = Array.from(new Set(srcs.filter((s): s is string => !!s)));
   const loaded = new Map(await Promise.all(uniq.map(async (s) => [s, await loadImage(s)] as const)));
+  const frame = opts.frame ? await loadImage(opts.frame).catch(() => null) : null;
   const c = document.createElement("canvas");
   c.width = SHEET_W;
   c.height = SHEET_H;
   const ctx = c.getContext("2d")!;
+  // the sheet's printed trim (event sheets), under the stickers
+  if (frame) ctx.drawImage(frame, 0, 0, SHEET_W, SHEET_H);
 
   slots.forEach(([x, y, w, h, rot], i) => {
     const src = i < srcs.length ? srcs[i] : srcs[0];
@@ -244,4 +247,49 @@ export function downloadDataUrl(dataUrl: string, filename: string) {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+/**
+ * A sticker with the guest's name on a ribbon across its bottom (event sheets). Drawn here, not
+ * by the AI, so the name is always spelled right. `font` is a loaded CSS font family.
+ */
+export async function withNameRibbon(src: string, name: string, font: string): Promise<string> {
+  const img = trimTransparent(await loadImage(src));
+  const text = name.trim().slice(0, 16);
+  const W = img.width, ribbonH = Math.round(W * 0.2);
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = img.height + Math.round(ribbonH * 0.45);
+  const ctx = c.getContext("2d")!;
+  ctx.drawImage(img, 0, 0);
+  const y = c.height - ribbonH, x0 = W * 0.08, x1 = W * 0.92, notch = ribbonH * 0.35;
+  // tails, then the band
+  ctx.fillStyle = "#7d1015";
+  ctx.beginPath();
+  ctx.moveTo(x0 - notch * 0.4, y + ribbonH * 0.2); ctx.lineTo(x0 + notch, y + ribbonH * 0.2); ctx.lineTo(x0 + notch, y + ribbonH); ctx.lineTo(x0 - notch * 0.4, y + ribbonH); ctx.lineTo(x0 + notch * 0.2, y + ribbonH * 0.6); ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x1 + notch * 0.4, y + ribbonH * 0.2); ctx.lineTo(x1 - notch, y + ribbonH * 0.2); ctx.lineTo(x1 - notch, y + ribbonH); ctx.lineTo(x1 + notch * 0.4, y + ribbonH); ctx.lineTo(x1 - notch * 0.2, y + ribbonH * 0.6); ctx.closePath(); ctx.fill();
+  const g = ctx.createLinearGradient(0, y, 0, y + ribbonH * 0.85);
+  g.addColorStop(0, "#c8262d");
+  g.addColorStop(1, "#931419");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.roundRect(x0, y, x1 - x0, ribbonH * 0.82, ribbonH * 0.12);
+  ctx.fill();
+  ctx.strokeStyle = "#e8c77d";
+  ctx.lineWidth = Math.max(2, ribbonH * 0.05);
+  ctx.stroke();
+  let size = ribbonH * 0.62;
+  ctx.font = `${size}px ${font}`;
+  while (ctx.measureText(text).width > (x1 - x0) * 0.86 && size > 8) {
+    size -= 2;
+    ctx.font = `${size}px ${font}`;
+  }
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#fbefd5";
+  ctx.shadowColor = "rgba(60,5,8,0.6)";
+  ctx.shadowOffsetY = Math.max(1, ribbonH * 0.03);
+  ctx.fillText(text, W / 2, y + ribbonH * 0.43);
+  return c.toDataURL("image/png");
 }

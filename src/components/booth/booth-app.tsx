@@ -16,7 +16,7 @@ import {
   priceLabel,
   type SheetKind,
 } from "@/lib/booth-config";
-import { addStickerBorder, composePrintSheet, slotPlacement, trimmedAspect } from "@/lib/booth-print";
+import { addStickerBorder, composePrintSheet, slotPlacement, trimmedAspect, withNameRibbon } from "@/lib/booth-print";
 import { LAYOUTS, SHEET_H, SHEET_W } from "@/lib/sheet-layouts";
 import BoothReveal from "./booth-reveal";
 import { sounds } from "@/lib/booth-sounds";
@@ -43,9 +43,13 @@ type Variants = Record<VariantKind, (string | null | false)[]>;
  */
 let ACTIVE_EVENT: PartyEvent | null = null;
 const EXTRAS = 7;
-const slotsOf = (kind: VariantKind) => Array.from({ length: kind === "pose" && ACTIVE_EVENT?.poses ? ACTIVE_EVENT.poses.length : EXTRAS }, (_, i) => i);
+/** event poses, plus the guest-with-the-hosts sticker as the last "pose" */
+const eventIdeas = () => (ACTIVE_EVENT?.poses ? [...ACTIVE_EVENT.poses, ...(ACTIVE_EVENT.groupPose ? [ACTIVE_EVENT.groupPose] : [])] : null);
+const slotsOf = (kind: VariantKind) => Array.from({ length: kind === "pose" && ACTIVE_EVENT?.poses ? eventIdeas()!.length : EXTRAS }, (_, i) => i);
+/** the guest's name, for the name stickers on event sheets (set once they sign up) */
+let ACTIVE_NAME: string | null = null;
 const emptyVariants = (): Variants => ({ pose: slotsOf("pose").map(() => null), face: slotsOf("face").map(() => null) });
-const sheetLayout = () => (ACTIVE_EVENT?.look ? ("event11" as const) : ("pack13" as const));
+const sheetLayout = () => (ACTIVE_EVENT?.look ? ("event15" as const) : ("pack13" as const));
 const PILL = "/brand/handle-pill.png";
 
 /** Expressions for the Big Feelings sheet (same pose ideas engine isn't needed). */
@@ -83,12 +87,17 @@ const SHEET_RECIPES: Record<SheetKind, Src[]> = {
   best: ["main", ["face", 0], ["pose", 0], ["pose", 1], ["face", 1], ["pose", 2], ["face", 2], ["pose", 3], ["face", 3], ["pose", 4], ["face", 4], "main", "pill"],
 };
 /** event11: the event logo, the guest, their 8 themed poses, the handle pill */
-const EVENT_RECIPE: Src[] = ["logo", "main", ["pose", 0], ["pose", 1], ["pose", 2], ["pose", 3], ["pose", 4], ["pose", 5], ["pose", 6], ["pose", 7], "pill"];
+/** event15: logo, the guest, the guest with the hosts, 3 name stickers, 8 poses, handle pill */
+const eventRecipe = (): Src[] => {
+  const n = ACTIVE_EVENT?.poses?.length ?? 0;
+  const group: Src[] = ACTIVE_EVENT?.groupPose ? [["pose", n]] : ["main"];
+  return ["logo", "main", ...group, ...Array.from({ length: n }, (_, k) => ["pose", k] as Src), "pill"];
+};
 
 /** Raw sticker per slot: null while an extra is still being made (preview only); failed extras fall back to the main sticker. */
 function sheetSources(kind: SheetKind, main: string, variants: Variants, preview: boolean): (string | null)[] {
   const look = ACTIVE_EVENT?.look;
-  return (look ? EVENT_RECIPE : SHEET_RECIPES[kind]).map((s) => {
+  return (look ? eventRecipe() : SHEET_RECIPES[kind]).map((s) => {
     if (s === "main") return main;
     if (s === "logo") return look?.logo ?? main;
     if (s === "pill") return look?.pill ?? PILL;
@@ -106,7 +115,35 @@ export interface KitItem {
   y: number;
   w: number;
   h: number;
+  /** event logo / handle pill: printed on every sheet, not one of the guest's own stickers */
+  brand?: boolean;
 }
+
+/** Slot i's sticker before its border: event name stickers get the guest's name on a ribbon. */
+const ribbonCache = new Map<string, Promise<string>>();
+function prepSlot(raw: string, i: number): Promise<string> {
+  const look = ACTIVE_EVENT?.look;
+  const r = look ? eventRecipe()[i] : null;
+  if (!look || !ACTIVE_NAME || !Array.isArray(r) || !ACTIVE_EVENT?.namePoses?.includes(r[1])) return Promise.resolve(raw);
+  const key = `${raw.length}:${raw.slice(-64)}:${ACTIVE_NAME}`;
+  if (!ribbonCache.has(key)) {
+    const host = document.querySelector(".theme-carol") ?? document.body;
+    const family = getComputedStyle(host).getPropertyValue("--font-carol").trim() || "cursive";
+    ribbonCache.set(
+      key,
+      document.fonts
+        .load(`64px ${family}`)
+        .catch(() => [])
+        .then(() => withNameRibbon(raw, ACTIVE_NAME!, family))
+        .catch(() => raw)
+    );
+  }
+  return ribbonCache.get(key)!;
+}
+const isBrandSlot = (i: number) => {
+  const r = ACTIVE_EVENT?.look ? eventRecipe()[i] : SHEET_RECIPES.pose[i];
+  return r === "logo" || r === "pill";
+};
 
 /** Bordered copies are slow to make; reuse them between the live preview and printing. */
 const borderCache = new Map<string, Promise<string>>();
@@ -120,8 +157,8 @@ const bordered = (src: string) => {
 
 /** One sheet exactly as it will print (pending extras drawn as placeholders when previewing). */
 async function buildSheet(kind: SheetKind, main: string, variants: Variants, preview: boolean, numbers = false) {
-  const srcs = await Promise.all(sheetSources(kind, main, variants, preview).map((s) => (s ? bordered(s) : Promise.resolve(null))));
-  return composePrintSheet(srcs, sheetLayout(), { numbers });
+  const srcs = await Promise.all(sheetSources(kind, main, variants, preview).map((s, i) => (s ? prepSlot(s, i).then(bordered) : Promise.resolve(null))));
+  return composePrintSheet(srcs, sheetLayout(), { numbers, frame: ACTIVE_EVENT?.look?.frame });
 }
 
 /** Every sticker placement for the guest's sheets, for the print station. */
@@ -135,8 +172,8 @@ async function buildKit(sheets: SheetKind[], main: string, variants: Variants): 
     sheets.map((kind, sheet) =>
       Promise.all(
         sheetSources(kind, main, variants, false).map(async (raw, i) => {
-          const src = await bordered(raw!);
-          return { sheet, n: i + 1, src, ...slotPlacement(sheetLayout(), i, await aspect(src)) };
+          const src = await bordered(await prepSlot(raw!, i));
+          return { sheet, n: i + 1, src, ...slotPlacement(sheetLayout(), i, await aspect(src)), ...(isBrandSlot(i) ? { brand: true } : {}) };
         })
       )
     )
@@ -205,6 +242,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
   const [signupOpen, setSignupOpen] = useState(false);
   const guestRef = useRef(guest);
   guestRef.current = guest;
+  ACTIVE_NAME = guest?.name?.trim() || null;
   const fromQrRef = useRef(false);
   /** event looks: sign-up comes right before printing, then the print starts */
   const printAfterSignup = useRef(false);
@@ -382,7 +420,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
       kind === "face"
         ? Promise.resolve(EXPRESSIONS)
         : ACTIVE_EVENT?.poses
-          ? Promise.resolve(ACTIVE_EVENT.poses)
+          ? Promise.resolve(eventIdeas()!)
           : (ideasJob.current ??= Promise.race([
             // poses designed for this person, if the vision engine answers quickly; otherwise the stock poses, so Pose Party doesn't lag
             post({ photo: image }).then((d: { ideas: string[] }) => (d.ideas?.length ? d.ideas : POSES)),
@@ -394,7 +432,18 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
         Promise.allSettled(
           slotsOf(kind).map((i) =>
             wait(i * 350 + (kind === "face" ? 175 : 0))
-              .then(() => retry(() => post({ photo: image, styleId: styleRef.current, idea: list[i % list.length], theme: themeRef.current })))
+              .then(() =>
+                retry(() =>
+                  post({
+                    photo: image,
+                    styleId: styleRef.current,
+                    idea: list[i % list.length],
+                    theme: themeRef.current,
+                    // the guest-with-the-hosts sticker: draw them from the hosts' own images
+                    ...(ACTIVE_EVENT?.groupPose && kind === "pose" && i === (ACTIVE_EVENT.poses?.length ?? -1) ? { refs: ACTIVE_EVENT.look?.hosts.map((h) => h.img) } : {}),
+                  })
+                )
+              )
               .then((d) => setVariant(kind, i, d.image, id))
               .catch(() => setVariant(kind, i, false, id))
           )
@@ -517,6 +566,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
             sheets,
             checkoutId: checkoutId ?? null,
             event: event.slug,
+            ...(event.look?.frame ? { frame: `${location.origin}${event.look.frame}` } : {}),
             ...(guestRef.current ? { guest: { id: guestRef.current.id, token: guestRef.current.token } } : {}),
             photoUrl: photo,
             stickerUrl,
@@ -853,6 +903,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
             onDone={(g) => {
               setGuest(g);
               guestRef.current = g;
+              ACTIVE_NAME = g.name?.trim() || null;
               if (fromQrRef.current) saveGuest(event.slug, g);
               setSignupOpen(false);
               if (printAfterSignup.current) {
@@ -1678,6 +1729,8 @@ type PrintOrder = {
   photoUrl?: string | null;
   stickerUrl?: string | null;
   sheetUrls?: string[];
+  /** printed trim under the stickers (event sheets) */
+  frame?: string;
 };
 
 const newOrderId = () =>
@@ -1701,7 +1754,7 @@ async function sendKit(guides: string[], kit: KitItem[], order: PrintOrder): Pro
     body: JSON.stringify({
       guide: guideUrls[0],
       guides: guideUrls,
-      items: kit.map((k) => ({ sheet: k.sheet, n: k.n, url: urlOf.get(k.src), x: k.x, y: k.y, w: k.w, h: k.h })),
+      items: kit.map((k) => ({ sheet: k.sheet, n: k.n, url: urlOf.get(k.src), x: k.x, y: k.y, w: k.w, h: k.h, ...(k.brand ? { brand: true } : {}) })),
       order,
     }),
   });

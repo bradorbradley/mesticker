@@ -31,6 +31,8 @@ export interface QueueItem {
   sheet?: number;
   x?: number;
   y?: number;
+  /** event logo / handle pill: printed, but not one of the guest's own stickers */
+  brand?: boolean;
 }
 
 export interface QueueOrder {
@@ -53,6 +55,8 @@ export interface QueueOrder {
   doneAt: string | null;
   stage: QueueStage | null;
   stageAt: string | null;
+  /** printed trim under the stickers (event sheets) */
+  frame?: string | null;
 }
 
 export const STALE_MINUTES = 15;
@@ -101,6 +105,7 @@ function ensureTable() {
       .then(() => sql`ALTER TABLE booth_queue ADD COLUMN IF NOT EXISTS guides JSONB`)
       .then(() => sql`ALTER TABLE booth_queue ADD COLUMN IF NOT EXISTS stage TEXT`)
       .then(() => sql`ALTER TABLE booth_queue ADD COLUMN IF NOT EXISTS stage_at TIMESTAMPTZ`)
+      .then(() => sql`ALTER TABLE booth_queue ADD COLUMN IF NOT EXISTS frame TEXT`)
       .catch((e) => {
         tableReady = null;
         throw e;
@@ -130,6 +135,7 @@ function fromRow(r: Row): QueueOrder {
     doneAt: iso(r.done_at),
     stage: (r.stage as QueueStage) ?? null,
     stageAt: iso(r.stage_at),
+    frame: (r.frame as string) ?? null,
   };
 }
 
@@ -140,22 +146,22 @@ function fromRow(r: Row): QueueOrder {
  * drawn, or once paid) upgrades it to verified (never back) and, while it's
  * still queued, replaces its kit with the newer one.
  */
-export async function enqueue(o: Pick<QueueOrder, "id" | "boothId" | "productId" | "checkoutId" | "verified" | "kitUrl" | "guideUrl" | "guides" | "items">) {
+export async function enqueue(o: Pick<QueueOrder, "id" | "boothId" | "productId" | "checkoutId" | "verified" | "kitUrl" | "guideUrl" | "guides" | "items"> & { frame?: string | null }) {
   if (inMemory()) {
     const m = memory();
     const had = m.get(o.id);
     if (had) {
       had.verified ||= o.verified;
       // a fuller kit (all sheet stickers drawn) replaces the quick one while it's still waiting
-      if (had.status === "queued") Object.assign(had, { kitUrl: o.kitUrl, guideUrl: o.guideUrl, guides: o.guides, items: o.items });
+      if (had.status === "queued") Object.assign(had, { kitUrl: o.kitUrl, guideUrl: o.guideUrl, guides: o.guides, items: o.items, frame: o.frame ?? had.frame ?? null });
     }
-    else m.set(o.id, { ...o, status: "queued", attempts: 0, error: null, createdAt: new Date().toISOString(), claimedAt: null, doneAt: null, stage: null, stageAt: null });
+    else m.set(o.id, { ...o, frame: o.frame ?? null, status: "queued", attempts: 0, error: null, createdAt: new Date().toISOString(), claimedAt: null, doneAt: null, stage: null, stageAt: null });
     return;
   }
   await ensureTable();
   await getDb()`
-    INSERT INTO booth_queue (id, booth_id, product_id, checkout_id, verified, kit_url, guide_url, guides, items)
-    VALUES (${o.id}, ${o.boothId}, ${o.productId}, ${o.checkoutId}, ${o.verified}, ${o.kitUrl}, ${o.guideUrl}, ${JSON.stringify(o.guides)}::jsonb, ${JSON.stringify(o.items)}::jsonb)
+    INSERT INTO booth_queue (id, booth_id, product_id, checkout_id, verified, kit_url, guide_url, guides, items, frame)
+    VALUES (${o.id}, ${o.boothId}, ${o.productId}, ${o.checkoutId}, ${o.verified}, ${o.kitUrl}, ${o.guideUrl}, ${JSON.stringify(o.guides)}::jsonb, ${JSON.stringify(o.items)}::jsonb, ${o.frame ?? null})
     ON CONFLICT (id) DO UPDATE SET
       verified = booth_queue.verified OR EXCLUDED.verified,
       -- the booth sends a quick kit as soon as there's a checkout, then the full one once
@@ -163,7 +169,8 @@ export async function enqueue(o: Pick<QueueOrder, "id" | "boothId" | "productId"
       kit_url = CASE WHEN booth_queue.status = 'queued' THEN EXCLUDED.kit_url ELSE booth_queue.kit_url END,
       guide_url = CASE WHEN booth_queue.status = 'queued' THEN EXCLUDED.guide_url ELSE booth_queue.guide_url END,
       guides = CASE WHEN booth_queue.status = 'queued' THEN EXCLUDED.guides ELSE booth_queue.guides END,
-      items = CASE WHEN booth_queue.status = 'queued' THEN EXCLUDED.items ELSE booth_queue.items END
+      items = CASE WHEN booth_queue.status = 'queued' THEN EXCLUDED.items ELSE booth_queue.items END,
+      frame = COALESCE(EXCLUDED.frame, booth_queue.frame)
   `;
 }
 

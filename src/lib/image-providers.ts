@@ -188,6 +188,15 @@ export async function generateScene(prompt: string, references: string[], aspect
   return `data:${part?.inlineData?.mimeType ?? part?.inline_data?.mime_type ?? "image/png"};base64,${b64}`;
 }
 
+/**
+ * A sticker of the guest together with other characters (e.g. the event hosts as chibi
+ * stickers): the guest's photo first, then the reference images, white background removed.
+ */
+export async function generateGroupSticker(photo: string, references: string[], prompt: string, aspectRatio = "4:3") {
+  const img = await generateScene(whiteBackgroundPrompt(prompt), [photo, ...references].slice(0, 5), aspectRatio);
+  return cleanBackground(img);
+}
+
 // ---------------------------------------------------------------- fal.ai FLUX Kontext
 async function generateFal(image: string, prompt: string) {
   const key = process.env.FAL_KEY;

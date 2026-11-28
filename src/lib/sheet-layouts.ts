@@ -65,6 +65,19 @@ export const LAYOUTS = {
     [185, 1800, 800, 190, 0],
   ] as Slot[],
   /**
+   * A booked event's sheet inside its trim border (the frame keeps ~55px clear): the event logo
+   * (1), the guest's hero (2) and the guest with the hosts (3), a row of 3 name stickers, two rows
+   * of 4 poses, the handle pill (15). Every pair keeps 30px+ of paper for the cutter.
+   */
+  event15: [
+    [260, 60, 650, 230, 0],
+    [60, 310, 495, 540, 0], [585, 310, 525, 540, 0],
+    [60, 880, 330, 330, 0], [420, 880, 330, 330, 0], [780, 880, 330, 330, 0],
+    [60, 1240, 237, 280, 0], [327, 1240, 237, 280, 0], [594, 1240, 237, 280, 0], [861, 1240, 249, 280, 0],
+    [60, 1550, 237, 260, 0], [327, 1550, 237, 260, 0], [594, 1550, 237, 260, 0], [861, 1550, 249, 260, 0],
+    [260, 1840, 650, 135, 0],
+  ] as Slot[],
+  /**
    * A booked event's sheet: the event's logo sticker across the top (slot 1), the guest's hero
    * sticker, 8 action poses, and the handle pill along the bottom (slot 11).
    */
@@ -86,6 +99,7 @@ export const LAYOUT_INFO: Record<LayoutId, string> = {
   pack12: "12 slots, no tilt: a ~2.2\" hero top-left, two ~1.1\" beside it, then three rows of three (~1.1–1.3\"). Best for 12 stickers: you + 7 poses + repeats.",
   big1: "1 slot: a single ~3.6\" sticker.",
   pack13: "13 slots, no tilt: pack12 slightly tighter, plus a wide slot along the bottom for the @mesticker.fun handle pill.",
+  event15: "15 slots inside an event's trim border: logo, hero, the guest with the hosts, 3 name stickers, 8 poses, the handle pill.",
   event11: "11 slots, no tilt: an event logo across the top, a ~2.1\" hero, 8 poses, and the handle pill along the bottom.",
 };
 

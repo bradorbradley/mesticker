@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { boothPresets, resolvePresetPrompt, withEventTheme } from "@/lib/presets";
 import { generateVariationDescriptors } from "@/lib/vision";
-import { generateSticker, requestedGeminiModel, requestedProvider } from "@/lib/image-providers";
+import { generateGroupSticker, generateSticker, requestedGeminiModel, requestedProvider } from "@/lib/image-providers";
+import { loadImageBuffer, toDataUrl } from "@/lib/sheet-render";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { recordGeneration, isThrottled } from "@/lib/spend-tracker";
 
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
   if (isThrottled()) return NextResponse.json({ error: "Busy, try again in a minute" }, { status: 503 });
 
   try {
-    const { photo, styleId, idea, provider: wanted, theme } = await request.json();
+    const { photo, styleId, idea, provider: wanted, theme, refs } = await request.json();
     if (!photo) return NextResponse.json({ error: "Missing photo" }, { status: 400 });
 
     if (!idea) {
@@ -35,6 +36,20 @@ export async function POST(request: NextRequest) {
     }
     const prompt = withEventTheme(resolvePresetPrompt(styleId).prompt, theme);
     const pose = String(idea).slice(0, 300);
+    // a group sticker: the guest plus other characters (our own images only, e.g. the event's hosts)
+    if (Array.isArray(refs) && refs.length) {
+      const own = refs.filter((r: unknown): r is string => typeof r === "string" && /^\/(events|booth)\/[\w./-]+\.(webp|png|jpg)$/.test(r)).slice(0, 4);
+      const origin = request.nextUrl.origin;
+      const refImgs = await Promise.all(own.map(async (r: string) => toDataUrl(await loadImageBuffer(origin + r), r.endsWith(".png") ? "image/png" : r.endsWith(".jpg") ? "image/jpeg" : "image/webp")));
+      const t0 = Date.now();
+      const image = await generateGroupSticker(
+        photo,
+        refImgs,
+        `${prompt} The first image is the guest; the other images are characters who must appear exactly as drawn (same faces, hair and outfits). ${pose}. Draw them all together as ONE cute chibi sticker in the same art style, every face fully recognizable. No text, captions or letters anywhere.`
+      );
+      recordGeneration("preview");
+      return NextResponse.json({ image, ms: Date.now() - t0, provider: "gemini", model: "group" });
+    }
     const result = await generateSticker(
       photo,
       `${prompt} Pose and expression for this sticker: ${pose}. Same person, same hairstyle and outfit, fully recognizable. No text, captions or letters anywhere.`,
