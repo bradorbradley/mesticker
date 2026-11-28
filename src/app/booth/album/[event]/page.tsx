@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { notFound } from "next/navigation";
 import { Lobster } from "next/font/google";
 import EventAlbum from "@/components/booth/event-album";
-import { eventAlbum } from "@/lib/guests";
+import { eventAlbum, madeStickersAt } from "@/lib/guests";
 import { getPartyEvent } from "@/lib/party-events";
 
 const carolFont = Lobster({ weight: "400", subsets: ["latin"], variable: "--font-carol", display: "swap" });
@@ -13,15 +13,26 @@ export const metadata = { title: "Class photo · MeSticker", robots: { index: fa
 /**
  * After the party: the "class photo" (every guest's cartoon with their name, the hosts up front)
  * and a gallery of each real photo beside its cartoon. The link we send everyone as a thank-you.
- * Shows guests who agreed to be featured; `?key=<station key>` shows everyone (the owner's log).
+ * Opens with a guest's private link (`?t=<their token>`, once they've made stickers) and shows guests who
+ * agreed to be featured; `?key=<station key>` shows everyone (the owner's view).
  */
-export default async function AlbumPage({ params, searchParams }: { params: Promise<{ event: string }>; searchParams: Promise<{ key?: string }> }) {
-  const [{ event: slug }, { key }] = await Promise.all([params, searchParams]);
+export default async function AlbumPage({ params, searchParams }: { params: Promise<{ event: string }>; searchParams: Promise<{ key?: string; t?: string }> }) {
+  const [{ event: slug }, { key, t }] = await Promise.all([params, searchParams]);
   const event = getPartyEvent(slug);
   if (!event?.look) notFound();
   const secret = process.env.MCP_SECRET ?? "";
   const a = Buffer.from(key ?? ""), b = Buffer.from(secret);
   const owner = !!secret && a.length === b.length && timingSafeEqual(a, b);
+  // guests see it only once they've made their own stickers (their private link); the owner always can
+  const allowed = owner || (await madeStickersAt(t, event.slug).catch(() => false));
+  if (!allowed) {
+    return (
+      <main className={`${carolFont.variable} flex min-h-screen flex-col items-center justify-center gap-3 bg-[#fbefd5] p-8 text-center text-[#3b1210]`}>
+        <h1 style={{ fontFamily: "var(--font-carol), cursive", fontSize: 44, color: "#a3161c" }}>{event.name}</h1>
+        <p className="text-lg font-semibold">The class photo opens once you&apos;ve made your stickers at the booth. 🎄</p>
+      </main>
+    );
+  }
   const entries = await eventAlbum(event.slug, owner).catch(() => []);
   return (
     <div className={carolFont.variable}>

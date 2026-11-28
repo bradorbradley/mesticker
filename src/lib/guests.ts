@@ -339,3 +339,35 @@ export async function eventAlbum(event: string, all = false): Promise<AlbumEntry
     ORDER BY c.created_at ASC`;
   return rows.map((r) => ({ orderId: String(r.order_id), name: (r.name as string) ?? null, photoUrl: (r.photo_url as string) ?? null, stickerUrl: String(r.sticker_url), createdAt: iso(r.created_at)! }));
 }
+
+/** The owner's log: every creation (newest first) with who made it. */
+export interface LogEntry extends Creation {
+  name: string | null;
+  email: string | null;
+  mediaConsent: boolean;
+  marketingConsent: boolean;
+}
+export async function guestLog(limit = 300): Promise<LogEntry[]> {
+  if (inMemory()) {
+    return [...mem().creations.values()]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit)
+      .map((c) => {
+        const g = c.guestId ? mem().guests.get(c.guestId) : undefined;
+        return { ...c, name: g?.name ?? null, email: g?.email ?? null, mediaConsent: !!g?.mediaConsent, marketingConsent: !!g?.marketingConsent };
+      });
+  }
+  await ensureTables();
+  const rows = await getDb()`
+    SELECT c.*, g.name, g.email, g.media_consent, g.marketing_consent
+    FROM guest_creations c LEFT JOIN event_guests g ON g.id = c.guest_id
+    ORDER BY c.created_at DESC LIMIT ${limit}`;
+  return rows.map((r) => ({ ...creationFrom(r as Row), name: (r.name as string) ?? null, email: (r.email as string) ?? null, mediaConsent: Boolean(r.media_consent), marketingConsent: Boolean(r.marketing_consent) }));
+}
+
+/** Has this guest (by their private token) made stickers at this event? (They may then see its album.) */
+export async function madeStickersAt(token: unknown, event: string): Promise<boolean> {
+  const g = await guestByToken(token);
+  if (!g) return false;
+  return (await creationsOf(g.id)).some((c) => c.event === event && !!c.stickerUrl);
+}
