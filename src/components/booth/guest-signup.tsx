@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CONSENT_TEXT } from "@/lib/consent-text";
 import type { PartyEvent } from "@/lib/party-events";
 import { u } from "./units";
+import { cn } from "@/lib/utils";
 import { primeMusic } from "./event-booth";
 
 /**
@@ -22,6 +23,32 @@ export default function GuestSignup({
   onDone: (g: SavedGuest) => void;
   onCancel: () => void;
 }) {
+  return (
+    <div className="absolute inset-0 z-50 overflow-y-auto bg-[var(--cream,#fffaf3)]">
+      <div className="mx-auto flex w-full max-w-md flex-col short:max-w-3xl" style={{ gap: u(1.6), padding: `${u(2.5)} ${u(2)} ${u(4)}` }}>
+        <div className="text-center">
+          <div className="short:hidden" style={{ fontSize: `max(40px, ${u(5)})` }}>🎄</div>
+          <h1 className="font-fun font-bold" style={{ fontSize: `max(28px, ${u(3.4)})`, lineHeight: 1.1 }}>
+            {event.name}
+          </h1>
+          <p className="t-body" style={{ marginTop: u(0.6) }}>
+            Your stickers are almost ready! Where should we send your sticker pack?
+          </p>
+        </div>
+        <GuestForm event={event} cta={cta} onDone={onDone} />
+        <button type="button" className="t-body underline" onClick={onCancel}>
+          Back
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The sign-up fields on their own (email, name, the two pre-ticked choices, the terms line), so they
+ * can sit right on the reveal screen: one tap prints. The submit tap also unlocks the story's music.
+ */
+export function GuestForm({ event, cta, onDone, compact = false }: { event: PartyEvent; cta: string; onDone: (g: SavedGuest) => void; compact?: boolean }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [media, setMedia] = useState(true);
@@ -52,70 +79,37 @@ export default function GuestSignup({
     }
   }
 
-  const box = "mt-1 h-6 w-6 shrink-0 accent-[var(--purple,#7c5cfc)]";
+  const box = "mt-0.5 h-5 w-5 shrink-0 accent-[var(--purple,#7c5cfc)]";
+  const input = cn(
+    "w-full rounded-2xl border-2 border-[var(--line,#e6e0f5)] bg-white px-4 outline-none focus:border-[var(--purple,#7c5cfc)]",
+    compact ? "py-2.5 text-base" : "py-3 text-lg"
+  );
   return (
-    <div className="absolute inset-0 z-50 overflow-y-auto bg-[var(--cream,#fffaf3)]">
-      <form onSubmit={submit} className="mx-auto flex w-full max-w-md flex-col short:grid short:max-w-3xl short:grid-cols-2 short:gap-x-6 short:gap-y-2" style={{ gap: u(1.6), padding: `${u(2.5)} ${u(2)} ${u(4)}` }}>
-        <div className="text-center short:col-span-2">
-          <div className="short:hidden" style={{ fontSize: `max(40px, ${u(5)})` }}>🎄</div>
-          <h1 className="font-fun font-bold" style={{ fontSize: `max(28px, ${u(3.4)})`, lineHeight: 1.1 }}>
-            {event.name}
-          </h1>
-          <p className="t-body" style={{ marginTop: u(0.6) }}>
-            Your stickers are almost ready! Where should we send your sticker pack?
-          </p>
-        </div>
-
-        <label className="flex flex-col gap-1">
-          <span className="font-semibold">Email</span>
-          <input
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="rounded-2xl border-2 border-[var(--line,#e6e0f5)] bg-white px-4 py-3 text-lg outline-none focus:border-[var(--purple,#7c5cfc)]"
-          />
+    <form onSubmit={submit} className="flex w-full flex-col" style={{ gap: compact ? u(0.9) : u(1.4) }}>
+      <div className={cn("grid gap-2", compact ? "grid-cols-2 short:grid-cols-2" : "grid-cols-1 short:grid-cols-2")}>
+        <input type="text" autoComplete="given-name" required value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="First name" aria-label="Name" className={input} />
+        <input type="email" inputMode="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" aria-label="Email" className={input} />
+      </div>
+      <div className={cn("flex flex-col rounded-2xl bg-white/80 text-left text-[13px] leading-snug", compact && "short:flex-row short:gap-3 short:text-[11px] short:leading-tight")} style={{ gap: u(0.7), padding: compact ? "8px 12px" : 14 }}>
+        <label className="flex items-start gap-2.5">
+          <input type="checkbox" className={box} checked={media} onChange={(e) => setMedia(e.target.checked)} />
+          <span>{CONSENT_TEXT.media}</span>
         </label>
-        <label className="flex flex-col gap-1">
-          <span className="font-semibold">Name</span>
-          <input
-            autoComplete="given-name"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={80}
-            className="rounded-2xl border-2 border-[var(--line,#e6e0f5)] bg-white px-4 py-3 text-lg outline-none focus:border-[var(--purple,#7c5cfc)]"
-          />
+        <label className="flex items-start gap-2.5">
+          <input type="checkbox" className={box} checked={marketing} onChange={(e) => setMarketing(e.target.checked)} />
+          <span>{CONSENT_TEXT.marketing}</span>
         </label>
-
-        <div className="flex flex-col rounded-2xl bg-white p-4 text-sm leading-snug short:col-span-2 short:flex-row short:gap-4 short:p-3" style={{ gap: u(1.2) }}>
-          <label className="flex items-start gap-3">
-            <input type="checkbox" className={box} checked={media} onChange={(e) => setMedia(e.target.checked)} />
-            <span>{CONSENT_TEXT.media}</span>
-          </label>
-          <label className="flex items-start gap-3">
-            <input type="checkbox" className={box} checked={marketing} onChange={(e) => setMarketing(e.target.checked)} />
-            <span>{CONSENT_TEXT.marketing}</span>
-          </label>
-        </div>
-
-        {error && <p className="text-center font-semibold text-[var(--pink,#e5487a)] short:col-span-2">{error}</p>}
-        <button type="submit" className="btn btn-lg btn-main justify-center short:col-span-2" disabled={!valid || busy}>
-          {busy ? "One sec…" : cta}
-        </button>
-        <p className="t-body text-center short:col-span-2" style={{ fontSize: `max(11px, ${u(1)})` }}>
-          By continuing you agree to our{" "}
-          <a href="/terms" target="_blank" className="underline">Terms</a> and{" "}
-          <a href="/privacy" target="_blank" className="underline">Privacy Policy</a> and confirm you&apos;re 18+ (or a parent or guardian of everyone in the photo).
-        </p>
-        <button type="button" className="t-body underline short:col-span-2" onClick={onCancel}>
-          Back
-        </button>
-      </form>
-    </div>
+      </div>
+      {error && <p className="text-center font-semibold text-[var(--pink,#e5487a)]">{error}</p>}
+      <button type="submit" className={cn("btn btn-lg btn-main justify-center", compact && "short:!py-2.5")} disabled={!valid || busy}>
+        {busy ? "One sec…" : cta}
+      </button>
+      <p className="t-body text-center" style={{ fontSize: `max(10px, ${u(0.95)})`, lineHeight: 1.3 }}>
+        By continuing you agree to our{" "}
+        <a href="/terms" target="_blank" className="underline">Terms</a> and{" "}
+        <a href="/privacy" target="_blank" className="underline">Privacy Policy</a> and confirm you&apos;re 18+ (or a parent or guardian of everyone in the photo).
+      </p>
+    </form>
   );
 }
 

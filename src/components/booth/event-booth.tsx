@@ -11,6 +11,7 @@ import QRCode from "qrcode";
 import type { PartyEvent } from "@/lib/party-events";
 import { u } from "./units";
 import { cn } from "@/lib/utils";
+import { LAYOUTS } from "@/lib/sheet-layouts";
 import { CarolGames } from "./games/carol-games";
 
 type Look = NonNullable<PartyEvent["look"]>;
@@ -115,10 +116,10 @@ export function EventAttract({ event, look, onStart, outOfPaper, qrPath, phone }
 }
 
 /** One picture: the guest's cartoon, then straight to printing (no sheet choices). */
-export function EventReveal({ sticker, onPrint, onRetake, onRetry, canRetry }: { sticker: string; onPrint: () => void; onRetake: () => void; onRetry: () => void; canRetry: boolean }) {
+export function EventReveal({ sticker, onPrint, onRetake, onRetry, canRetry, form }: { sticker: string; onPrint: () => void; onRetake: () => void; onRetry: () => void; canRetry: boolean; form?: React.ReactNode }) {
   return (
-    <div className="flex h-full w-full items-center justify-center landscape:flex-row portrait:flex-col" style={{ gap: u(3), padding: `${u(1)} ${u(4)} ${u(2.5)}` }}>
-      <div className="relative flex items-center justify-center landscape:h-full landscape:w-[48%] portrait:w-full portrait:min-h-0 portrait:flex-1">
+    <div className={cn("flex h-full w-full items-center landscape:flex-row landscape:justify-center portrait:flex-col", form && "portrait:overflow-y-auto")} style={{ gap: form ? u(1.2) : u(3), padding: form ? `${u(0.8)} ${u(2)} ${u(1.5)}` : `${u(1)} ${u(4)} ${u(2.5)}` }}>
+      <div className={cn("relative flex items-center justify-center landscape:h-full landscape:w-[44%] portrait:w-full", form ? "portrait:h-[32vh] portrait:shrink-0" : "portrait:min-h-0 portrait:flex-1")}>
         <motion.div
           className="absolute rounded-full"
           style={{ width: "78%", aspectRatio: "1", background: "radial-gradient(circle, rgba(255,214,140,0.55), transparent 65%)" }}
@@ -134,14 +135,16 @@ export function EventReveal({ sticker, onPrint, onRetake, onRetry, canRetry }: {
           transition={{ type: "spring", stiffness: 140, damping: 11 }}
         />
       </div>
-      <div className="flex flex-col landscape:w-[42%] portrait:items-center portrait:text-center" style={{ gap: u(1.6) }}>
+      <div className={cn("flex flex-col landscape:w-[48%] portrait:items-center portrait:text-center", form && "w-full max-w-md landscape:max-h-full landscape:overflow-y-auto landscape:py-2")} style={{ gap: form ? u(1) : u(1.6) }}>
         <h2 className="t-h2">
           Look at <span className="pop">you!</span>
         </h2>
-        <p className="t-lead">Your sheet: this cartoon, you with Fred, Augustine & Alex, name stickers and 8 festive poses.</p>
-        <button className="btn btn-lg btn-main w-fit" onClick={onPrint}>
-          🖨️ Print my stickers
-        </button>
+        <p className={form ? "t-body short:hidden" : "t-lead"}>{form ? "Add your name for your name stickers, then print!" : "Your sheet: this cartoon, you with Fred, Augustine & Alex, name stickers and 8 festive poses."}</p>
+        {form ?? (
+          <button className="btn btn-lg btn-main w-fit" onClick={onPrint}>
+            🖨️ Print my stickers
+          </button>
+        )}
         <div className="flex flex-wrap" style={{ gap: u(1) }}>
           <button className="btn btn-soft" onClick={onRetake}>
             📸 New photo
@@ -192,7 +195,6 @@ const ACTOR_BIG = 34;
 
 export function storyBeats(event: PartyEvent, look: Look, me: string, pose: (k: number) => string, name: string | null): Beat[] {
   const who = name || "friend";
-  const WHO = who.toUpperCase();
   const hosts = look.hosts;
   const H = (i: number, at: Slot, extra: Partial<Actor> = {}): Actor => ({ key: `h${i}`, src: hosts[Math.min(i, hosts.length - 1)].img, at, anim: "bob", ...extra });
   const santa = look.cameo?.img ?? hosts[0].img;
@@ -202,35 +204,21 @@ export function storyBeats(event: PartyEvent, look: Look, me: string, pose: (k: 
   const trio = (extra: Partial<Actor> = {}) => [H(0, "L", extra), H(1, "C", extra), H(2, "R", extra)];
   const n = (i: number) => hosts[Math.min(i, hosts.length - 1)].name;
   // pose order: 0 reindeer, 1 stocking, 2 ornament, 3 sled, 4 snowball, 5 star, 6 skating, 7 snow globe, 8 gingerbread, 9 cocoa, 10 present, 11 with the hosts
+  // ~29s: one clear idea per frame, long enough to read, always something moving
   return [
-    { scene: "home", ms: 1100, cast: trio(), bubble: { who: "h0", text: `Hi, I'm ${n(0)}!` }, zoom: "h0", fx: ["flash"] },
-    { scene: "home", ms: 900, cast: trio(), bubble: { who: "h1", text: `I'm ${n(1)}!` }, zoom: "h1" },
-    { scene: "home", ms: 900, cast: trio(), bubble: { who: "h2", text: `And I'm ${n(2)}!` }, zoom: "h2" },
-    { scene: "home", ms: 1250, cast: trio({ anim: "jump" }), caption: `WELCOME TO ${event.name.toUpperCase()}!`, fx: ["speed"], sfx: "♪♫♪" },
-    { scene: "home", ms: 900, cast: trio(), caption: "KNOCK KNOCK!", door: "knock", fx: ["shake"], sfx: "KNOCK!" },
-    { scene: "home", ms: 1350, cast: [H(0, "L"), G("RC", { anim: "jump" })], door: "open", ribbon: `It's ${who}!`, fx: ["impact", "flash"], sfx: "TA-DA!", zoom: "guest" },
-    { scene: "home", ms: 1000, cast: [H(0, "L", { anim: "jump" }), H(2, "C", { anim: "jump" }), G("R")], door: "open", bubble: { who: "h2", text: `Welcome, ${who}!` } },
-    { scene: "home", ms: 1050, cast: [G("L"), S("R", { anim: "fly" })], caption: "SUDDENLY…", fx: ["shake", "impact"], sfx: "CRASH!" },
-    { scene: "home", ms: 1100, cast: [G("L"), S("R")], bubble: { who: "santa", text: "My reindeer escaped! HELP!" }, zoom: "santa" },
-    { scene: "home", ms: 900, cast: [G("L", { anim: "jump" }), S("R")], bubble: { who: "guest", text: "On it! 💪" }, zoom: "guest", fx: ["speed"] },
-    { scene: "street", ms: 1200, cast: [P(3, "L", { anim: "zoom" })], caption: "MEANWHILE, OUTSIDE…", fx: ["speed"], sfx: "WHOOSH!" },
-    { scene: "street", ms: 1050, cast: [P(4, "L", { anim: "jump" }), H(1, "R", { anim: "jump" })], bubble: { who: "h1", text: "Hey! 😂" }, fx: ["impact", "shake"], sfx: "SPLAT!" },
-    { scene: "street", ms: 1000, cast: [G("L", { anim: "jump" }), H(1, "R", { anim: "jump" })], caption: "SNOWBALL FIGHT!", fx: ["speed", "flash"], sfx: "GAME ON!", zoom: "guest" },
-    { scene: "street", ms: 19000, cast: [], game: 0 },
-    { scene: "street", ms: 1050, cast: [P(6, "C", { anim: "zoom" })], caption: `SMOOTH MOVES, ${WHO}!`, fx: ["speed"] },
-    { scene: "street", ms: 1000, cast: [P(6, "C", { anim: "jump" })], caption: "TRACE THE FIGURE 8!", fx: ["flash"], sfx: "SWOOSH!" },
-    { scene: "street", ms: 19000, cast: [], game: 1 },
-    { scene: "street", ms: 1100, cast: [P(0, "LC", { anim: "fly", lift: 18 })], caption: "FOUND HIM!", fx: ["speed", "flash"], sfx: "GIDDY UP!" },
-    { scene: "roof", ms: 1100, cast: [P(0, "L", { anim: "fly", lift: 30 })], caption: "OVER THE ROOFTOPS…", fx: ["speed"] },
-    { scene: "roof", ms: 1050, cast: [P(10, "L", { anim: "jump" }), S("RC", { anim: "jump" })], bubble: { who: "santa", text: `Oh no, I mixed up the presents! Find ${who}!` }, sfx: "HO HO HO!", fx: ["impact"] },
-    { scene: "roof", ms: 19000, cast: [], game: 2 },
-    { scene: "roof", ms: 1000, cast: [P(10, "L", { anim: "jump" }), S("RC", { anim: "jump" })], bubble: { who: "santa", text: "Presents saved! 🎁" }, fx: ["flash"] },
-    { scene: "home", ms: 1000, cast: [P(5, "C")], caption: "BACK AT 387…", bubble: { who: "p5", text: "Last star! ⭐" }, fx: ["flash"] },
-    { scene: "home", ms: 900, cast: [P(8, "L", { anim: "jump" }), H(1, "R")], bubble: { who: "h1", text: "Is that… a gingerbread you?!" }, sfx: "CRUNCH!", fx: ["shake"] },
-    { scene: "home", ms: 900, cast: [P(9, "C")], bubble: { who: "p9", text: "Cocoa break ☕" }, zoom: "p9" },
-    { scene: "home", ms: 1000, cast: trio({ anim: "jump" }), caption: "MATCH THE MEMORIES!", fx: ["speed"], sfx: "FLIP!" },
-    { scene: "home", ms: 19000, cast: [], game: 3 },
-    { scene: "home", ms: 2000, cast: [P(11, "C", { anim: "jump", big: true })], caption: "AND EVERYONE SANG!", notes: true, fx: ["flash", "speed"], ribbon: "Merry Christmas! 🎄" },
+    { scene: "home", ms: 2300, cast: trio({ anim: "jump" }), caption: `WELCOME TO ${event.name.toUpperCase()}!`, sfx: "♪♫♪", fx: ["flash"] },
+    { scene: "home", ms: 2300, cast: trio(), bubble: { who: "h1", text: `We're ${n(0)}, ${n(1)} & ${n(2)}!` }, zoom: "h1" },
+    { scene: "home", ms: 1700, cast: trio(), caption: "KNOCK KNOCK!", door: "knock", fx: ["shake"], sfx: "KNOCK!" },
+    { scene: "home", ms: 2100, cast: [H(0, "L"), G("RC", { anim: "jump" })], door: "open", ribbon: `It's ${who}!`, fx: ["impact", "flash"], sfx: "TA-DA!" },
+    { scene: "home", ms: 1900, cast: [G("L"), S("R", { anim: "fly" })], caption: "SUDDENLY…", fx: ["shake", "impact"], sfx: "CRASH!" },
+    { scene: "home", ms: 2300, cast: [G("L"), S("R")], bubble: { who: "santa", text: "My reindeer escaped! Help!" }, zoom: "santa" },
+    { scene: "home", ms: 1700, cast: [G("L", { anim: "jump" }), S("R")], bubble: { who: "guest", text: "On it! 💪" }, zoom: "guest", fx: ["speed"] },
+    { scene: "street", ms: 2000, cast: [P(3, "LC", { anim: "zoom" })], caption: "DOWN THE HILL…", fx: ["speed"], sfx: "WHOOSH!" },
+    { scene: "street", ms: 2000, cast: [P(4, "L", { anim: "jump" }), H(1, "R", { anim: "jump" })], bubble: { who: "h1", text: "Hey! 😂" }, fx: ["impact"], sfx: "SPLAT!" },
+    { scene: "street", ms: 2100, cast: [P(0, "LC", { anim: "fly", lift: 18 })], caption: "FOUND THE REINDEER!", fx: ["speed", "flash"], sfx: "GIDDY UP!" },
+    { scene: "roof", ms: 2200, cast: [P(10, "L", { anim: "jump" }), S("RC", { anim: "jump" })], bubble: { who: "santa", text: "Christmas is saved!" }, sfx: "HO HO HO!", fx: ["impact"] },
+    { scene: "home", ms: 2100, cast: [P(8, "L", { anim: "jump" }), H(2, "R")], bubble: { who: "h2", text: "Is that… a gingerbread you?!" }, sfx: "CRUNCH!" },
+    { scene: "home", ms: 3000, cast: [P(11, "C", { anim: "jump", big: true })], caption: "AND EVERYONE SANG!", notes: true, fx: ["flash"], ribbon: "Game time! 🎮" },
   ];
 }
 
@@ -560,7 +548,6 @@ export function EventGenerating({ look, photo, ready }: { look: Look; photo: str
  * their name ribbons and white die-cut borders), not a tiny picture of the sheet.
  */
 export function FloatingStickers({ stickers, className }: { stickers: string[]; className?: string }) {
-  const list = Array.from(new Set(stickers)).slice(0, 15);
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useEffect(() => {
@@ -570,27 +557,54 @@ export function FloatingStickers({ stickers, className }: { stickers: string[]; 
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  // the column count that gives the biggest stickers in this box
+  const float = (k: number, cell: number) => ({
+    animate: { y: [0, -cell * 0.04, 0], rotate: [k % 2 ? -2.5 : 2.5, k % 2 ? 2.5 : -2.5, k % 2 ? -2.5 : 2.5] },
+    transition: { duration: 2.6 + (k % 4) * 0.4, repeat: Infinity, ease: "easeInOut" as const, delay: (k % 5) * 0.3 },
+  });
+  const pop = (k: number) => ({ initial: { scale: 0, rotate: -15, opacity: 0 }, animate: { scale: 1, rotate: 0, opacity: 1 }, transition: { type: "spring" as const, stiffness: 200, damping: 13, delay: 0.1 + k * 0.06 } });
+  const img = "h-full w-full object-contain drop-shadow-[0_8px_10px_rgba(60,8,10,0.35)]";
+
+  // portrait: laid out like the printed sheet (hero and group big, rows of name stickers and poses), no sheet behind
+  const slots = LAYOUTS.event15.slice(1, 14); // the guest's 13 (no logo, no pill)
+  const portrait = size.h >= size.w * 0.9 && stickers.length >= 8;
+  if (portrait) {
+    const list = stickers.slice(0, slots.length);
+    const used = slots.slice(0, list.length);
+    const x0 = Math.min(...used.map((sl) => sl[0])), y0 = Math.min(...used.map((sl) => sl[1]));
+    const x1 = Math.max(...used.map((sl) => sl[0] + sl[2])), y1 = Math.max(...used.map((sl) => sl[1] + sl[3]));
+    const k = Math.min(size.w / (x1 - x0), size.h / (y1 - y0));
+    return (
+      <div ref={box} className={cn("relative", className)}>
+        <div className="absolute left-1/2 top-1/2" style={{ width: (x1 - x0) * k, height: (y1 - y0) * k, transform: "translate(-50%, -50%)" }}>
+          {list.map((src, i) => {
+            const [x, y, w, h] = used[i];
+            return (
+              <motion.div key={`${i}-${src.slice(-24)}`} className="absolute" style={{ left: (x - x0) * k, top: (y - y0) * k, width: w * k, height: h * k }} {...pop(i)}>
+                <motion.img src={src} alt="" className={img} {...float(i, h * k)} />
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // landscape: the column count that gives the biggest stickers while showing every one
+  const list = Array.from(new Set(stickers)).slice(0, 15);
   const n = list.length || 1;
   let cols = 1, cell = 0;
   for (let c = 1; c <= n; c++) {
     const rows = Math.ceil(n / c);
-    const s = Math.min(size.w / c, size.h / rows);
-    if (s > cell) [cols, cell] = [c, s];
+    const sz = Math.min(size.w / c, size.h / rows);
+    if (sz > cell) [cols, cell] = [c, sz];
   }
   return (
     <div ref={box} className={cn("relative flex items-center justify-center", className)}>
       {cell > 0 && (
         <div className="grid" style={{ gridTemplateColumns: `repeat(${cols}, ${cell}px)`, gridAutoRows: `${cell}px` }}>
           {list.map((src, k) => (
-            <motion.div key={src} className="flex items-center justify-center" style={{ padding: cell * 0.04 }} initial={{ scale: 0, rotate: -15, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200, damping: 13, delay: 0.1 + k * 0.07 }}>
-              <motion.img
-                src={src}
-                alt=""
-                className="h-full w-full object-contain drop-shadow-[0_8px_10px_rgba(60,8,10,0.35)]"
-                animate={{ y: [0, -cell * 0.05, 0], rotate: [k % 2 ? -3 : 3, k % 2 ? 3 : -3, k % 2 ? -3 : 3] }}
-                transition={{ duration: 2.6 + (k % 4) * 0.4, repeat: Infinity, ease: "easeInOut", delay: (k % 5) * 0.3 }}
-              />
+            <motion.div key={src} className="flex items-center justify-center" style={{ padding: cell * 0.04 }} {...pop(k)}>
+              <motion.img src={src} alt="" className={img} {...float(k, cell)} />
             </motion.div>
           ))}
         </div>
@@ -659,7 +673,7 @@ export function EventWait({
   stickers: string[];
   onDone: () => void;
 }) {
-  const [phase, setPhase] = useState<"video" | "save">("video");
+  const [phase, setPhase] = useState<"video" | "games" | "save">("video");
   const [run, setRun] = useState(0);
   const [qr, setQr] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -670,6 +684,8 @@ export function EventWait({
   }, [handset, orderId]);
 
   const unique = Array.from(new Set(stickers));
+  // the games' cast: every pose sticker and the hero (the hosts are added by the games)
+  const gameStickers = Array.from(new Set([...poses.filter((p): p is string => typeof p === "string"), ...(sticker ? [sticker] : [])]));
 
   const save = async () => {
     setSaved("Getting them ready…");
@@ -680,12 +696,14 @@ export function EventWait({
   return (
     <div className="fixed inset-0 z-[60] overflow-hidden bg-[#2a0d0b]">
       {phase === "video" ? (
-        <WelcomeVideo key={run} event={event} look={look} sticker={sticker} poses={poses} name={name} etaSec={run ? undefined : firstEta.current} games={!run} onEnd={() => setPhase("save")} />
+        <WelcomeVideo key={run} event={event} look={look} sticker={sticker} poses={poses} name={name} etaSec={run ? undefined : firstEta.current} onEnd={() => setPhase(run ? "save" : "games")} />
+      ) : phase === "games" ? (
+        <CarolGames stickers={gameStickers} hero={sticker ?? look.hosts[0].img} hosts={look.hosts.map((h) => ({ name: h.name, img: h.img }))} name={name} durationMs={75000} onDone={() => setPhase("save")} />
       ) : (
         <div className="relative flex h-full w-full items-center text-center landscape:flex-row portrait:flex-col" style={{ gap: u(1.6), padding: "16px 16px 84px" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={look.scene} alt="" className="fixed inset-0 h-full w-full scale-110 object-cover opacity-60 blur-2xl" />
-          <FloatingStickers stickers={unique} className="relative min-h-0 w-full flex-1 landscape:h-full" />
+          <FloatingStickers stickers={stickers} className="relative min-h-0 w-full flex-1 landscape:h-full" />
           <div className="relative flex shrink-0 flex-col items-center landscape:w-[36%]" style={{ gap: u(1), maxWidth: 420 }}>
           <h2 className="t-h2 !text-[#fbefd5]">Your stickers! 🎉</h2>
           <p className="t-lead !text-[#f3dcb0]">Save all your stickers to your phone, ready to send to friends.</p>
@@ -730,7 +748,7 @@ export function EventWait({
       )}
 
       {/* status + done, floating (the games have their own bars) */}
-      <div className={"absolute inset-x-0 bottom-0 z-50 flex justify-center p-3"} style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+      <div className={cn("inset-x-0 bottom-0 z-50 flex justify-center p-3", phase === "games" ? "hidden" : "absolute")} style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
         <div className="flex w-full max-w-xl items-center rounded-full bg-black/55 py-2 pl-5 pr-2 text-white backdrop-blur" style={{ gap: 12 }}>
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-bold">{info.label}</div>

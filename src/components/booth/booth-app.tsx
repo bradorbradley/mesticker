@@ -22,7 +22,7 @@ import BoothReveal from "./booth-reveal";
 import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
 import type { PartyEvent } from "@/lib/party-events";
-import GuestSignup, { loadSavedGuest, saveGuest, type SavedGuest } from "@/components/booth/guest-signup";
+import GuestSignup, { GuestForm, loadSavedGuest, saveGuest, type SavedGuest } from "@/components/booth/guest-signup";
 import { EventAttract, EventDone, EventGenerating, EventReveal, EventWait, HostsMascot, primeMusic, type WaitInfo } from "@/components/booth/event-booth";
 import Mascot from "./mascot";
 import BoothCamera from "./booth-camera";
@@ -281,7 +281,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
   const variantsRef = useRef<Variants>(emptyVariants());
   // what the guest takes home: the stickers exactly as printed (name ribbons, die-cut borders), else the raw ones
   const guestStickers = kit?.some((k) => !k.brand)
-    ? Array.from(new Set(kit.filter((k) => !k.brand).map((k) => k.src)))
+    ? kit.filter((k) => !k.brand && k.sheet === 0).sort((a, b) => a.n - b.n).map((k) => k.src)
     : [sticker, ...variants.pose].filter((x): x is string => typeof x === "string");
   const genId = useRef(0);
   const setVariant = (kind: VariantKind, i: number, v: string | false, id: number) => {
@@ -836,6 +836,23 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                     setSignupOpen(true);
                   } else startPrint();
                 }}
+                form={
+                  event.collectGuest && !guest ? (
+                    <GuestForm
+                      event={event}
+                      compact
+                      cta="🖨️ Print my stickers"
+                      onDone={(g) => {
+                        sounds.tap();
+                        setGuest(g);
+                        guestRef.current = g;
+                        ACTIVE_NAME = g.name?.trim() || null;
+                        if (fromQrRef.current) saveGuest(event.slug, g);
+                        startPrint();
+                      }}
+                    />
+                  ) : undefined
+                }
               />
             )}
             {step === "sheets" && sticker && !event?.look && (
