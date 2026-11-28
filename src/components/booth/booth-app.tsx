@@ -52,9 +52,16 @@ const eventIdeas = () => {
     const opts = [base, ...(ev.poseAlts?.[i] ?? [])];
     return opts[Math.floor(Math.random() * opts.length)];
   };
-  return [...ev.poses.map((p, i) => pick(i, p)), ...(ev.groupPose ? [ev.groupPose] : [])];
+  return [...ev.poses.map((p, i) => pick(i, p)), ...(ev.groups ?? []).map((g) => g.idea)];
 };
 const slotsOf = (kind: VariantKind) => Array.from({ length: kind === "pose" && ACTIVE_EVENT?.poses ? eventIdeas()!.length : EXTRAS }, (_, i) => i);
+/** a group sticker draws the guest with the hosts (or the cameo, e.g. Santa) from their own images */
+const groupRefs = (kind: VariantKind, i: number) => {
+  const ev = ACTIVE_EVENT;
+  const g = kind === "pose" && ev?.poses ? ev.groups?.[i - ev.poses.length] : undefined;
+  if (!g || !ev?.look) return {};
+  return { refs: g.with === "cameo" && ev.look.cameo ? [ev.look.cameo.img] : ev.look.hosts.map((h) => h.img) };
+};
 /** the guest's name, for the name stickers on event sheets (set once they sign up) */
 let ACTIVE_NAME: string | null = null;
 const emptyVariants = (): Variants => ({ pose: slotsOf("pose").map(() => null), face: slotsOf("face").map(() => null) });
@@ -96,11 +103,12 @@ const SHEET_RECIPES: Record<SheetKind, Src[]> = {
   best: ["main", ["face", 0], ["pose", 0], ["pose", 1], ["face", 1], ["pose", 2], ["face", 2], ["pose", 3], ["face", 3], ["pose", 4], ["face", 4], "main", "pill"],
 };
 /** event11: the event logo, the guest, their 8 themed poses, the handle pill */
-/** event15: logo, the guest, the guest with the hosts, 3 name stickers, 8 poses, handle pill */
+/** event sheet: logo, the guest, then the event's sheet order (groups, name stickers, poses), handle pill */
 const eventRecipe = (): Src[] => {
-  const n = ACTIVE_EVENT?.poses?.length ?? 0;
-  const group: Src[] = ACTIVE_EVENT?.groupPose ? [["pose", n]] : ["main"];
-  return ["logo", "main", ...group, ...Array.from({ length: n }, (_, k) => ["pose", k] as Src), "pill"];
+  const ev = ACTIVE_EVENT;
+  const n = (ev?.poses?.length ?? 0) + (ev?.groups?.length ?? 0);
+  const order = ev?.sheet ?? Array.from({ length: n }, (_, k) => k);
+  return ["logo", "main", ...order.map((k) => ["pose", k] as Src), "pill"];
 };
 
 /** Raw sticker per slot: null while an extra is still being made (preview only); failed extras fall back to the main sticker. */
@@ -444,6 +452,10 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
   const ideasJob = useRef<Promise<string[]> | null>(null);
   const variantPhoto = useRef<string | null>(null);
   const variantJobs = useRef<Partial<Record<VariantKind, Promise<unknown>>>>({});
+  // how many people are in the photo (couples get both of them on every sticker, and two sheets)
+  const peopleRef = useRef(1);
+  const peopleJob = useRef<Promise<number>>(Promise.resolve(1));
+  const [people, setPeople] = useState(1);
   const startVariants = (kind: VariantKind) => {
     const image = variantPhoto.current;
     if (!image || variantJobs.current[kind]) return;
@@ -464,8 +476,8 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
             post({ photo: image }).then((d: { ideas: string[] }) => (d.ideas?.length ? d.ideas : POSES)),
             new Promise<string[]>((r) => setTimeout(() => r(POSES), IDEAS_TIMEOUT_MS)),
           ]).catch(() => POSES));
-    variantJobs.current[kind] = ideas
-      .then((list) =>
+    variantJobs.current[kind] = Promise.all([ideas, Promise.race([peopleJob.current, wait(5000).then(() => 1)])])
+      .then(([list]) =>
         // stagger so 14 image requests don't all land in the same instant
         Promise.allSettled(
           slotsOf(kind).map((i) =>
@@ -478,7 +490,8 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                     idea: list[i % list.length],
                     theme: themeRef.current,
                     // the guest-with-the-hosts sticker: draw them from the hosts' own images
-                    ...(ACTIVE_EVENT?.groupPose && kind === "pose" && i === (ACTIVE_EVENT.poses?.length ?? -1) ? { refs: ACTIVE_EVENT.look?.hosts.map((h) => h.img) } : {}),
+                    ...groupRefs(kind, i),
+                    ...(peopleRef.current > 1 ? { people: peopleRef.current } : {}),
                   })
                 )
               )
@@ -509,6 +522,21 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
       body: JSON.stringify({ image, styleId: styleRef.current, provider: modelRef.current.hero, theme: themeRef.current }),
     });
     variantPhoto.current = image;
+    peopleRef.current = 1;
+    setPeople(1);
+    setPicked(["pose"]);
+    peopleJob.current = ACTIVE_EVENT?.look
+      ? fetch("/api/booth/pose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ photo: image, count: true }) })
+          .then((r) => (r.ok ? r.json() : { people: 1 }))
+          .then((d: { people?: number }) => {
+            const n = Math.max(1, Math.min(6, Number(d.people) || 1));
+            peopleRef.current = n;
+            setPeople(n);
+            if (n > 1) setPicked(["pose", "pose"]); // one sheet each, by default
+            return n;
+          })
+          .catch(() => 1)
+      : Promise.resolve(1);
     if (collectGuest.current) photoUrl.current = uploadUrl(image).catch(() => null);
     startVariantsRef.current("pose");
     if (!ACTIVE_EVENT?.look) startVariantsRef.current("face");
@@ -872,9 +900,17 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                 }}
                 form={
                   event.collectGuest && !guest ? (
+                    <>
+                    {people > 1 && (
+                      <label className="flex w-full items-center justify-center gap-2.5 rounded-2xl bg-white/80 px-3 py-2 font-semibold">
+                        <input type="checkbox" className="h-5 w-5 accent-[var(--purple,#7c5cfc)]" checked={picked.length > 1} onChange={(e) => setPicked(e.target.checked ? ["pose", "pose"] : ["pose"])} />
+                        <span>👯 {people} of you! Print 2 sheets, one each</span>
+                      </label>
+                    )}
                     <GuestForm
                       event={event}
                       compact
+                      namePlaceholder={people > 1 ? "Your names" : undefined}
                       cta="🖨️ Print my stickers"
                       onDone={(g) => {
                         sounds.tap();
@@ -885,6 +921,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                         startPrint();
                       }}
                     />
+                    </>
                   ) : undefined
                 }
               />

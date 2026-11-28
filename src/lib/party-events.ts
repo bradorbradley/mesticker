@@ -40,8 +40,10 @@ export interface PartyEvent {
   };
   /** the poses on the event sheet, instead of the usual per-person ideas */
   poses?: string[];
-  /** one more sticker: the guest together with the hosts (made from their images) */
-  groupPose?: string;
+  /** stickers of the guest together with the hosts or the cameo (drawn from their images), after the poses */
+  groups?: { idea: string; with: "hosts" | "cameo" }[];
+  /** the sheet, slot by slot after the logo and the main sticker: sticker indexes (poses, then groups) */
+  sheet?: number[];
   /** poses (by index) that get the guest's name on a ribbon */
   namePoses?: number[];
   /** other ideas for some pose slots, one picked per guest, so every sheet is a little different */
@@ -74,39 +76,36 @@ export const PARTY_EVENTS: Record<string, PartyEvent> = {
       music: "/events/carol/music.mp3",
       invite: "/events/carol/invite.jpg",
     },
-    // the order matters: the sheet, the story and the games use these by index
+    // the order matters: the sheet and the story use these by index (0–6 solo, then 7–9 groups)
     poses: [
+      // 0–2 get the guest's name on a ribbon
       "riding a flying reindeer across a huge glowing full moon, waving, scarf flying, inside a round badge with a deep blue starry night-sky background",
       "popping out of a giant red Christmas stocking with a white fluffy cuff, arms up, inside a round badge with a warm cozy fireplace background",
       "their happy face peeking out of a shiny red glass Christmas ornament bauble with a gold cap and a ribbon bow on top",
+      // 3–5 action
       "racing downhill on a wooden sled, snow spraying everywhere, huge excited grin, motion lines",
-      "throwing a snowball mid-throw with a mischievous grin, snow flying",
-      "standing on a little ladder placing a glowing gold star on top of a small decorated Christmas tree",
-      "ice skating on one leg with arms out wide, sparkles trailing from the skates",
-      "a tiny version of themself waving inside a glass snow globe with falling snow and a wooden base",
-      "as a cute gingerbread cookie version of themself with white icing details and gumdrop buttons",
-      "wearing a Santa hat and cozy scarf, sipping hot cocoa with marshmallows from a big mug, rosy cheeks",
+      "winding up to throw a snowball mid-leap, mischievous grin, snow flying",
       "bursting out of a wrapped Christmas present with a big red bow, confetti flying, arms wide",
+      // 6 a simple solo pose
+      "wearing a Santa hat and cozy scarf, sipping hot cocoa with marshmallows from a big mug, rosy cheeks, waving",
     ],
-    groupPose: "the guest standing in the middle with the three choir singers around them, all four singing Christmas carols together holding lit candles and open songbooks, joyful, musical notes floating around them",
+    groups: [
+      { with: "hosts", idea: "the guest in the middle of the three choir singers, all four singing Christmas carols together holding lit candles and open songbooks, joyful, musical notes floating around them" },
+      { with: "hosts", idea: "the guest and the three choir singers each popping out of their own giant red Christmas stocking, four stockings hanging in a row on a fireplace mantel with garland, arms up, laughing" },
+      { with: "cameo", idea: "the guest riding in Santa's red sleigh right next to Santa, both waving, presents piled behind them, flying over snowy rooftops past a huge full moon, inside a round badge with a starry night-sky background" },
+    ],
+    // after logo + main: carols group, the 3 name stickers, stockings group, sleigh, 4 solo poses (then the pill)
+    sheet: [7, 0, 1, 2, 8, 9, 3, 4, 5, 6],
     namePoses: [0, 1, 2],
-    // slots the welcome story doesn't use can change from guest to guest
+    // every sheet is a little different: some poses swap for an alternative per guest
     poseAlts: {
-      5: [
-        "on tiptoes hanging a shiny red ornament on a decorated Christmas tree",
-        "tangled up in twinkly Christmas lights, laughing",
-      ],
+      3: ["snowboarding down a snowy hill doing a jump, scarf flying, motion lines", "zooming down a snowy hill on a toboggan, arms up, snow spraying"],
+      4: ["ducking behind a snow fort with an armful of snowballs, cheeky grin", "mid snowball fight, a snowball splatting nearby, laughing"],
+      5: ["ice skating in a spin with sparkles trailing from the skates", "jumping for joy over a pile of wrapped presents, arms up"],
       6: [
-        "building a snowman with a top hat, carrot nose and scarf, snow on their mittens",
-        "making a snow angel in fresh snow, seen from above, big grin",
-      ],
-      7: [
-        "flying in Santa's sleigh piled with presents past the stars, inside a round badge with a night-sky background",
-        "singing a carol into a candy cane like a microphone, musical notes around them",
-      ],
-      9: [
+        "holding a big striped candy cane and waving, cozy winter sweater",
         "wearing reindeer antlers and a glowing red nose, giggling",
-        "baking Christmas cookies, flour on their nose, holding a tray of iced star cookies",
+        "hugging a cute snowman with a top hat and carrot nose",
       ],
     },
   },
