@@ -68,15 +68,24 @@ export async function listRecent(kind: string, sinceSeconds: number) {
   return rows.map((r) => ({ url: `${publicBase()}/api/images/${r.id}`, uploadedAt: new Date(r.created_at as string).toISOString(), size: Number(r.bytes) }));
 }
 
+/** Delete stored images by their public URLs (a guest asking to be forgotten). */
+export async function deleteImages(urls: string[]) {
+  const ids = urls.map((u) => u.split("/api/images/")[1]).filter((id): id is string => !!id && /^[\w.-]{6,80}$/.test(id));
+  if (!ids.length || !process.env.DATABASE_URL) return;
+  await ensureTable();
+  await getDb()`DELETE FROM stored_images WHERE id = ANY(${ids})`;
+}
+
 export async function prune() {
   await ensureTable();
   const sql = getDb();
-  await sql`DELETE FROM stored_images WHERE created_at < NOW() - make_interval(days => ${RETENTION_DAYS})`;
-  const [{ total }] = await sql`SELECT COALESCE(SUM(bytes), 0)::bigint AS total FROM stored_images`;
+  // kind 'keep' = event guests' photos and stickers, kept until they ask us to delete them
+  await sql`DELETE FROM stored_images WHERE kind <> 'keep' AND created_at < NOW() - make_interval(days => ${RETENTION_DAYS})`;
+  const [{ total }] = await sql`SELECT COALESCE(SUM(bytes), 0)::bigint AS total FROM stored_images WHERE kind <> 'keep'`;
   let over = Number(total) - MAX_MB * 1024 * 1024;
   if (over <= 0) return;
   // drop the oldest until under the cap
-  const old = await sql`SELECT id, bytes FROM stored_images ORDER BY created_at LIMIT 500`;
+  const old = await sql`SELECT id, bytes FROM stored_images WHERE kind <> 'keep' ORDER BY created_at LIMIT 500`;
   const ids: string[] = [];
   for (const r of old) {
     if (over <= 0) break;

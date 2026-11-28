@@ -378,6 +378,8 @@ export default function PrintAdmin() {
         ))}
       </section>
 
+      <GuestsPanel api={api} say={say} />
+
       <details>
         <summary className="text-sm font-bold">Log</summary>
         <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-neutral-100 p-3 text-xs">{log.join("\n") || "Nothing yet."}</pre>
@@ -420,5 +422,79 @@ function OrderRow({ o, onReprint }: { o: QueueOrder; onReprint?: () => void }) {
         </button>
       )}
     </div>
+  );
+}
+
+/** Event sign-ups: counts, the spreadsheet, and sticker emails still waiting to go out. */
+function GuestsPanel({ api, say }: { api: (path: string, init?: RequestInit) => Promise<Record<string, unknown>>; say: (line: string) => void }) {
+  const [stats, setStats] = useState<{ total: number; media: number; marketing: number } | null>(null);
+  const [mail, setMail] = useState<{ ready: boolean; pending: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const g = await api("/api/events/guests");
+      setStats({ total: Number(g.total), media: Number(g.media), marketing: Number(g.marketing) });
+      const d = await api("/api/events/deliver");
+      setMail({ ready: d.ready === true, pending: Number(d.pending) });
+    } catch {
+      /* shown as nothing */
+    }
+  }, [api]);
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  async function download() {
+    const key = localStorage.getItem(KEY) ?? "";
+    const res = await fetch("/api/events/guests?format=csv", { headers: { authorization: `Bearer ${key}` } });
+    if (!res.ok) return say("Couldn't download the guest list");
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mesticker-guests-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function sendPending() {
+    setBusy(true);
+    try {
+      const r = await api("/api/events/deliver", { method: "POST" });
+      say(`Sticker emails: ${r.sent} sent${Number(r.failed) ? `, ${r.failed} failed` : ""}`);
+    } catch (e) {
+      say(`Sticker emails: ${msg(e)}`);
+    } finally {
+      setBusy(false);
+      load();
+    }
+  }
+
+  if (!stats) return null;
+  return (
+    <section className="space-y-2 rounded-2xl border border-neutral-200 p-4 text-sm">
+      <h2 className="font-bold">Event guests</h2>
+      <p>
+        {stats.total} signed up · {stats.media} OK to feature on social · {stats.marketing} OK to email offers
+      </p>
+      {mail && (
+        <p className={mail.pending && !mail.ready ? "text-amber-700" : "text-neutral-600"}>
+          {mail.pending ? `${mail.pending} sticker email${mail.pending > 1 ? "s" : ""} waiting` : "All sticker emails sent"}
+          {!mail.ready && " · email isn't set up yet, they'll go out once it is"}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <button className="rounded-lg border border-neutral-300 px-3 py-2 font-semibold" onClick={download}>
+          Download guest list
+        </button>
+        {mail?.ready && mail.pending > 0 && (
+          <button className="rounded-lg bg-violet-600 px-3 py-2 font-semibold text-white disabled:opacity-40" disabled={busy} onClick={sendPending}>
+            Send waiting emails
+          </button>
+        )}
+      </div>
+    </section>
   );
 }

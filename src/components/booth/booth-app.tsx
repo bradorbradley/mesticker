@@ -21,6 +21,8 @@ import { LAYOUTS, SHEET_H, SHEET_W } from "@/lib/sheet-layouts";
 import BoothReveal from "./booth-reveal";
 import { sounds } from "@/lib/booth-sounds";
 import { cn } from "@/lib/utils";
+import type { PartyEvent } from "@/lib/party-events";
+import GuestSignup from "@/components/booth/guest-signup";
 import Mascot from "./mascot";
 import BoothCamera from "./booth-camera";
 import OperatorPanel, { IMAGE_MODELS, providersFor, type BoothSettings, type GenStats } from "./operator-panel";
@@ -168,7 +170,21 @@ function Split({ children, className }: { children: React.ReactNode; className?:
   );
 }
 
-export default function BoothApp() {
+/** Upload an image (data URL) once and get its public URL. */
+async function uploadUrl(image: string): Promise<string> {
+  const d = await fetch("/api/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image }) }).then((r) => r.json());
+  if (!d.url) throw new Error("upload failed");
+  return d.url as string;
+}
+
+type Guest = { id: string; token: string; email: string };
+
+export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
+  // event links (/booth/<slug>): sign-up before the camera, free, event theme
+  const [guest, setGuest] = useState<Guest | null>(null);
+  const [signupOpen, setSignupOpen] = useState(false);
+  const photoUrl = useRef<Promise<string | null> | null>(null);
+  const collectGuest = useRef(!!event?.collectGuest);
   const [step, setStep] = useState<Step>("attract");
   const [photo, setPhoto] = useState<string | null>(null);
   const [sticker, setSticker] = useState<string | null>(null);
@@ -234,8 +250,8 @@ export default function BoothApp() {
   // the event's cartoon style, from the staff panel (default chibi)
   const styleRef = useRef(BOOTH_STYLE);
   const themeRef = useRef<string | undefined>(undefined);
-  themeRef.current = settings?.eventTheme || undefined;
-  styleRef.current = settings?.eventStyle && eventStyleOptions.some((p) => p.id === settings.eventStyle) ? settings.eventStyle : BOOTH_STYLE;
+  themeRef.current = event?.theme || settings?.eventTheme || undefined;
+  styleRef.current = event?.style ? event.style : settings?.eventStyle && eventStyleOptions.some((p) => p.id === settings.eventStyle) ? settings.eventStyle : BOOTH_STYLE;
   const updateSettings = useCallback((patch: Partial<BoothSettings>) => {
     setSettings((s) => {
       const next = { ...(s ?? loadSettings()), ...patch };
@@ -260,6 +276,9 @@ export default function BoothApp() {
     setStickerReady(false);
     setPicked(["pose"]);
     setAutoEmailedTo(null);
+    setGuest(null);
+    setSignupOpen(false);
+    photoUrl.current = null;
     resetVariants();
     setOperatorOpen(false);
     printCopy.current = null;
@@ -375,6 +394,7 @@ export default function BoothApp() {
       body: JSON.stringify({ image, styleId: styleRef.current, provider: modelRef.current.hero, theme: themeRef.current }),
     });
     variantPhoto.current = image;
+    if (collectGuest.current) photoUrl.current = uploadUrl(image).catch(() => null);
     startVariantsRef.current("pose");
     startVariantsRef.current("face");
     try {
@@ -456,6 +476,18 @@ export default function BoothApp() {
       setStep("printing");
       try {
         const { main, guides: sheetGuides, kit: sheetKit } = await buildPrintFiles(sheets);
+        if (event && guest) {
+          // the guest's record: original photo, main sticker, clean sheet images (no numbers)
+          const v = variantsRef.current;
+          const [photo, stickerUrl, sheetUrls] = await Promise.all([
+            photoUrl.current ?? Promise.resolve(null),
+            uploadUrl(await addStickerBorder(main)).catch(() => null),
+            Promise.all(sheets.map(async (k) => uploadUrl(await buildSheet(k, main, v, false, false)).catch(() => null))),
+          ]);
+          setPrintOrder({ id: orderId, sheets, checkoutId: checkoutId ?? null, event: event.slug, guest: { id: guest.id, token: guest.token }, photoUrl: photo, stickerUrl, sheetUrls: sheetUrls.filter((u): u is string => !!u) });
+          const [user, domain] = guest.email.split("@");
+          setAutoEmailedTo(`${user.slice(0, 2)}•••@${domain}`);
+        }
         setGuides(sheetGuides);
         setKit(sheetKit);
         setSettings((s) => {
@@ -482,7 +514,7 @@ export default function BoothApp() {
         console.error("print file failed", e);
       }
     },
-    [sticker, picked, emailOn, buildPrintFiles]
+    [sticker, picked, emailOn, buildPrintFiles, event, guest]
   );
 
   const outOfPaper = settings !== null && settings.sheetsLeft <= 0;
@@ -502,7 +534,7 @@ export default function BoothApp() {
       clearInterval(t);
     };
   }, []);
-  const freeMode = eventFree || (settings?.freeMode ?? BOOTH_FREE_MODE);
+  const freeMode = !!event?.free || eventFree || (settings?.freeMode ?? BOOTH_FREE_MODE);
 
   // ---- "Take from mobile": the guest's phone takes the photo, then either device picks sheets / pays.
   // This laptop stays the brain (it makes the stickers and sends the print order); the phone
@@ -648,7 +680,8 @@ export default function BoothApp() {
                   sounds.unlock();
                   sounds.tap();
                   document.documentElement.requestFullscreen?.().catch(() => {});
-                  setStep("camera");
+                  if (event?.collectGuest && !guest) setSignupOpen(true);
+                  else setStep("camera");
                 }}
               />
             )}
@@ -701,6 +734,17 @@ export default function BoothApp() {
             {step === "done" && <Done sticker={sticker} digitalUrl={digitalUrl} emailOn={emailOn} autoEmailedTo={autoEmailedTo} onFinish={reset} />}
           </motion.div>
         </AnimatePresence>
+        {signupOpen && event && (
+          <GuestSignup
+            event={event}
+            onCancel={() => setSignupOpen(false)}
+            onDone={(g) => {
+              setGuest(g);
+              setSignupOpen(false);
+              setStep("camera");
+            }}
+          />
+        )}
       </main>
 
       {pairOpen && step === "camera" && (
@@ -1495,7 +1539,17 @@ function PayWithQr({
  * order on the print queue with every sticker's exact spot, while the guest
  * watches their sheets.
  */
-type PrintOrder = { id: string; sheets: SheetKind[]; checkoutId: string | null };
+type PrintOrder = {
+  id: string;
+  sheets: SheetKind[];
+  checkoutId: string | null;
+  /** event links: who made it, and their originals for their record */
+  event?: string;
+  guest?: { id: string; token: string };
+  photoUrl?: string | null;
+  stickerUrl?: string | null;
+  sheetUrls?: string[];
+};
 
 const newOrderId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `o-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
