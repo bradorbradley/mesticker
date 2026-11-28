@@ -555,8 +555,52 @@ export function EventGenerating({ look, photo, ready }: { look: Look; photo: str
   );
 }
 
-/** The end: their sheet and cartoon, and one tap to save every sticker to their photos. */
-export function EventDone({ sticker, sheet, stickers, onFinish, emailedTo }: { sticker: string | null; sheet: string | null; stickers: string[]; onFinish: () => void; emailedTo: string | null }) {
+/**
+ * Every sticker the guest got, big, floating with a little drift: the guest's own stickers (with
+ * their name ribbons and white die-cut borders), not a tiny picture of the sheet.
+ */
+export function FloatingStickers({ stickers, className }: { stickers: string[]; className?: string }) {
+  const list = Array.from(new Set(stickers)).slice(0, 15);
+  const box = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // the column count that gives the biggest stickers in this box
+  const n = list.length || 1;
+  let cols = 1, cell = 0;
+  for (let c = 1; c <= n; c++) {
+    const rows = Math.ceil(n / c);
+    const s = Math.min(size.w / c, size.h / rows);
+    if (s > cell) [cols, cell] = [c, s];
+  }
+  return (
+    <div ref={box} className={cn("relative flex items-center justify-center", className)}>
+      {cell > 0 && (
+        <div className="grid" style={{ gridTemplateColumns: `repeat(${cols}, ${cell}px)`, gridAutoRows: `${cell}px` }}>
+          {list.map((src, k) => (
+            <motion.div key={src} className="flex items-center justify-center" style={{ padding: cell * 0.04 }} initial={{ scale: 0, rotate: -15, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200, damping: 13, delay: 0.1 + k * 0.07 }}>
+              <motion.img
+                src={src}
+                alt=""
+                className="h-full w-full object-contain drop-shadow-[0_8px_10px_rgba(60,8,10,0.35)]"
+                animate={{ y: [0, -cell * 0.05, 0], rotate: [k % 2 ? -3 : 3, k % 2 ? 3 : -3, k % 2 ? -3 : 3] }}
+                transition={{ duration: 2.6 + (k % 4) * 0.4, repeat: Infinity, ease: "easeInOut", delay: (k % 5) * 0.3 }}
+              />
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The end: all their stickers floating, big, and one tap to save every one to their photos. */
+export function EventDone({ stickers, onFinish, emailedTo }: { sticker?: string | null; sheet?: string | null; stickers: string[]; onFinish: () => void; emailedTo: string | null }) {
   const [status, setStatus] = useState<string | null>(null);
   const save = async () => {
     setStatus("Getting them ready…");
@@ -564,36 +608,14 @@ export function EventDone({ sticker, sheet, stickers, onFinish, emailedTo }: { s
     setStatus(await saveImages(Array.from(new Set(stickers))).catch(() => "Tip: press and hold any sticker to save it."));
   };
   return (
-    <div className="flex h-full w-full items-center justify-center overflow-y-auto landscape:flex-row portrait:flex-col portrait:justify-start portrait:pt-8" style={{ gap: u(2.4), paddingLeft: u(3), paddingRight: u(3), paddingBottom: u(2) }}>
+    <div className="flex h-full w-full landscape:flex-row landscape:items-center portrait:flex-col" style={{ gap: u(1.6), padding: `${u(1.5)} ${u(2)} max(${u(2)}, env(safe-area-inset-bottom))` }}>
       <Snow />
-      <div className="relative flex items-center justify-center landscape:h-full landscape:w-[44%] portrait:h-[40vh] portrait:w-full portrait:shrink-0" style={{ gap: u(1.6) }}>
-        {sheet && (
-          <motion.img
-            src={sheet}
-            alt="Your sticker sheet"
-            className="h-full max-h-full w-auto rounded-[12px] bg-white shadow-[0_18px_40px_rgba(80,10,10,0.3)] landscape:max-h-[86%] landscape:h-auto"
-            style={{ aspectRatio: "3.9 / 6.7", maxWidth: "60%", padding: 6 }}
-            initial={{ rotate: -8, y: 40, opacity: 0 }}
-            animate={{ rotate: -3, y: 0, opacity: 1 }}
-            transition={{ type: "spring", stiffness: 120, damping: 14 }}
-          />
-        )}
-        {sticker && (
-          <motion.img
-            src={sticker}
-            alt="Your cartoon"
-            className="die-cut max-h-[70%] w-[40%] object-contain"
-            initial={{ scale: 0.4, rotate: 12, opacity: 0 }}
-            animate={{ scale: 1, rotate: 4, opacity: 1 }}
-            transition={{ type: "spring", stiffness: 160, damping: 12, delay: 0.25 }}
-          />
-        )}
-      </div>
-      <div className="z-10 flex flex-col landscape:w-[40%] portrait:items-center portrait:text-center" style={{ gap: u(1.4) }}>
+      <FloatingStickers stickers={stickers} className="min-h-0 flex-1 landscape:h-full" />
+      <div className="z-10 flex shrink-0 flex-col items-center text-center landscape:w-[34%]" style={{ gap: u(1) }}>
         <h2 className="t-h2">
           Merry <span className="pop">Christmas!</span>
         </h2>
-        <p className="t-lead">Grab your sheet from the printer and peel away. {emailedTo ? `We're emailing every sticker to ${emailedTo}.` : ""}</p>
+        <p className="t-body">Grab your sheet from the printer and peel away.{emailedTo ? ` We're emailing every sticker to ${emailedTo}.` : ""}</p>
         <button className="btn btn-lg btn-main w-fit" onClick={save}>
           📲 Save my stickers to Photos
         </button>
@@ -622,7 +644,6 @@ export function EventWait({
   info,
   orderId,
   handset,
-  sheet,
   stickers,
   onDone,
 }: {
@@ -661,25 +682,11 @@ export function EventWait({
       {phase === "video" ? (
         <WelcomeVideo key={run} event={event} look={look} sticker={sticker} poses={poses} name={name} etaSec={run ? undefined : firstEta.current} games={!run} onEnd={() => setPhase("save")} />
       ) : (
-        <div className="relative flex h-full w-full items-center justify-center overflow-y-auto text-center landscape:flex-row portrait:flex-col" style={{ gap: u(2.4), padding: "16px 16px 84px" }}>
+        <div className="relative flex h-full w-full items-center text-center landscape:flex-row portrait:flex-col" style={{ gap: u(1.6), padding: "16px 16px 84px" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={look.scene} alt="" className="fixed inset-0 h-full w-full scale-110 object-cover opacity-60 blur-2xl" />
-          {unique.length > 0 ? (
-            <div className="relative grid shrink-0 grid-cols-4 rounded-2xl bg-white/10 p-2 landscape:max-h-[80%] landscape:w-[46%] portrait:w-full portrait:max-w-md" style={{ gap: 6, overflowY: "auto" }}>
-              {unique.map((src, k) => (
-                <motion.div key={src} initial={{ scale: 0, rotate: -12 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 240, damping: 14, delay: k * 0.06 }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt="" className="aspect-square w-full object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]" />
-                </motion.div>
-              ))}
-            </div>
-          ) : (
-            sheet && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={sheet} alt="Your sticker sheet" className="relative w-auto shrink-0 rounded-xl bg-white p-1.5 shadow-2xl landscape:max-h-[78%] portrait:max-h-[42vh]" style={{ aspectRatio: "3.9 / 6.7" }} />
-            )
-          )}
-          <div className="relative flex flex-col items-center" style={{ gap: u(1.2), maxWidth: 420 }}>
+          <FloatingStickers stickers={unique} className="relative min-h-0 w-full flex-1 landscape:h-full" />
+          <div className="relative flex shrink-0 flex-col items-center landscape:w-[36%]" style={{ gap: u(1), maxWidth: 420 }}>
           <h2 className="t-h2 !text-[#fbefd5]">Your stickers! 🎉</h2>
           <p className="t-lead !text-[#f3dcb0]">Save all your stickers to your phone, ready to send to friends.</p>
           {handset ? (

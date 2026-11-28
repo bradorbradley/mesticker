@@ -279,6 +279,10 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
   // ---- Pose / Mix packs: 8 extra stickers, started the moment the photo is taken
   const [variants, setVariantsState] = useState<Variants>(emptyVariants);
   const variantsRef = useRef<Variants>(emptyVariants());
+  // what the guest takes home: the stickers exactly as printed (name ribbons, die-cut borders), else the raw ones
+  const guestStickers = kit?.some((k) => !k.brand)
+    ? Array.from(new Set(kit.filter((k) => !k.brand).map((k) => k.src)))
+    : [sticker, ...variants.pose].filter((x): x is string => typeof x === "string");
   const genId = useRef(0);
   const setVariant = (kind: VariantKind, i: number, v: string | false, id: number) => {
     if (id !== genId.current) return; // a newer photo/style replaced this one
@@ -876,7 +880,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
                           orderId={printOrder?.id ?? null}
                           handset={handset}
                           sheet={printOrder?.sheetUrls?.[0] ?? null}
-                          stickers={[sticker, ...variants.pose].filter((x): x is string => typeof x === "string")}
+                          stickers={guestStickers}
                           onDone={() => setStep("done")}
                         />
                       )
@@ -888,7 +892,7 @@ export default function BoothApp({ event }: { event?: PartyEvent } = {}) {
               <EventDone
                 sticker={sticker}
                 sheet={printOrder?.sheetUrls?.[0] ?? guides?.[0] ?? null}
-                stickers={[sticker, ...variants.pose].filter((x): x is string => typeof x === "string")}
+                stickers={guestStickers}
                 emailedTo={autoEmailedTo}
                 onFinish={reset}
               />
